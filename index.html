@@ -61,12 +61,24 @@ const SHEET_NAMES = {
 };
 
 async function fetchSmartsheet(sheetId, token) {
-  const r = await fetch(
-    `https://api.smartsheet.com/2.0/sheets/${sheetId}?pageSize=10000`,
-    { headers: { "Authorization": "Bearer " + token } }
-  );
-  if (!r.ok) throw new Error(`Smartsheet API error: ${r.status} ${r.statusText}`);
-  const data = await r.json();
+  // Try direct first, fall back to CORS proxy
+  const DIRECT = `https://api.smartsheet.com/2.0/sheets/${sheetId}?pageSize=10000`;
+  const PROXY  = `https://corsproxy.io/?url=https://api.smartsheet.com/2.0/sheets/${sheetId}?pageSize=10000`;
+
+  const tryFetch = async (url, headers) => {
+    const r = await fetch(url, { headers });
+    if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+    return r.json();
+  };
+
+  let data;
+  try {
+    data = await tryFetch(DIRECT, { "Authorization": "Bearer " + token });
+  } catch(e) {
+    console.log("[PMT] Direct fetch failed, trying proxy...", e.message);
+    data = await tryFetch(PROXY, { "Authorization": "Bearer " + token, "X-Requested-With": "XMLHttpRequest" });
+  }
+
   const columns = {};
   (data.columns || []).forEach(col => { columns[col.id] = col.title; });
   return (data.rows || []).map(row => {
