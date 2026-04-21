@@ -1,14 +1,9 @@
 name: PMT Dashboard Sync
 
 on:
-  # Run automatically on a schedule
   schedule:
-    - cron: '0 7 * * 1-5'   # 7am UTC Monday-Friday (adjust to your timezone)
-
-  # Allow manual trigger from GitHub UI
+    - cron: '0 7 * * 1-5'   # 7am UTC Monday-Friday
   workflow_dispatch:
-
-  # Allow trigger via webhook URL (what the Refresh button calls)
   repository_dispatch:
     types: [refresh-dashboard]
 
@@ -27,17 +22,10 @@ jobs:
       - name: Install dependencies
         run: pip install requests
 
-      - name: Run sync
+      - name: Run Smartsheet sync + write to GitHub Pages
         env:
           SMARTSHEET_TOKEN: ${{ secrets.SMARTSHEET_TOKEN }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          PROJECT_ID: ${{ secrets.PROJECT_ID }}
+          GITHUB_TOKEN: ${{ secrets.PERSONAL_GITHUB_TOKEN }}
+          GITHUB_USER: sarmittal
+          GITHUB_REPO: pmt-dashboard-sync
         run: python sync_smartsheet.py
-
-      - name: Upload dashboard-data.json to SharePoint
-        env:
-          SHAREPOINT_SITE_URL: ${{ secrets.SHAREPOINT_SITE_URL }}
-          SHAREPOINT_CLIENT_ID: ${{ secrets.SHAREPOINT_CLIENT_ID }}
-          SHAREPOINT_CLIENT_SECRET: ${{ secrets.SHAREPOINT_CLIENT_SECRET }}
-          SHAREPOINT_TENANT_ID: ${{ secrets.SHAREPOINT_TENANT_ID }}
-        run: python upload_to_sharepoint.py
