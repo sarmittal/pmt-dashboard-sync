@@ -655,6 +655,10 @@ function ActivityTable({ rows }) {
 // ─── TABS ────────────────────────────────────────────────────────────────────
 const TABS = [
   { id: "executive",   label: "Executive Summary" },
+  { id: "workplan",    label: "Workplan" },
+  { id: "raid",        label: "RAID Analysis" },
+  { id: "cr",          label: "Change Requests" },
+  { id: "backlog",     label: "Backlog" },
   { id: "overview",    label: "Program Health Overview" },
   { id: "scorecard",   label: "Component Scorecard" },
   { id: "compcards",   label: "Component Cards" },
@@ -1000,6 +1004,10 @@ export default function App() {
       {/* Content */}
       <div style={{ maxWidth: (tab === "scorecard" || tab === "executive" || tab === "compcards") ? "100%" : 1400, margin: "0 auto", padding: (tab === "scorecard" || tab === "executive" || tab === "compcards") ? "20px 16px" : 20 }}>
         {tab === "executive"    && <ExecutiveSummaryTab wp={wp} raid={raid} req={req} cap={cap} openModal={openModal} />}
+        {tab === "workplan"     && <WorkplanTab data={wp} openModal={openModal} />}
+        {tab === "raid"         && <RaidTab data={raid} openModal={openModal} />}
+        {tab === "cr"           && <ChangeRequestsTab raid={raid} openModal={openModal} />}
+        {tab === "backlog"      && <BuildTab data={req} openModal={openModal} />}
         {tab === "overview"     && <OverviewTab wp={wp} raid={raid} req={req} cap={cap} openModal={openModal} />}
         {tab === "scorecard"    && <ScorecardTab wp={wp} raid={raid} req={req} openModal={openModal} />}
         {tab === "compcards"    && <ComponentCardsTab wp={wp} raid={raid} req={req} openModal={openModal} />}
@@ -4506,6 +4514,73 @@ function ScorecardTab({ wp, raid, req, openModal }) {
       {storyModal && <StoryDrillModal title={storyModal.title} rows={storyModal.rows} reqKeys={req?.keys} onClose={()=>setStoryModal(null)} />}
       {/* Workplan hierarchy drill-down */}
       {wpDrillModal && <WorkplanDrillModal title={wpDrillModal.title} rows={wpDrillModal.rows} onClose={()=>setWpDrillModal(null)} />}
+    </div>
+  );
+}
+
+// ─── CHANGE REQUESTS TAB ─────────────────────────────────────────────────────
+function ChangeRequestsTab({ raid, openModal }) {
+  if (!raid) return <Empty label="Upload the RAID Log to view Change Requests." />;
+  const { cr, keys: K } = raid;
+  if (!cr?.all?.length) return <Empty label="No Change Request items found in the RAID Log." />;
+
+  const CR_COLS = [K.desc, K.crAnalysis, K.crStatus, K.crHours, K.owner, K.component].filter(Boolean);
+  const statusColor = s => {
+    const v = String(s||"").toLowerCase();
+    if (v.includes("approved") || v.includes("inform-accepted (reviewed)")) return C.complete;
+    if (v.includes("rejected")) return C.delayed;
+    if (v.includes("deferred")) return C.yellow;
+    return C.muted;
+  };
+
+  const buckets = [
+    { label: "Total CRs",  value: cr.all.length,      color: C.navyLight, rows: cr.all,      hours: cr.totalHours },
+    { label: "Approved",   value: cr.approved.length,  color: C.complete,  rows: cr.approved,  hours: cr.approvedHours },
+    { label: "Pending",    value: cr.pending.length,   color: C.gold,      rows: cr.pending,   hours: cr.pendingHours },
+    { label: "Deferred",   value: cr.deferred.length,  color: C.yellow,    rows: cr.deferred,  hours: cr.deferredHours },
+    { label: "Rejected",   value: cr.rejected.length,  color: C.delayed,   rows: cr.rejected,  hours: cr.rejectedHours },
+  ];
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 11 }}>
+        {buckets.map(({ label, value, color, rows, hours }) => (
+          <KpiCard key={label} label={label} value={value} color={color}
+            sub={hours ? `${hours.toLocaleString()} est. hrs` : undefined}
+            onClick={rows?.length ? () => openModal(label, rows, CR_COLS) : null} />
+        ))}
+      </div>
+      <Card>
+        <SecTitle title="Change Request Detail" color={C.navyLight} />
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+            <thead>
+              <tr style={{ background: "#f0f4f8" }}>
+                {CR_COLS.map(c => <th key={c} style={{ textAlign: "left", padding: "8px 10px", color: C.muted, fontSize: 11, fontWeight: 700, borderBottom: `2px solid ${C.border}`, whiteSpace: "nowrap" }}>{c}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {cr.all.slice(0, 100).map((r, i) => (
+                <tr key={i} style={{ borderBottom: `1px solid ${C.border}`, background: i % 2 === 0 ? C.white : "#f9fafb" }}>
+                  {CR_COLS.map(col => {
+                    const v = String(r[col] || "—");
+                    const isStatus = col === K.crStatus;
+                    const sc = isStatus ? statusColor(v) : null;
+                    return (
+                      <td key={col} style={{ padding: "7px 10px", maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={v}>
+                        {isStatus && sc
+                          ? <span style={{ background: sc + "20", color: sc, border: `1px solid ${sc}40`, borderRadius: 4, padding: "2px 7px", fontSize: 10, fontWeight: 700 }}>{v}</span>
+                          : v.slice(0, 70)}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {cr.all.length > 100 && <div style={{ color: C.muted, fontSize: 11, textAlign: "center", padding: 6 }}>Showing 100 of {cr.all.length}</div>}
+        </div>
+      </Card>
     </div>
   );
 }
