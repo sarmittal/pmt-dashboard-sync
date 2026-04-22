@@ -942,52 +942,6 @@ export default function App() {
             {/* Right — action buttons */}
             <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
 
-              {/* PRIMARY — Load Smartsheet JSON */}
-              <label style={{ padding: "7px 16px", background: C.navyLight, border: "none", borderRadius: 6,
-                cursor: "pointer", color: "#fff", fontSize: 11, fontWeight: 700, display:"flex", alignItems:"center", gap:6 }}>
-                🔄 Load Smartsheet Data
-                <input type="file" accept=".json" style={{ display: "none" }} onChange={e => {
-                  const f = e.target.files[0]; if (!f) return;
-                  const reader = new FileReader();
-                  reader.onload = ev => {
-                    try {
-                      const data = JSON.parse(ev.target.result);
-                      // Support both direct smartsheet_data.json and v2 snapshot format
-                      const isSmartsheet = data.wp || data.raid || data.req;
-                      const isSnapshot   = data.v === 2 && data.sheets;
-                      if (isSmartsheet) {
-                        // smartsheet_data.json format from Python script
-                        const sheets = data;
-                        if (sheets.wp)   { const s={"03. PMT  Workplan":sheets.wp};            setWp(parseWorkplan(s));           setRawSheets(p=>({...p,wp:sheets.wp})); }
-                        if (sheets.raid) { const s={"05. PMT [Project] RAID Log":sheets.raid};  setRaid(parseRaid(s));             setRawSheets(p=>({...p,raid:sheets.raid})); }
-                        if (sheets.req)  { const s={"03. PMT - Requirements Repository":sheets.req}; setReq(parseRequirements(s)); setRawSheets(p=>({...p,req:sheets.req})); }
-                        if (sheets.cap)  { const s={"07. SAP Tech Sprint Capacity Management":sheets.cap}; setCap(parseCapacity(s)); setRawSheets(p=>({...p,cap:sheets.cap})); }
-                        if (sheets.test) { const s={"110. Test Scenarios":sheets.test};         setTest(parseTestScenarios(s));    setRawSheets(p=>({...p,test:sheets.test})); }
-                        const meta = { lastSync: data.meta?.lastSync || new Date().toISOString(), source: "smartsheet" };
-                        setSyncMeta(meta);
-                        setFnames({ wp:"Smartsheet", raid:"Smartsheet", req:"Smartsheet", test:"Smartsheet", cap:"Smartsheet" });
-                        alert("✅ Smartsheet data loaded successfully!\n\nAll 5 sheets are now populated.");
-                      } else if (isSnapshot) {
-                        // v2 snapshot format
-                        const s = data.sheets;
-                        if (s.wp)   { setWp(parseWorkplan(s.wp));           setRawSheets(p=>({...p,wp:s.wp})); }
-                        if (s.raid) { setRaid(parseRaid(s.raid));            setRawSheets(p=>({...p,raid:s.raid})); }
-                        if (s.req)  { setReq(parseRequirements(s.req));      setRawSheets(p=>({...p,req:s.req})); }
-                        if (s.cap)  { setCap(parseCapacity(s.cap));          setRawSheets(p=>({...p,cap:s.cap})); }
-                        if (s.test) { setTest(parseTestScenarios(s.test));   setRawSheets(p=>({...p,test:s.test})); }
-                        if (data.fnames) setFnames(data.fnames);
-                        setSyncMeta({ lastSync: data.ts, source: "snapshot" });
-                        alert("✅ Snapshot loaded! Saved on: " + (data.ts?.slice(0,10) || "unknown"));
-                      } else {
-                        alert("❌ Unrecognised file format. Please use smartsheet_data.json from the sync script.");
-                      }
-                    } catch(err) { alert("Error loading file: " + err.message); }
-                  };
-                  reader.readAsText(f);
-                  e.target.value = "";
-                }} />
-              </label>
-
               {/* Save snapshot */}
               <button
                 disabled={!wp && !raid && !req && !cap}
@@ -1041,20 +995,6 @@ export default function App() {
               </button>
             </div>
           </div>
-
-          {/* Bottom row — individual XLSX upload zones (collapsed by default) */}
-          <details>
-            <summary style={{ fontSize: 10, color: C.muted, fontWeight: 600, cursor: "pointer", userSelect: "none", marginBottom: 6 }}>
-              ▶ Individual XLSX uploads (fallback if sync script unavailable)
-            </summary>
-            <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
-              <UploadZone label="Workplan" icon="📋" loaded={!!wp} hint="PMT Workplan (.xlsx)" filename={fnames.wp} onFile={f => load("wp", f)} />
-              <UploadZone label="RAID Log" icon="⚠️" loaded={!!raid} hint="RAID Log (.xlsx)" filename={fnames.raid} onFile={f => load("raid", f)} />
-              <UploadZone label="Requirements / User Stories" icon="📝" loaded={!!req} hint="Requirements Repository (.xlsx)" filename={fnames.req} onFile={f => load("req", f)} />
-              <UploadZone label="Capacity Planning" icon="👥" loaded={!!cap} hint="Capacity Planning Sheet (.xlsx)" filename={fnames.cap} onFile={f => load("cap", f)} />
-              <UploadZone label="Test Scenarios" icon="🧪" loaded={!!test} hint="Test Scenarios (.xlsx)" filename={fnames.test} onFile={f => load("test", f)} />
-            </div>
-          </details>
 
         </div>
       </div>
