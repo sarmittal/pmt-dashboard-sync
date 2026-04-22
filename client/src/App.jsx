@@ -942,28 +942,6 @@ export default function App() {
             {/* Right — action buttons */}
             <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
 
-              {/* Save snapshot */}
-              <button
-                disabled={!wp && !raid && !req && !cap}
-                onClick={() => {
-                  try {
-                    const snapshot = { v: 2, ts: new Date().toISOString(), fnames, sheets: rawSheets };
-                    const json = JSON.stringify(snapshot);
-                    const w = window.open("", "_blank");
-                    if (w) {
-                      w.document.write("<pre style='font-family:monospace;font-size:11px;word-break:break-all;white-space:pre-wrap'>" + json + "</pre>");
-                      w.document.title = "PMT Snapshot"; w.document.close();
-                    } else { setSnapshotText(json); }
-                  } catch(err) { alert("Save error: " + err.message); }
-                }}
-                style={{ padding: "6px 12px", background: (!wp&&!raid&&!req&&!cap) ? "#e2e8f0" : "#f1f5f9",
-                  border: `1px solid ${C.border}`, borderRadius: 6,
-                  cursor: (!wp&&!raid&&!req&&!cap) ? "not-allowed" : "pointer",
-                  color: (!wp&&!raid&&!req&&!cap) ? C.muted : C.text, fontSize: 11, fontWeight: 600,
-                  opacity: (!wp&&!raid&&!req&&!cap) ? 0.5 : 1 }}>
-                💾 Save Snapshot
-              </button>
-
               {/* Refresh from Smartsheet (API) */}
               <button
                 disabled={refreshing}
@@ -986,12 +964,6 @@ export default function App() {
                   border: "none", borderRadius: 6, cursor: refreshing ? "wait" : "pointer",
                   color: refreshing ? C.muted : "#fff", fontSize: 11, fontWeight: 700 }}>
                 {refreshing ? "⏳ Refreshing…" : "🔄 Refresh from Smartsheet"}
-              </button>
-
-              {/* Clear */}
-              <button onClick={() => { clearAll(); setWp(null); setRaid(null); setReq(null); setCap(null); setTest(null); setFnames({}); setSyncMeta(null); }}
-                style={{ padding: "6px 12px", background: "#fee2e2", border: "1px solid #fca5a5", borderRadius: 6, cursor: "pointer", color: C.red, fontSize: 11, fontWeight: 700 }}>
-                🗑 Clear
               </button>
             </div>
           </div>
