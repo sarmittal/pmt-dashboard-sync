@@ -1,0 +1,15 @@
+---
+applications:
+  - name: pmt-dashboard
+    memory: 256M
+    disk_quota: 512M
+    instances: 1
+    buildpacks:
+      - nodejs_buildpack
+    command: node server/index.js
+    health-check-type: http
+    health-check-http-endpoint: /api/health
+    env:
+      NODE_ENV: production
+      # SMARTSHEET_TOKEN is set via CF environment variables — never commit it here.
+      # cf set-env pmt-dashboard SMARTSHEET_TOKEN <your-token>
