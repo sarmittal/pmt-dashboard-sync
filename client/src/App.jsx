@@ -673,7 +673,6 @@ const TABS = [
   { id: "backlog",     label: "Backlog" },
   { id: "overview",    label: "Program Health Overview" },
   { id: "scorecard",   label: "Component Scorecard" },
-  { id: "compcards",   label: "Component Cards" },
   { id: "testing",     label: "Test Scenarios" },
 ];
 
@@ -994,7 +993,6 @@ export default function App() {
         {tab === "backlog"      && <BacklogTab raid={raid} />}
         {tab === "overview"     && <OverviewTab wp={wp} raid={raid} req={req} cap={cap} openModal={openModal} />}
         {tab === "scorecard"    && <ScorecardTab wp={wp} raid={raid} req={req} openModal={openModal} />}
-        {tab === "compcards"    && <ComponentCardsTab wp={wp} raid={raid} req={req} openModal={openModal} />}
         {tab === "testing"      && <TestScenariosTab data={test} wp={wp} />}
       </div>
 
