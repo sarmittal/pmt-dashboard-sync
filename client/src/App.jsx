@@ -5238,22 +5238,38 @@ function ScorecardTab({ wp, raid, req, openModal }) {
           <span style={{ fontSize:12, color:C.muted }}><b style={{ color:C.text }}>RAID:</b> <code style={{ background:"#f0f2f5", padding:"1px 5px", borderRadius:3 }}>Component</code> column</span>
           <span style={{ fontSize:12, color:C.muted }}><b style={{ color:C.text }}>Stories:</b> <code style={{ background:"#f0f2f5", padding:"1px 5px", borderRadius:3 }}>Sub Process</code> column · Sprint from <code style={{ background:"#f0f2f5", padding:"1px 5px", borderRadius:3 }}>Build Cycle</code> · Excl. Deprecated (5.) / Deferred (6.) via <code style={{ background:"#f0f2f5", padding:"1px 5px", borderRadius:3 }}>User Story Review Status (D&A)</code></span>
           <span style={{ fontSize:12, color:C.muted }}><b style={{ color:C.text }}>Workplan:</b> matched on <code style={{ background:"#f0f2f5", padding:"1px 5px", borderRadius:3 }}>Activity Grp - Lvl 3</code> · Design/Build status rolled up from child tasks · click pill to drill down</span>
-          <div style={{ display:"flex", gap:8, flexWrap:"wrap", alignItems:"center" }}>
-            <span style={{ fontSize:11, color:C.muted, fontWeight:600 }}>Sprint bubbles:</span>
-            {[
-              ["Complete",    "#1d4ed8", "#dbeafe", "#93c5fd"],
-              ["Partial",     "#0369a1", "#e0f2fe", "#7dd3fc"],
-              ["In Progress", "#15803d", "#dcfce7", "#86efac"],
-              ["Blocked",     "#b91c1c", "#fee2e2", "#fca5a5"],
-              ["Not Started", "#334155", "#f1f5f9", "#94a3b8"],
-              ["N/A",         "#7e22ce", "#f3e8ff", "#d8b4fe"],
-            ].map(([l, color, bg, border]) => (
-              <span key={l} style={{ display:"inline-flex", alignItems:"center", gap:4,
-                background:bg, color:color, border:`1px solid ${border}`,
-                borderRadius:10, padding:"1px 8px", fontSize:11, fontWeight:500 }}>
-                {l}
-              </span>
-            ))}
+          <div style={{ display:"flex", gap:16, flexWrap:"wrap", alignItems:"center" }}>
+            <div style={{ display:"flex", gap:8, flexWrap:"wrap", alignItems:"center" }}>
+              <span style={{ fontSize:11, color:C.muted, fontWeight:600 }}>Sprint bubbles:</span>
+              {[
+                ["Complete",    "#1d4ed8", "#dbeafe", "#93c5fd"],
+                ["Partial",     "#0369a1", "#e0f2fe", "#7dd3fc"],
+                ["In Progress", "#15803d", "#dcfce7", "#86efac"],
+                ["Blocked",     "#b91c1c", "#fee2e2", "#fca5a5"],
+                ["Not Started", "#334155", "#f1f5f9", "#94a3b8"],
+                ["N/A",         "#7e22ce", "#f3e8ff", "#d8b4fe"],
+              ].map(([l, color, bg, border]) => (
+                <span key={l} style={{ display:"inline-flex", alignItems:"center", gap:4,
+                  background:bg, color:color, border:`1px solid ${border}`,
+                  borderRadius:10, padding:"1px 8px", fontSize:11, fontWeight:500 }}>
+                  {l}
+                </span>
+              ))}
+            </div>
+            <div style={{ display:"flex", gap:8, flexWrap:"wrap", alignItems:"center" }}>
+              <span style={{ fontSize:11, color:C.muted, fontWeight:600 }}>% bar colour:</span>
+              {[
+                ["Off Track",   C.delayed, "#fee2e2"],
+                ["On Track",    C.gold,    "#fef9e7"],
+                ["Complete",    C.green,   "#dcfce7"],
+                ["Not Started", "#94a3b8", "#f1f5f9"],
+              ].map(([l, col, bg]) => (
+                <span key={l} style={{ display:"inline-flex", alignItems:"center", gap:5, fontSize:11 }}>
+                  <span style={{ width:24, height:7, borderRadius:4, background:col, display:"inline-block" }} />
+                  <span style={{ color:C.muted }}>{l}</span>
+                </span>
+              ))}
+            </div>
           </div>
         </div>
       </Card>
@@ -5640,7 +5656,13 @@ function ScorecardTab({ wp, raid, req, openModal }) {
                               <div style={{ display:"flex", alignItems:"center", gap:6, justifyContent:"center" }}>
                                 <div style={{ width:60, background:"#e2e8f0", borderRadius:4, height:7, overflow:"hidden" }}>
                                   <div style={{ width:`${cw.pctComplete}%`, height:"100%", borderRadius:4,
-                                    background: cw.pctComplete >= 75 ? C.green : cw.pctComplete >= 40 ? C.gold : C.delayed }} />
+                                    background: (() => {
+                                      const s = String(cw.buildStatus || cw.designStatus || "").toLowerCase();
+                                      if (s.includes("off track"))  return C.delayed;
+                                      if (s.includes("on track"))   return C.gold;
+                                      if (s.includes("complete"))   return C.green;
+                                      return "#94a3b8"; // not started / unknown → grey
+                                    })() }} />
                                 </div>
                                 <span style={{ color:C.text, fontWeight:700, fontSize:11 }}>{cw.pctComplete}%</span>
                               </div>
