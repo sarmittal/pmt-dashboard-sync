@@ -1033,358 +1033,320 @@ const PRIORITY_COLORS = { "1 - Critical": "#7b0d0d", "1-Critical": "#7b0d0d", "C
 const getPriorityColor = (p) => { const k = Object.keys(PRIORITY_COLORS).find(k => String(p||"").toLowerCase().includes(k.toLowerCase().replace(/[^a-z0-9]/g,""))); return k ? PRIORITY_COLORS[k] : "#888"; };
 
 function ExecutiveSummaryTab({ wp, raid, req, cap, openModal }) {
-  const [wpModal,    setWpModal]    = useState(null);
-  const [storyModal, setStoryModal] = useState(null);
+  const [wpGroupModal, setWpGroupModal] = useState(null); // { title, wsRows } — workstream summary modal
+  const [wpDrillModal, setWpDrillModal] = useState(null); // { title, rows }   — WorkplanDrillModal
 
   const anyData = wp || raid || req || cap;
   if (!anyData) return <Empty label="No data loaded. Connect to Smartsheet to populate the Executive Summary." />;
 
-  // ── Helpers ───────────────────────────────────────────────────────────────
-  const normPct = v => { const s = String(v ?? "").replace("%","").trim(); if (!s || isNaN(Number(s))) return null; const n = Number(s); return n <= 1 ? Math.round(n*100) : Math.round(n); };
-  const isWpLeaf = r => { const c = r["Children"]; if (!c || c === "" || c === "0") return true; const n = Number(c); return isNaN(n) || n === 0; };
-  const getWpS = r => String(r["Default Status"] || r["Status"] || "").toLowerCase();
+  // ── Shared helpers ────────────────────────────────────────────────────────
+  const normPct  = v => { const s = String(v??"").replace("%","").trim(); if(!s||isNaN(Number(s))) return null; const n=Number(s); return n<=1?Math.round(n*100):Math.round(n); };
+  const isLeaf   = r => { const c=r["Children"]; if(!c||c===""||c==="0") return true; const n=Number(c); return isNaN(n)||n===0; };
+  const getWpS   = r => String(r["Default Status"]||r["Status"]||"").toLowerCase();
 
-  const StatusPill = ({ status }) => {
-    const sl = String(status || "").toLowerCase();
-    const bg    = sl.includes("off track") ? "#fee2e2" : sl.includes("on track") ? "#fef3c7" : sl.includes("complete") ? "#dbeafe" : "#f1f5f9";
-    const color = sl.includes("off track") ? "#b91c1c" : sl.includes("on track") ? "#b45309" : sl.includes("complete") ? "#1d4ed8" : "#64748b";
-    const border= sl.includes("off track") ? "#fca5a5" : sl.includes("on track") ? "#fcd34d" : sl.includes("complete") ? "#93c5fd" : "#cbd5e1";
-    return <span style={{ background:bg, color, border:`1px solid ${border}`, borderRadius:4, padding:"2px 8px", fontSize:10, fontWeight:700, whiteSpace:"nowrap" }}>{status||"—"}</span>;
+  // ── Section 1: RAID ───────────────────────────────────────────────────────
+  const K = raid?.keys;
+  const due8  = raid ? raid.open.filter(r => { const d=daysUntil(r[K.date]); return d!=null && d>=0 && d<=8;  }) : [];
+  const due14 = raid ? raid.open.filter(r => { const d=daysUntil(r[K.date]); return d!=null && d>=0 && d<=14; }) : [];
+  const delayedRisks = raid ? raid.open.filter(r => String(r[K.type]||"").toLowerCase().includes("risk") && String(r[K.status]||"").toLowerCase().includes("delay")) : [];
+
+  // ── Section 2: Workplan tiles ─────────────────────────────────────────────
+  const buildWpGroup = (lvl0Test) => {
+    if (!wp) return null;
+    const rows    = wp.allRows.filter(r => lvl0Test(String(r["Activity Grp - Lvl 0"]||"").trim()));
+    const leaves  = rows.filter(isLeaf);
+    const lvl1s   = Array.from(new Set(rows.map(r => String(r["Activity Grp - Lvl 1"]||"").trim()).filter(Boolean)));
+    const offTrack = leaves.filter(r => getWpS(r).includes("off track")).length;
+    // % complete: prefer Lvl 1 header rows, fall back to leaf average
+    const lvl1Headers = rows.filter(r => Number(r["Lvl"]??0) === 1);
+    const pcts = lvl1Headers.map(r => normPct(r["% Complete"]??r["% complete"])).filter(v=>v!=null);
+    const pct  = pcts.length ? Math.round(pcts.reduce((a,b)=>a+b,0)/pcts.length) : null;
+    // Per-workstream (Lvl 1) data for the drill-down modal
+    const wsRows = lvl1s.map(name => {
+      const wsAllRows = rows.filter(r => String(r["Activity Grp - Lvl 1"]||"").trim() === name);
+      const wsLeaves  = wsAllRows.filter(isLeaf);
+      const wsHeader  = wsAllRows.find(r => Number(r["Lvl"]??0) === 1);
+      const wsPctH    = wsHeader ? normPct(wsHeader["% Complete"]??wsHeader["% complete"]) : null;
+      const wsLeafPcts = wsLeaves.map(r => normPct(r["% Complete"]??r["% complete"])).filter(v=>v!=null);
+      const wsPct     = wsPctH!=null ? wsPctH : wsLeafPcts.length ? Math.round(wsLeafPcts.reduce((a,b)=>a+b,0)/wsLeafPcts.length) : null;
+      const wsOff     = wsLeaves.filter(r => getWpS(r).includes("off track")).length;
+      const wsOn      = wsLeaves.filter(r => getWpS(r).includes("on track")).length;
+      const wsComplete= wsLeaves.filter(r => getWpS(r).includes("complete")).length;
+      const wsStatus  = String(wsHeader?.["Default Status"]||wsHeader?.["Status"]||"").trim() || (wsOff>0?"Off Track":wsPct===100?"Complete":wsOn>0?"On Track":"Not Started");
+      const wsDue14   = wsLeaves.filter(r => { const d=daysUntil(r["Finish"]||r["End Date"]); return d!=null&&d>=0&&d<=14&&!getWpS(r).includes("complete"); }).length;
+      return { name, rows:wsAllRows, wsOff, wsOn, wsComplete, total:wsLeaves.length, pct:wsPct, status:wsStatus, due14:wsDue14 };
+    }).filter(ws => ws.total > 0);
+    return { pct, offTrack, total:leaves.length, rows, wsRows };
   };
+  const pmtGroup = buildWpGroup(v => v.toLowerCase().includes("pmt") || v.toLowerCase().includes("performance management"));
+  const epGroup  = buildWpGroup(v => v.toLowerCase().includes("e&p"));
+  const due8wp   = wp ? wp.allRows.filter(r => isLeaf(r) && !getWpS(r).includes("complete") && (() => { const d=daysUntil(r["Finish"]||r["End Date"]); return d!=null&&d>=0&&d<=8; })()) : [];
+  const due14wp  = wp ? wp.allRows.filter(r => isLeaf(r) && !getWpS(r).includes("complete") && (() => { const d=daysUntil(r["Finish"]||r["End Date"]); return d!=null&&d>=0&&d<=14; })()) : [];
 
-  const barColor = status => { const s = String(status||"").toLowerCase(); return s.includes("off") ? C.delayed : s.includes("on") ? C.gold : s.includes("complete") ? C.green : "#94a3b8"; };
+  // ── Section 3: Sprint numbers ─────────────────────────────────────────────
+  const sprintRows = req ? req.sprintOrder.map(sp => ({ name:sp, ...(req.bySprint[sp]||{complete:0,partial:0,inProgress:0,notStarted:0,blocked:0,total:0,rows:[]}) })) : [];
 
-  // ── Row 1: Program Health KPIs ────────────────────────────────────────────
-  const lvl3Rows   = wp ? wp.allRows.filter(r => Number(r["Lvl"]??0) === 3) : [];
-  const lvl3Pcts   = lvl3Rows.map(r => normPct(r["% Complete"]??r["% complete"])).filter(v => v != null);
-  const overallPct = lvl3Pcts.length > 0 ? Math.round(lvl3Pcts.reduce((a,b)=>a+b,0)/lvl3Pcts.length) : null;
-
-  const rOpenRisks  = raid ? raid.openRisks.length : null;
-  const rOpenIssues = raid ? raid.openIssues.length : null;
-  const openActions   = raid ? raid.open.filter(r => String(r[raid.keys.type]||"").toLowerCase().includes("action"))   : [];
-  const openDecisions = raid ? raid.open.filter(r => String(r[raid.keys.type]||"").toLowerCase().includes("decision")) : [];
-  const rOpenActDec = raid ? openActions.length + openDecisions.length : null;
-  const storiesBlocked = req ? req.blocked.length : null;
-
-  // ── Row 2: Workstream Health Tables ──────────────────────────────────────
-  const buildWorkstreams = (lvl0Filter, raidMatcher) => {
-    if (!wp) return [];
-    const filtered  = wp.allRows.filter(r => lvl0Filter(String(r["Activity Grp - Lvl 0"]||"").trim()));
-    const lvl1Names = Array.from(new Set(filtered.map(r => String(r["Activity Grp - Lvl 1"]||"").trim()).filter(Boolean)));
-    return lvl1Names.map(name => {
-      const rows      = filtered.filter(r => String(r["Activity Grp - Lvl 1"]||"").trim() === name);
-      const header    = rows.find(r => Number(r["Lvl"]??0) === 1);
-      const leaves    = rows.filter(isWpLeaf);
-      const status    = header ? String(header["Default Status"]||header["Status"]||"").trim() : null;
-      const pctH      = header ? normPct(header["% Complete"]??header["% complete"]) : null;
-      const leafPcts  = leaves.map(r => normPct(r["% Complete"]??r["% complete"])).filter(v=>v!=null);
-      const pct       = pctH != null ? pctH : leafPcts.length ? Math.round(leafPcts.reduce((a,b)=>a+b,0)/leafPcts.length) : null;
-      const offTrack  = leaves.filter(r => getWpS(r).includes("off track")).length;
-      const onTrack   = leaves.filter(r => getWpS(r).includes("on track")).length;
-      const resolvedStatus = status || (offTrack>0 ? "Off Track" : pct===100 ? "Complete" : onTrack>0 ? "On Track" : "Not Started");
-      const wsRaids   = raid ? raid.open.filter(r => raidMatcher(r, name)) : [];
-      const delayed   = wsRaids.filter(r => String(r[raid?.keys?.status]||"").toLowerCase()==="delayed");
-      return { name, status:resolvedStatus, pct, offTrack, onTrack, total:leaves.length, openRaids:wsRaids.length, delayedRaids:delayed.length, wsRaids, delayedWsRaids:delayed, rows };
-    }).filter(ws => ws.name && ws.total > 0);
-  };
-
-  const pmtFilter     = v => v.toLowerCase().includes("pmt") || v.toLowerCase().includes("performance management");
-  const epFilter      = v => v.toLowerCase().includes("e&p");
-  const pmtRaidMatch  = (r, wsName) => {
-    if (!raid?.keys?.workstream) return false;
-    const rws = String(r[raid.keys.workstream]||"").toLowerCase().trim();
-    const nm  = wsName.toLowerCase();
-    if (rws === nm) return true;
-    const words = nm.split(/\s+/).slice(0,3).join(" ");
-    return rws.includes(words) || nm.includes(rws.split(/\s+/).slice(0,3).join(" "));
-  };
-  const epRaidMatch   = (r) => String(r[raid?.keys?.experience]||"").toLowerCase().includes("e&p");
-
-  const pmtWorkstreams = buildWorkstreams(pmtFilter, pmtRaidMatch);
-  const epWorkstreams  = buildWorkstreams(epFilter,  epRaidMatch);
-
-  // ── Row 3: RAID Overview ──────────────────────────────────────────────────
-  const PRIORITY_LABELS = ["1 - Critical","2 - High","3 - Medium","4 - Low"];
-  const PRIORITY_COLORS = { "1 - Critical":"#ef4444","2 - High":"#f59e0b","3 - Medium":"#3b82f6","4 - Low":"#94a3b8" };
-  const getPriorityLabel = r => { const p = String(r[raid?.keys?.priority]||""); if (/1|critical/i.test(p)) return "1 - Critical"; if (/2|high/i.test(p)) return "2 - High"; if (/3|medium/i.test(p)) return "3 - Medium"; return "4 - Low"; };
-  const priorityCounts = Object.fromEntries(PRIORITY_LABELS.map(l => [l, 0]));
-  const totalOpen = raid ? raid.open.length : 0;
-  if (raid) raid.open.forEach(r => { priorityCounts[getPriorityLabel(r)]++; });
-
-  // Design RAIDs Impacting Build: Tag non-empty and NOT "No impact to Tech Build"
-  const tagKey = raid?.keys?.tag;
-  const designImpactRaids = raid && tagKey ? raid.open.filter(r => {
+  // ── Section 4: Impact Tech Build RAIDs ───────────────────────────────────
+  const tagKey = K?.tag;
+  const impactRaids = raid && tagKey ? raid.items.filter(r => {
     const tag = String(r[tagKey]||"").toLowerCase().trim();
-    if (!tag) return false;
-    if (tag.startsWith("no impact")) return false;
-    return tag.includes("design") || tag.includes("tech build") || tag.includes("pending");
+    return tag.includes("impact tech build");
   }) : [];
 
-  // ── Row 4: SAP Sprint Pipeline ────────────────────────────────────────────
-  const sprintRows = req ? req.sprintOrder.map(sp => ({ name:sp, ...(req.bySprint[sp]||{complete:0,partial:0,inProgress:0,notStarted:0,blocked:0,na:0,total:0,rows:[]}) })) : [];
+  // ── Sub-component for workstream status pill ──────────────────────────────
+  const WsPill = ({ status }) => {
+    const sl = String(status||"").toLowerCase();
+    const bg    = sl.includes("off")||sl.includes("at risk")?"#fee2e2":sl.includes("on track")?"#fef3c7":sl.includes("complete")?"#dbeafe":"#f1f5f9";
+    const color = sl.includes("off")||sl.includes("at risk")?"#b91c1c":sl.includes("on track")?"#b45309":sl.includes("complete")?"#1d4ed8":"#64748b";
+    const border= sl.includes("off")||sl.includes("at risk")?"#fca5a5":sl.includes("on track")?"#fcd34d":sl.includes("complete")?"#93c5fd":"#cbd5e1";
+    return <span style={{ background:bg, color, border:`1px solid ${border}`, borderRadius:4, padding:"2px 7px", fontSize:10, fontWeight:700, whiteSpace:"nowrap" }}>{status||"—"}</span>;
+  };
+  const barBg = status => { const s=String(status||"").toLowerCase(); return s.includes("off")?"#ef4444":s.includes("on track")?"#f59e0b":s.includes("complete")?"#22c55e":"#94a3b8"; };
 
   return (
-    <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+    <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
 
-      {/* ── Row 1: Program Health KPIs ───────────────────────────────────── */}
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(5,minmax(0,1fr))", gap:10 }}>
-        {[
-          { label:"Overall % Complete",        value: overallPct!=null?`${overallPct}%`:"—",
-            color: overallPct==null?C.muted:overallPct>=75?C.green:overallPct>=40?C.gold:C.delayed,
-            sub: wp?`${lvl3Rows.length} components`:"No workplan data",
-            onClick: null },
-          { label:"Open Risks",                value: rOpenRisks??"—",
-            color: rOpenRisks>0?C.delayed:C.green,
-            sub: raid?`${raid.delayed.filter(r=>String(r[raid.keys.type]||"").toLowerCase().includes("risk")).length} delayed`:"—",
-            onClick: raid&&rOpenRisks>0 ? ()=>openModal("Open Risks", raid.openRisks) : null },
-          { label:"Open Issues",               value: rOpenIssues??"—",
-            color: rOpenIssues>0?C.delayed:C.green,
-            sub: raid?`${raid.delayed.filter(r=>String(r[raid.keys.type]||"").toLowerCase().includes("issue")).length} delayed`:"—",
-            onClick: raid&&rOpenIssues>0 ? ()=>openModal("Open Issues", raid.openIssues) : null },
-          { label:"Open Actions & Decisions",  value: rOpenActDec??"—",
-            color: rOpenActDec>0?C.navyLight:C.green,
-            sub: raid?`${openActions.length} actions · ${openDecisions.length} decisions`:"—",
-            onClick: raid&&rOpenActDec>0 ? ()=>openModal("Open Actions & Decisions", [...openActions,...openDecisions]) : null },
-          { label:"Stories Blocked",           value: storiesBlocked??"—",
-            color: storiesBlocked>0?C.delayed:C.green,
-            sub: req?`of ${req.total} in-scope stories`:"No story data",
-            onClick: req&&storiesBlocked>0 ? ()=>setStoryModal({title:"Blocked Stories", rows:req.blocked}) : null },
-        ].map(({ label, value, color, sub, onClick }) => (
-          <div key={label} onClick={onClick}
-            onMouseEnter={e=>{ if(onClick) e.currentTarget.style.boxShadow="0 3px 10px rgba(0,0,0,0.12)"; }}
-            onMouseLeave={e=>{ e.currentTarget.style.boxShadow="0 1px 4px rgba(0,0,0,0.07)"; }}
-            style={{ background:C.white, border:`1px solid ${C.border}`, borderRadius:8,
-              padding:"12px 14px", borderTop:`3px solid ${color}`,
-              boxShadow:"0 1px 4px rgba(0,0,0,0.07)", cursor:onClick?"pointer":"default" }}>
-            <div style={{ color:C.muted, fontSize:9, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.07em", marginBottom:3 }}>{label}</div>
-            <div style={{ color, fontSize:26, fontWeight:800, lineHeight:1.1 }}>{value}</div>
-            <div style={{ color:C.muted, fontSize:9, marginTop:3 }}>{sub}</div>
-            {onClick && <div style={{ color:C.accent, fontSize:9, marginTop:2 }}>Details →</div>}
+      {/* ══ SECTION 1: RAID ════════════════════════════════════════════════ */}
+      {raid && (
+        <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+          <div style={{ fontSize:11, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.07em" }}>RAID</div>
+          {/* KPI row */}
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(6,minmax(0,1fr))", gap:10 }}>
+            <KpiCard label="Total Open RAIDs" value={raid.open.length}         color={C.navyLight} onClick={() => openModal("All Open RAIDs", raid.open)} />
+            <KpiCard label="Open Issues"       value={raid.openIssues.length}   color={C.delayed}   onClick={() => openModal("Open Issues",    raid.openIssues)} />
+            <KpiCard label="Open Risks"        value={raid.openRisks.length}    color={C.gold}      onClick={() => openModal("Open Risks",     raid.openRisks)} />
+            <KpiCard label="Delayed Risks"     value={delayedRisks.length}      color={C.delayed}   onClick={delayedRisks.length ? () => openModal("Delayed Risks", delayedRisks) : null} />
+            <KpiCard label="Due in 8 Days"     value={due8.length}              color={due8.length>0?C.delayed:C.muted}  onClick={due8.length  ? () => openModal("Due in 8 Days",  due8)  : null} />
+            <KpiCard label="Due in 14 Days"    value={due14.length}             color={due14.length>0?C.gold:C.muted}    onClick={due14.length ? () => openModal("Due in 14 Days", due14) : null} />
           </div>
-        ))}
-      </div>
+          {/* Priority chart */}
+          <Card>
+            <SecTitle title="Open RAID by Priority & Status" color={C.delayed} />
+            <HSBar
+              data={Object.entries(raid.byPriority).map(([name, d]) => ({ name, onTrack:d.onTrack, delayed:d.delayed, rows:d.rows }))}
+              valueKeys={["onTrack","delayed"]} colors={[C.onTrack, C.delayed]}
+              onBarClick={row => openModal(`Priority: ${row.name}`, row.rows)} />
+            <Leg items={[{label:"On Track",color:C.onTrack},{label:"Delayed",color:C.delayed}]} />
+          </Card>
+        </div>
+      )}
 
-      {/* ── Row 2: Workstream Health ─────────────────────────────────────── */}
-      {(pmtWorkstreams.length > 0 || epWorkstreams.length > 0) && (
-        <div style={{ display:"grid", gridTemplateColumns: epWorkstreams.length>0?"1fr 1fr":"1fr", gap:12 }}>
-          {[
-            { title:"PMT Workstream Health", rows:pmtWorkstreams, raidLabel:"Delayed RAIDs" },
-            ...(epWorkstreams.length>0 ? [{ title:"E&P Workstream Health", rows:epWorkstreams, raidLabel:"E&P RAIDs" }] : []),
-          ].map(({ title, rows: wsRows, raidLabel }) => (
-            <Card key={title} title={title} style={{ padding:0 }}>
+      {/* ══ SECTION 2: WORKPLAN ════════════════════════════════════════════ */}
+      {wp && (
+        <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+          <div style={{ fontSize:11, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.07em" }}>Workplan</div>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(4,minmax(0,1fr))", gap:10 }}>
+            {/* PMT tile */}
+            {pmtGroup && (
+              <div onClick={() => setWpGroupModal({ title:"PMT Workplan", wsRows:pmtGroup.wsRows })}
+                onMouseEnter={e=>e.currentTarget.style.boxShadow="0 4px 14px rgba(0,0,0,0.12)"}
+                onMouseLeave={e=>e.currentTarget.style.boxShadow="0 1px 3px rgba(0,0,0,0.06)"}
+                style={{ background:C.white, border:`1px solid ${C.border}`, borderRadius:8,
+                  padding:"14px 16px", borderTop:`3px solid ${C.navyLight}`,
+                  boxShadow:"0 1px 3px rgba(0,0,0,0.06)", cursor:"pointer" }}>
+                <div style={{ color:C.muted, fontSize:9, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.07em", marginBottom:3 }}>PMT Workplan</div>
+                <div style={{ color:C.navyLight, fontSize:26, fontWeight:800, lineHeight:1 }}>{pmtGroup.pct!=null?`${pmtGroup.pct}%`:"—"}</div>
+                {pmtGroup.offTrack>0
+                  ? <div style={{ color:C.delayed, fontSize:10, marginTop:3, fontWeight:600 }}>{pmtGroup.offTrack} delayed</div>
+                  : <div style={{ color:C.muted, fontSize:10, marginTop:3 }}>{pmtGroup.total} activities</div>}
+                <div style={{ color:C.accent, fontSize:9, marginTop:2 }}>Workstream breakdown →</div>
+              </div>
+            )}
+            {/* E&P tile */}
+            {epGroup && (
+              <div onClick={() => setWpGroupModal({ title:"E&P Workplan", wsRows:epGroup.wsRows })}
+                onMouseEnter={e=>e.currentTarget.style.boxShadow="0 4px 14px rgba(0,0,0,0.12)"}
+                onMouseLeave={e=>e.currentTarget.style.boxShadow="0 1px 3px rgba(0,0,0,0.06)"}
+                style={{ background:C.white, border:`1px solid ${C.border}`, borderRadius:8,
+                  padding:"14px 16px", borderTop:`3px solid ${C.complete}`,
+                  boxShadow:"0 1px 3px rgba(0,0,0,0.06)", cursor:"pointer" }}>
+                <div style={{ color:C.muted, fontSize:9, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.07em", marginBottom:3 }}>E&P Workplan</div>
+                <div style={{ color:C.complete, fontSize:26, fontWeight:800, lineHeight:1 }}>{epGroup.pct!=null?`${epGroup.pct}%`:"—"}</div>
+                {epGroup.offTrack>0
+                  ? <div style={{ color:C.delayed, fontSize:10, marginTop:3, fontWeight:600 }}>{epGroup.offTrack} delayed</div>
+                  : <div style={{ color:C.muted, fontSize:10, marginTop:3 }}>{epGroup.total} activities</div>}
+                <div style={{ color:C.accent, fontSize:9, marginTop:2 }}>Workstream breakdown →</div>
+              </div>
+            )}
+            {/* Due in 8 days */}
+            <div onClick={due8wp.length ? () => openModal("Activities Due in 8 Days", due8wp) : undefined}
+              onMouseEnter={e=>{ if(due8wp.length) e.currentTarget.style.boxShadow="0 4px 14px rgba(0,0,0,0.12)"; }}
+              onMouseLeave={e=>e.currentTarget.style.boxShadow="0 1px 3px rgba(0,0,0,0.06)"}
+              style={{ background:C.white, border:`1px solid ${C.border}`, borderRadius:8,
+                padding:"14px 16px", borderTop:`3px solid ${due8wp.length>0?C.delayed:C.muted}`,
+                boxShadow:"0 1px 3px rgba(0,0,0,0.06)", cursor:due8wp.length?"pointer":"default" }}>
+              <div style={{ color:C.muted, fontSize:9, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.07em", marginBottom:3 }}>Activities Due ≤ 8 Days</div>
+              <div style={{ color:due8wp.length>0?C.delayed:C.muted, fontSize:26, fontWeight:800, lineHeight:1 }}>{due8wp.length}</div>
+              <div style={{ color:C.muted, fontSize:10, marginTop:3 }}>not yet complete</div>
+              {due8wp.length>0 && <div style={{ color:C.accent, fontSize:9, marginTop:2 }}>Details →</div>}
+            </div>
+            {/* Due in 14 days */}
+            <div onClick={due14wp.length ? () => openModal("Activities Due in 14 Days", due14wp) : undefined}
+              onMouseEnter={e=>{ if(due14wp.length) e.currentTarget.style.boxShadow="0 4px 14d rgba(0,0,0,0.12)"; }}
+              onMouseLeave={e=>e.currentTarget.style.boxShadow="0 1px 3px rgba(0,0,0,0.06)"}
+              style={{ background:C.white, border:`1px solid ${C.border}`, borderRadius:8,
+                padding:"14px 16px", borderTop:`3px solid ${due14wp.length>0?C.gold:C.muted}`,
+                boxShadow:"0 1px 3px rgba(0,0,0,0.06)", cursor:due14wp.length?"pointer":"default" }}>
+              <div style={{ color:C.muted, fontSize:9, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.07em", marginBottom:3 }}>Activities Due ≤ 14 Days</div>
+              <div style={{ color:due14wp.length>0?C.gold:C.muted, fontSize:26, fontWeight:800, lineHeight:1 }}>{due14wp.length}</div>
+              <div style={{ color:C.muted, fontSize:10, marginTop:3 }}>not yet complete</div>
+              {due14wp.length>0 && <div style={{ color:C.accent, fontSize:9, marginTop:2 }}>Details →</div>}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══ SECTION 3: SPRINT BUILD (numbers only) ═════════════════════════ */}
+      {req && sprintRows.length > 0 && (
+        <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+          <div style={{ fontSize:11, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.07em" }}>SAP Sprint Build</div>
+          <Card style={{ padding:0 }}>
+            <table style={{ width:"100%", borderCollapse:"collapse", fontSize:11 }}>
+              <thead>
+                <tr style={{ background:"#162f50" }}>
+                  {["Sprint","Total","Complete","In Progress","Blocked","Not Started","Partial"].map((h,i) => (
+                    <th key={h} style={{ padding:"8px 12px", textAlign:i===0?"left":"center", color:"#fff", fontSize:10, fontWeight:700, whiteSpace:"nowrap" }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {sprintRows.map((sp, i) => (
+                  <tr key={sp.name}
+                    onClick={() => sp.rows?.length && openModal(`Sprint: ${sp.name}`, sp.rows)}
+                    onMouseEnter={e => { if(sp.rows?.length) e.currentTarget.style.background="#eef4ff"; }}
+                    onMouseLeave={e => e.currentTarget.style.background = i%2===0?C.white:"#f8fafc"}
+                    style={{ background:i%2===0?C.white:"#f8fafc", borderBottom:`1px solid ${C.border}`, cursor:sp.rows?.length?"pointer":"default" }}>
+                    <td style={{ padding:"8px 12px", fontWeight:600, color:C.text }}>{sp.name}</td>
+                    <td style={{ padding:"8px 12px", textAlign:"center", fontWeight:700, color:C.text }}>{sp.total||"—"}</td>
+                    <td style={{ padding:"8px 12px", textAlign:"center", fontWeight:700, color:"#1d4ed8" }}>{sp.complete||"—"}</td>
+                    <td style={{ padding:"8px 12px", textAlign:"center", fontWeight:700, color:"#15803d" }}>{sp.inProgress||"—"}</td>
+                    <td style={{ padding:"8px 12px", textAlign:"center", fontWeight:700, color:"#b91c1c" }}>{sp.blocked||"—"}</td>
+                    <td style={{ padding:"8px 12px", textAlign:"center", fontWeight:700, color:"#475569" }}>{sp.notStarted||"—"}</td>
+                    <td style={{ padding:"8px 12px", textAlign:"center", fontWeight:700, color:"#0369a1" }}>{sp.partial||"—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </Card>
+        </div>
+      )}
+
+      {/* ══ SECTION 4: ACTION — IMPACT TECH BUILD RAIDS ════════════════════ */}
+      {impactRaids.length > 0 && (
+        <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+          <div style={{ fontSize:11, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.07em" }}>
+            Action — Impact Tech Build RAIDs ({impactRaids.length})
+          </div>
+          <Card style={{ padding:0 }}>
+            <div style={{ overflowY:"auto", maxHeight:320 }}>
               <table style={{ width:"100%", borderCollapse:"collapse", fontSize:11 }}>
                 <thead>
-                  <tr style={{ background:"#f8fafc" }}>
-                    {["Workstream","Status","% Complete",raidLabel].map(h => (
-                      <th key={h} style={{ padding:"7px 10px", textAlign:"left", color:C.muted, fontWeight:600, fontSize:10, borderBottom:`1px solid ${C.border}` }}>{h}</th>
+                  <tr style={{ background:"#162f50" }}>
+                    {["RAID ID","Status","Component","Experience","Description","Owner","Due Date"].map(h => (
+                      <th key={h} style={{ padding:"8px 10px", textAlign:"left", color:"#fff", fontSize:10, fontWeight:700, whiteSpace:"nowrap" }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {wsRows.map((ws, i) => (
-                    <tr key={ws.name}
-                      onClick={() => ws.rows?.length && setWpModal({ title:ws.name, rows:ws.rows, initialFilter: ws.offTrack>0?"Off Track":"All" })}
-                      onMouseEnter={e => { if(ws.rows?.length) e.currentTarget.style.background="#eef4ff"; }}
-                      onMouseLeave={e => { e.currentTarget.style.background = i%2===0?C.white:"#f8fafc"; }}
-                      style={{ background:i%2===0?C.white:"#f8fafc", borderBottom:`1px solid ${C.border}`, cursor: ws.rows?.length?"pointer":"default", transition:"background .1s" }}>
-                      <td style={{ padding:"7px 10px", fontWeight:600, color:C.text }}>
+                  {impactRaids.map((r, i) => {
+                    const sl = String(r[K.status]||"").toLowerCase();
+                    const sc = sl.includes("delay")?C.delayed:sl.includes("complete")?C.green:C.onTrack;
+                    const d  = daysUntil(r[K.date]);
+                    const dc = d!=null&&d<=8?C.delayed:d!=null&&d<=14?C.gold:C.muted;
+                    return (
+                      <tr key={i}
+                        onClick={() => openModal(`RAID: ${r[K.id]||""}`, [r])}
+                        onMouseEnter={e=>e.currentTarget.style.background="#eef4ff"}
+                        onMouseLeave={e=>e.currentTarget.style.background=i%2===0?C.white:"#f8fafc"}
+                        style={{ background:i%2===0?C.white:"#f8fafc", borderBottom:`1px solid ${C.border}`, cursor:"pointer" }}>
+                        <td style={{ padding:"7px 10px", fontWeight:700, color:C.navyLight, whiteSpace:"nowrap" }}>{r[K.id]||"—"}</td>
+                        <td style={{ padding:"7px 10px" }}><span style={{ background:sc+"20", color:sc, border:`1px solid ${sc}40`, borderRadius:4, padding:"2px 6px", fontSize:10, fontWeight:700 }}>{r[K.status]||"—"}</span></td>
+                        <td style={{ padding:"7px 10px", color:C.text }}>{r[K.component]||"—"}</td>
+                        <td style={{ padding:"7px 10px", color:C.muted }}>{r[K.experience]||"—"}</td>
+                        <td style={{ padding:"7px 10px", color:C.text, maxWidth:260, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={r[K.desc]||""}>{r[K.desc]||"—"}</td>
+                        <td style={{ padding:"7px 10px", color:C.muted, whiteSpace:"nowrap" }}>{r[K.owner]||"—"}</td>
+                        <td style={{ padding:"7px 10px", color:dc, fontWeight:600, whiteSpace:"nowrap" }}>{r[K.date]||"—"}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </div>
+      )}
+      {impactRaids.length === 0 && tagKey && raid && (
+        <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+          <div style={{ fontSize:11, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.07em" }}>Action — Impact Tech Build RAIDs</div>
+          <Card><div style={{ color:C.muted, fontSize:12 }}>No RAIDs with Tag "Action - Impact Tech Build" found.</div></Card>
+        </div>
+      )}
+
+      {/* ── Modals ─────────────────────────────────────────────────────────── */}
+      {wpGroupModal && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center" }}
+          onClick={() => setWpGroupModal(null)}>
+          <div style={{ background:C.white, borderRadius:10, width:"90%", maxWidth:1000, maxHeight:"90vh",
+            display:"flex", flexDirection:"column", boxShadow:"0 24px 60px rgba(0,0,0,0.3)" }}
+            onClick={e=>e.stopPropagation()}>
+            <div style={{ background:C.headerBg, padding:"12px 20px", borderRadius:"10px 10px 0 0",
+              display:"flex", justifyContent:"space-between", alignItems:"center", flexShrink:0 }}>
+              <span style={{ color:"#fff", fontWeight:700, fontSize:13 }}>{wpGroupModal.title} — Workstream Summary</span>
+              <button onClick={() => setWpGroupModal(null)} style={{ background:"rgba(255,255,255,0.15)", border:"none", color:"#fff", borderRadius:5, padding:"5px 14px", cursor:"pointer", fontSize:13, fontWeight:600 }}>✕</button>
+            </div>
+            <div style={{ overflowY:"auto", flex:1 }}>
+              <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
+                <thead>
+                  <tr style={{ background:"#162f50" }}>
+                    {["Workstream","Total","On Track","Delayed","% Complete","Due ≤14 Days","Status"].map((h,i) => (
+                      <th key={h} style={{ padding:"9px 12px", textAlign:i===0?"left":"center", color:"#fff", fontSize:11, fontWeight:700, whiteSpace:"nowrap" }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {wpGroupModal.wsRows.map(({ name, rows:wsAllRows, wsOff, wsOn, total, pct, status, due14 }, i) => (
+                    <tr key={name}
+                      onClick={() => setWpDrillModal({ title:name, rows:wsAllRows, initialFilter:wsOff>0?"Off Track":"All" })}
+                      onMouseEnter={e=>e.currentTarget.style.background="#eef4ff"}
+                      onMouseLeave={e=>e.currentTarget.style.background=i%2===0?C.white:"#f7f9fc"}
+                      style={{ background:i%2===0?C.white:"#f7f9fc", borderBottom:`1px solid ${C.border}`, cursor:"pointer" }}>
+                      <td style={{ padding:"10px 12px", fontWeight:600, color:C.text }}>
                         <span style={{ display:"flex", alignItems:"center", gap:6 }}>
-                          <span style={{ width:3, height:12, background:barColor(ws.status), borderRadius:2, display:"inline-block", flexShrink:0 }} />
-                          {ws.name}
+                          <span style={{ width:3, height:14, background:barBg(status), borderRadius:2, display:"inline-block", flexShrink:0 }} />
+                          {name}
                         </span>
                       </td>
-                      <td style={{ padding:"7px 10px" }}><StatusPill status={ws.status} /></td>
-                      <td style={{ padding:"7px 10px" }}>
-                        {ws.pct!=null ? (
-                          <div style={{ display:"flex", alignItems:"center", gap:5 }}>
-                            <div style={{ width:60, background:"#e2e8f0", borderRadius:3, height:5, overflow:"hidden" }}>
-                              <div style={{ width:`${ws.pct}%`, height:"100%", borderRadius:3, background:barColor(ws.status) }} />
+                      <td style={{ padding:"10px 12px", textAlign:"center", fontWeight:700, color:C.text }}>{total}</td>
+                      <td style={{ padding:"10px 12px", textAlign:"center", fontWeight:700, color:C.onTrack }}>{wsOn}</td>
+                      <td style={{ padding:"10px 12px", textAlign:"center", fontWeight:700, color:wsOff>0?C.delayed:C.muted }}>{wsOff}</td>
+                      <td style={{ padding:"10px 12px", textAlign:"center" }}>
+                        {pct!=null ? (
+                          <div style={{ display:"flex", alignItems:"center", gap:5, justifyContent:"center" }}>
+                            <div style={{ width:50, background:"#e2e8f0", borderRadius:3, height:6, overflow:"hidden" }}>
+                              <div style={{ width:`${pct}%`, height:"100%", background:barBg(status), borderRadius:3 }} />
                             </div>
-                            <span style={{ fontWeight:700, color:C.text, fontSize:11 }}>{ws.pct}%</span>
+                            <span style={{ fontWeight:700, fontSize:11 }}>{pct}%</span>
                           </div>
                         ) : <span style={{ color:C.muted }}>—</span>}
                       </td>
-                      <td style={{ padding:"7px 10px" }} onClick={e => e.stopPropagation()}>
-                        {ws.delayedRaids>0 ? (
-                          <span onClick={() => openModal(`${ws.name} — Delayed RAIDs`, ws.delayedWsRaids)}
-                            style={{ color:C.delayed, fontWeight:700, cursor:"pointer", fontSize:12 }}>
-                            {ws.delayedRaids} ↗
-                          </span>
-                        ) : ws.openRaids>0 ? (
-                          <span onClick={() => openModal(`${ws.name} — Open RAIDs`, ws.wsRaids)}
-                            style={{ color:C.navyLight, fontWeight:700, cursor:"pointer", fontSize:12 }}>
-                            {ws.openRaids} ↗
-                          </span>
-                        ) : <span style={{ color:C.muted }}>—</span>}
-                      </td>
+                      <td style={{ padding:"10px 12px", textAlign:"center", fontWeight:700, color:due14>0?C.gold:C.muted }}>{due14||"—"}</td>
+                      <td style={{ padding:"10px 12px", textAlign:"center" }}><WsPill status={status} /></td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-            </Card>
-          ))}
+            </div>
+            <div style={{ padding:"8px 16px", borderTop:`1px solid ${C.border}`, color:C.muted, fontSize:10, background:"#f8fafc" }}>
+              💡 Click any row to drill into task detail
+            </div>
+          </div>
         </div>
       )}
-
-      {/* ── Row 3: RAID KPIs + Charts (same as RAID Analysis tab) ──────── */}
-      {raid && (() => {
-        const K = raid.keys;
-        return (
-          <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
-            {/* 5 KPI cards */}
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:11 }}>
-              <KpiCard label="Open RAIDs"     value={raid.open.length}                          color={C.navyLight} onClick={() => openModal("All Open RAIDs", raid.open)} />
-              <KpiCard label="Open Issues"    value={raid.openIssues.length}                    color={C.delayed}   onClick={() => openModal("Open Issues",    raid.openIssues)} />
-              <KpiCard label="Open Risks"     value={raid.openRisks.length}                     color={C.gold}      onClick={() => openModal("Open Risks",     raid.openRisks)} />
-              <KpiCard label="On Track RAIDs" value={raid.open.length - raid.delayed.length}    color={C.onTrack}   onClick={() => openModal("On Track RAIDs", raid.open.filter(r => !String(r[K.status]||"").toLowerCase().includes("delay")))} />
-              <KpiCard label="Delayed RAIDs"  value={raid.delayed.length}                       color={C.delayed}   onClick={() => openModal("Delayed RAIDs",  raid.delayed)} />
-            </div>
-            {/* 3 horizontal bar charts */}
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:14 }}>
-              <Card>
-                <SecTitle title="Open RAID by Priority & Status" color={C.delayed} />
-                <HSBar data={Object.entries(raid.byPriority).map(([name, d]) => ({ name, onTrack:d.onTrack, delayed:d.delayed, rows:d.rows }))} valueKeys={["onTrack","delayed"]} colors={[C.onTrack,C.delayed]} onBarClick={row => openModal(`Priority: ${row.name}`, row.rows)} />
-                <Leg items={[{label:"On Track",color:C.onTrack},{label:"Delayed",color:C.delayed}]} />
-              </Card>
-              <Card>
-                <SecTitle title="Open RAID by Team" color={C.navyLight} />
-                <HSBar data={Object.entries(raid.byTeam).sort((a,b)=>(b[1].onTrack+b[1].delayed)-(a[1].onTrack+a[1].delayed)).slice(0,10).map(([name,d])=>({name,onTrack:d.onTrack,delayed:d.delayed,rows:d.rows}))} valueKeys={["onTrack","delayed"]} colors={[C.onTrack,C.delayed]} onBarClick={row => openModal(`Team: ${row.name}`, row.rows)} />
-                <Leg items={[{label:"On Track",color:C.onTrack},{label:"Delayed",color:C.delayed}]} />
-              </Card>
-              <Card>
-                <SecTitle title="Open RAID by Component" color={C.complete} />
-                <HSBar data={Object.entries(raid.byComponent).sort((a,b)=>(b[1].onTrack+b[1].delayed)-(a[1].onTrack+a[1].delayed)).slice(0,10).map(([name,d])=>({name,onTrack:d.onTrack,delayed:d.delayed,rows:d.rows}))} valueKeys={["onTrack","delayed"]} colors={[C.onTrack,C.delayed]} onBarClick={row => openModal(`Component: ${row.name}`, row.rows)} />
-                <Leg items={[{label:"On Track",color:C.onTrack},{label:"Delayed",color:C.delayed}]} />
-              </Card>
-            </div>
-            {/* Open Design RAIDs Impacting Build */}
-            {designImpactRaids.length > 0 && (
-              <Card title={`Open Design RAIDs Impacting Build (${designImpactRaids.length})`}>
-                <div style={{ overflowY:"auto", maxHeight:240 }}>
-                  <table style={{ width:"100%", borderCollapse:"collapse", fontSize:11 }}>
-                    <thead>
-                      <tr style={{ background:"#f8fafc" }}>
-                        {["RAID ID","Status","Component","Tag","Description","Owner"].map(h => (
-                          <th key={h} style={{ padding:"6px 8px", textAlign:"left", color:C.muted, fontWeight:600, fontSize:10, borderBottom:`1px solid ${C.border}`, whiteSpace:"nowrap" }}>{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {designImpactRaids.map((r, i) => {
-                        const sl = String(r[K.status]||"").toLowerCase();
-                        const sc = sl.includes("delay") ? C.delayed : sl.includes("complete") ? C.green : C.onTrack;
-                        return (
-                          <tr key={i} onClick={() => openModal(`Design RAID: ${r[K.id]||""}`, [r])}
-                            style={{ background:i%2===0?C.white:"#f8fafc", borderBottom:`1px solid ${C.border}`, cursor:"pointer" }}
-                            onMouseEnter={e=>e.currentTarget.style.background="#eef4ff"}
-                            onMouseLeave={e=>e.currentTarget.style.background=i%2===0?C.white:"#f8fafc"}>
-                            <td style={{ padding:"6px 8px", fontWeight:700, color:C.navyLight, whiteSpace:"nowrap" }}>{r[K.id]||"—"}</td>
-                            <td style={{ padding:"6px 8px" }}><span style={{ color:sc, fontWeight:700, fontSize:10 }}>{r[K.status]||"—"}</span></td>
-                            <td style={{ padding:"6px 8px", color:C.text, whiteSpace:"nowrap" }}>{r[K.component]||"—"}</td>
-                            <td style={{ padding:"6px 8px" }}>
-                              <span style={{ background:"#fef3c7", color:"#92400e", border:"1px solid #fcd34d", borderRadius:3, padding:"1px 5px", fontSize:10, whiteSpace:"nowrap" }}>
-                                {r[K.tag]||"—"}
-                              </span>
-                            </td>
-                            <td style={{ padding:"6px 8px", color:C.text, maxWidth:220, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={r[K.desc]||""}>{r[K.desc]||"—"}</td>
-                            <td style={{ padding:"6px 8px", color:C.muted, whiteSpace:"nowrap" }}>{r[K.owner]||"—"}</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </Card>
-            )}
-          </div>
-        );
-      })()}
-
-      {/* ── Row 4: SAP Sprint Pipeline ───────────────────────────────────── */}
-      {req && (
-        <Card title="SAP Sprint Pipeline" style={{ padding:0 }}>
-          {sprintRows.length === 0 ? (
-            <div style={{ padding:16, color:C.muted, fontSize:12 }}>No sprint data loaded.</div>
-          ) : (
-            <div style={{ display:"flex", flexDirection:"column" }}>
-              {/* Header row */}
-              <div style={{ display:"grid", gridTemplateColumns:"200px 1fr 50px 50px 50px 60px 50px", gap:8,
-                padding:"7px 12px", background:"#f8fafc", borderBottom:`1px solid ${C.border}`,
-                fontSize:10, fontWeight:600, color:C.muted }}>
-                <span>Sprint</span>
-                <span>Progress</span>
-                <span style={{ textAlign:"center", color:"#1d4ed8" }}>Done</span>
-                <span style={{ textAlign:"center", color:"#15803d" }}>In Prog</span>
-                <span style={{ textAlign:"center", color:"#b91c1c" }}>Blocked</span>
-                <span style={{ textAlign:"center", color:"#475569" }}>Not Strt</span>
-                <span style={{ textAlign:"center" }}>Total</span>
-              </div>
-
-              {sprintRows.map((sp, i) => (
-                <div key={sp.name}
-                  onClick={() => setStoryModal({ title:`Sprint: ${sp.name}`, rows:sp.rows||[] })}
-                  onMouseEnter={e => e.currentTarget.style.background="#eff6ff"}
-                  onMouseLeave={e => e.currentTarget.style.background = i%2===0?C.white:"#f8fafc"}
-                  style={{ display:"grid", gridTemplateColumns:"200px 1fr 50px 50px 50px 60px 50px", gap:8,
-                    padding:"8px 12px", background:i%2===0?C.white:"#f8fafc",
-                    borderBottom:`1px solid ${C.border}`, cursor:"pointer", alignItems:"center" }}>
-
-                  <span style={{ fontSize:11, fontWeight:600, color:C.text, overflow:"hidden",
-                    textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={sp.name}>{sp.name}</span>
-
-                  {/* Stacked progress bar */}
-                  <div style={{ display:"flex", borderRadius:3, overflow:"hidden", height:14, background:"#e2e8f0" }}>
-                    {[
-                      [sp.complete,   "#1d4ed8","Complete"],
-                      [sp.partial,    "#0369a1","Partial"],
-                      [sp.inProgress, "#15803d","In Progress"],
-                      [sp.blocked,    "#dc2626","Blocked"],
-                      [sp.notStarted, "#94a3b8","Not Started"],
-                      [sp.na,         "#c084fc","N/A"],
-                    ].map(([count, color, label]) => {
-                      if (!count || !sp.total) return null;
-                      const w = Math.round(count/sp.total*100);
-                      return (
-                        <div key={label} title={`${label}: ${count}`}
-                          style={{ width:`${w}%`, background:color, height:"100%",
-                            display:"flex", alignItems:"center", justifyContent:"center",
-                            fontSize:8, color:"#fff", fontWeight:700, overflow:"hidden" }}>
-                          {w>=8?count:""}
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  <span style={{ fontSize:12, fontWeight:700, color:"#1d4ed8",  textAlign:"center" }}>{sp.complete||"—"}</span>
-                  <span style={{ fontSize:12, fontWeight:700, color:"#15803d",  textAlign:"center" }}>{sp.inProgress||"—"}</span>
-                  <span style={{ fontSize:12, fontWeight:700, color:"#b91c1c",  textAlign:"center" }}>{sp.blocked||"—"}</span>
-                  <span style={{ fontSize:12, fontWeight:700, color:"#475569",  textAlign:"center" }}>{sp.notStarted||"—"}</span>
-                  <span style={{ fontSize:12, fontWeight:600, color:C.muted,    textAlign:"center" }}>{sp.total}</span>
-                </div>
-              ))}
-
-              {/* Legend */}
-              <div style={{ display:"flex", gap:12, padding:"8px 12px", background:"#f8fafc",
-                borderTop:`1px solid ${C.border}`, flexWrap:"wrap", alignItems:"center" }}>
-                <span style={{ fontSize:10, color:C.muted, fontWeight:600 }}>Status:</span>
-                {[["#1d4ed8","Complete"],["#0369a1","Partial"],["#15803d","In Progress"],["#dc2626","Blocked"],["#94a3b8","Not Started"]].map(([col,lbl]) => (
-                  <span key={lbl} style={{ display:"inline-flex", alignItems:"center", gap:4, fontSize:10, color:C.muted }}>
-                    <span style={{ width:10, height:10, borderRadius:2, background:col, display:"inline-block" }} />{lbl}
-                  </span>
-                ))}
-                <span style={{ marginLeft:"auto", fontSize:10, color:C.muted }}>Click any row to drill down</span>
-              </div>
-            </div>
-          )}
-        </Card>
-      )}
-
-      {/* ── Modals ──────────────────────────────────────────────────────── */}
-      {wpModal    && <WorkplanDrillModal title={wpModal.title} rows={wpModal.rows} initialFilter={wpModal.initialFilter} onClose={() => setWpModal(null)} />}
-      {storyModal && <StoryDrillModal   title={storyModal.title} rows={storyModal.rows} reqKeys={req?.keys}             onClose={() => setStoryModal(null)} />}
+      {wpDrillModal && <WorkplanDrillModal title={wpDrillModal.title} rows={wpDrillModal.rows} initialFilter={wpDrillModal.initialFilter} onClose={() => setWpDrillModal(null)} />}
     </div>
   );
 }
+
 
 // ─── RAID KPI DRILL-DOWN MODAL ───────────────────────────────────────────────
 function RaidKpiModal({ title, rows, K, teamKey, allTeams, allTypes, allComps, statusCol, hideType, hideStatus, colConfig, setColConfig, onClose }) {
