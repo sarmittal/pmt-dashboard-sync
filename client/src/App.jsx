@@ -1272,7 +1272,10 @@ function ExecutiveSummaryTab({ wp, raid, req, cap, openModal }) {
             <KpiCard label="Due in 8 Days"        value={due8.length}                            color={C.delayed}           onClick={due8.length  ? () => setRaidModal({ title:"RAID Due in 8 Days",   rows:due8  }) : null} />
             <KpiCard label="Due in 14 Days"       value={due14.length}                           color={C.navyLight}         onClick={due14.length ? () => setRaidModal({ title:"RAID Due in 14 Days",  rows:due14 }) : null} />
             <KpiCard label="RAIDs Impacting Build" value={impactOpen.length}                     color={C.navyLight}         sub={`${impactDelayed.length} Delayed`} subColor={C.delayed} onClick={impactOpen.length ? () => setRaidModal({ title:"RAIDs Impacting Build", rows:impactRaids, hideType:false, hideStatus:false }) : null} />
-            <KpiCard label="Blocked User Stories" value={blockedStories.length || (req ? 0 : "—")} color={C.blocked||"#8e44ad"} onClick={blockedStories.length ? () => openModal("Blocked User Stories", blockedStories) : null} />
+            <div style={{ position:"relative" }}>
+              <div style={{ position:"absolute", left:-5, top:"8%", bottom:"8%", width:2, background:C.border, borderRadius:1 }} />
+              <KpiCard label="Blocked User Stories" value={blockedStories.length || (req ? 0 : "—")} color={C.blocked||"#8e44ad"} onClick={blockedStories.length ? () => openModal("Blocked User Stories", blockedStories) : null} />
+            </div>
           </div>
           {/* Priority chart — exact same chart as RAID Analysis tab */}
           <Card>
