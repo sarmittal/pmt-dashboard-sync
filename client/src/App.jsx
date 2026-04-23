@@ -1035,6 +1035,7 @@ const getPriorityColor = (p) => { const k = Object.keys(PRIORITY_COLORS).find(k 
 function ExecutiveSummaryTab({ wp, raid, req, cap, openModal }) {
   const [wpGroupModal, setWpGroupModal] = useState(null); // { title, wsRows } — workstream summary modal
   const [wpDrillModal, setWpDrillModal] = useState(null); // { title, rows }   — WorkplanDrillModal
+  const [raidModal,    setRaidModal]    = useState(null); // { title, rows }   — RaidDrillModal
 
   const anyData = wp || raid || req || cap;
   if (!anyData) return <Empty label="No data loaded. Connect to Smartsheet to populate the Executive Summary." />;
@@ -1112,12 +1113,12 @@ function ExecutiveSummaryTab({ wp, raid, req, cap, openModal }) {
           <div style={{ fontSize:11, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.07em" }}>RAID</div>
           {/* KPI row */}
           <div style={{ display:"grid", gridTemplateColumns:"repeat(6,minmax(0,1fr))", gap:10 }}>
-            <KpiCard label="Total Open RAIDs" value={raid.open.length}         color={C.navyLight} onClick={() => openModal("All Open RAIDs", raid.open)} />
-            <KpiCard label="Open Issues"       value={raid.openIssues.length}   color={C.delayed}   onClick={() => openModal("Open Issues",    raid.openIssues)} />
-            <KpiCard label="Open Risks"        value={raid.openRisks.length}    color={C.gold}      onClick={() => openModal("Open Risks",     raid.openRisks)} />
-            <KpiCard label="Delayed Risks"     value={delayedRisks.length}      color={C.delayed}   onClick={delayedRisks.length ? () => openModal("Delayed Risks", delayedRisks) : null} />
-            <KpiCard label="Due in 8 Days"     value={due8.length}              color={due8.length>0?C.delayed:C.muted}  onClick={due8.length  ? () => openModal("Due in 8 Days",  due8)  : null} />
-            <KpiCard label="Due in 14 Days"    value={due14.length}             color={due14.length>0?C.gold:C.muted}    onClick={due14.length ? () => openModal("Due in 14 Days", due14) : null} />
+            <KpiCard label="Total Open RAIDs" value={raid.open.length}         color={C.navyLight} onClick={() => setRaidModal({ title:"All Open RAIDs", rows:raid.open })} />
+            <KpiCard label="Open Issues"       value={raid.openIssues.length}   color={C.delayed}   onClick={() => setRaidModal({ title:"Open Issues",    rows:raid.openIssues, initialTypeFilter:"Issue" })} />
+            <KpiCard label="Open Risks"        value={raid.openRisks.length}    color={C.gold}      onClick={() => setRaidModal({ title:"Open Risks",     rows:raid.openRisks,  initialTypeFilter:"Risk"  })} />
+            <KpiCard label="Delayed Risks"     value={delayedRisks.length}      color={C.delayed}   onClick={delayedRisks.length ? () => setRaidModal({ title:"Delayed Risks", rows:delayedRisks, initialTypeFilter:"Risk", initialStatusFilter:"Delayed" }) : null} />
+            <KpiCard label="Due in 8 Days"     value={due8.length}              color={due8.length>0?C.delayed:C.muted}  onClick={due8.length  ? () => setRaidModal({ title:"RAID Due in 8 Days",  rows:due8  }) : null} />
+            <KpiCard label="Due in 14 Days"    value={due14.length}             color={due14.length>0?C.gold:C.muted}    onClick={due14.length ? () => setRaidModal({ title:"RAID Due in 14 Days", rows:due14 }) : null} />
           </div>
           {/* Priority chart */}
           <Card>
@@ -1125,7 +1126,7 @@ function ExecutiveSummaryTab({ wp, raid, req, cap, openModal }) {
             <HSBar
               data={Object.entries(raid.byPriority).map(([name, d]) => ({ name, onTrack:d.onTrack, delayed:d.delayed, rows:d.rows }))}
               valueKeys={["onTrack","delayed"]} colors={[C.onTrack, C.delayed]}
-              onBarClick={row => openModal(`Priority: ${row.name}`, row.rows)} />
+              onBarClick={row => setRaidModal({ title:`Priority: ${row.name}`, rows:row.rows })} />
             <Leg items={[{label:"On Track",color:C.onTrack},{label:"Delayed",color:C.delayed}]} />
           </Card>
         </div>
@@ -1169,7 +1170,7 @@ function ExecutiveSummaryTab({ wp, raid, req, cap, openModal }) {
               </div>
             )}
             {/* Due in 8 days */}
-            <div onClick={due8wp.length ? () => openModal("Activities Due in 8 Days", due8wp) : undefined}
+            <div onClick={due8wp.length ? () => setWpDrillModal({ title:"Activities Due ≤ 8 Days", rows:due8wp, initialFilter:"All" }) : undefined}
               onMouseEnter={e=>{ if(due8wp.length) e.currentTarget.style.boxShadow="0 4px 14px rgba(0,0,0,0.12)"; }}
               onMouseLeave={e=>e.currentTarget.style.boxShadow="0 1px 3px rgba(0,0,0,0.06)"}
               style={{ background:C.white, border:`1px solid ${C.border}`, borderRadius:8,
@@ -1181,7 +1182,7 @@ function ExecutiveSummaryTab({ wp, raid, req, cap, openModal }) {
               {due8wp.length>0 && <div style={{ color:C.accent, fontSize:9, marginTop:2 }}>Details →</div>}
             </div>
             {/* Due in 14 days */}
-            <div onClick={due14wp.length ? () => openModal("Activities Due in 14 Days", due14wp) : undefined}
+            <div onClick={due14wp.length ? () => setWpDrillModal({ title:"Activities Due ≤ 14 Days", rows:due14wp, initialFilter:"All" }) : undefined}
               onMouseEnter={e=>{ if(due14wp.length) e.currentTarget.style.boxShadow="0 4px 14d rgba(0,0,0,0.12)"; }}
               onMouseLeave={e=>e.currentTarget.style.boxShadow="0 1px 3px rgba(0,0,0,0.06)"}
               style={{ background:C.white, border:`1px solid ${C.border}`, borderRadius:8,
@@ -1343,6 +1344,7 @@ function ExecutiveSummaryTab({ wp, raid, req, cap, openModal }) {
         </div>
       )}
       {wpDrillModal && <WorkplanDrillModal title={wpDrillModal.title} rows={wpDrillModal.rows} initialFilter={wpDrillModal.initialFilter} onClose={() => setWpDrillModal(null)} />}
+      {raidModal && <RaidDrillModal title={raidModal.title} rows={raidModal.rows} raidKeys={raid?.keys} initialStatusFilter={raidModal.initialStatusFilter} initialTypeFilter={raidModal.initialTypeFilter} onClose={() => setRaidModal(null)} />}
     </div>
   );
 }
