@@ -4776,7 +4776,21 @@ function ScorecardClassicTab({ wp, raid, req, openModal }) {
 function ScorecardTab({ wp, raid, req, openModal }) {
   const [raidModal, setRaidModal] = useState(null);
   const [storyModal, setStoryModal] = useState(null);
-  const [wpDrillModal, setWpDrillModal] = useState(null); // { title, rows }
+  const [wpDrillModal, setWpDrillModal] = useState(null);
+  const [modalColConfig, setModalColConfig] = useState({
+    raidId:    { label:"RAID ID",              visible:true,  width:90  },
+    status:    { label:"Status",               visible:true,  width:90  },
+    type:      { label:"Type",                 visible:true,  width:90  },
+    component: { label:"Component",            visible:true,  width:130 },
+    experience:{ label:"Experience",           visible:true,  width:90  },
+    topic:     { label:"Topic",                visible:true,  width:90  },
+    desc:      { label:"Description",          visible:true,  width:260 },
+    comment:   { label:"Comments / Resolution",visible:true,  width:220 },
+    owner:     { label:"Owner",                visible:true,  width:110 },
+    team:      { label:"Primary Team (Owner)", visible:true,  width:140 },
+    critPath:  { label:"Critical Path",        visible:true,  width:100 },
+    dueDate:   { label:"Due Date",             visible:true,  width:85  },
+  });
   if (!raid && !req && !wp) return <Empty label="Upload files to view Component Scorecard." />;
 
   // ── Component name aliases ────────────────────────────────────────────────
@@ -5620,8 +5634,29 @@ function ScorecardTab({ wp, raid, req, openModal }) {
         </div>
       </Card>
 
-      {/* RAID drill-down */}
-      {raidModal && <RaidDrillModal title={raidModal.title} rows={raidModal.rows} raidKeys={raid?.keys} onClose={()=>setRaidModal(null)} />}
+      {/* RAID drill-down — same rich modal as RAID Analysis tab */}
+      {raidModal && raid && (() => {
+        const K = raid.keys;
+        const teamKey = K.team || "Primary Team (Owner)";
+        const statusCol = s => { const sl = String(s||"").toLowerCase(); return sl.includes("delay") ? C.delayed : sl.includes("complete") ? C.complete : C.onTrack; };
+        const allModalTeams = Array.from(new Set(raidModal.rows.map(r => String(r[teamKey]||"").trim()).filter(Boolean))).sort();
+        const allModalTypes = Array.from(new Set(raidModal.rows.map(r => String(r[K.type]||"").trim()).filter(Boolean))).sort();
+        const allModalComps = Array.from(new Set(raidModal.rows.map(r => String(r[K.component]||"").trim()).filter(Boolean))).sort();
+        return (
+          <RaidKpiModal
+            title={raidModal.title}
+            rows={raidModal.rows}
+            K={K} teamKey={teamKey}
+            allTeams={allModalTeams} allTypes={allModalTypes} allComps={allModalComps}
+            statusCol={statusCol}
+            hideType={raidModal.hideType || false}
+            hideStatus={raidModal.hideStatus || false}
+            colConfig={modalColConfig}
+            setColConfig={setModalColConfig}
+            onClose={() => setRaidModal(null)}
+          />
+        );
+      })()}
       {/* Story drill-down */}
       {storyModal && <StoryDrillModal title={storyModal.title} rows={storyModal.rows} reqKeys={req?.keys} onClose={()=>setStoryModal(null)} />}
       {/* Workplan hierarchy drill-down */}
