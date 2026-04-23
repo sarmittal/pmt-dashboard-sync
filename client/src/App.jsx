@@ -1084,6 +1084,25 @@ function ExecutiveSummaryTab({ wp, raid, req, cap, openModal }) {
   const due8wp   = wp ? wp.allRows.filter(r => isLeaf(r) && !getWpS(r).includes("complete") && (() => { const d=daysUntil(r["Finish"]||r["End Date"]); return d!=null&&d>=0&&d<=8; })()) : [];
   const due14wp  = wp ? wp.allRows.filter(r => isLeaf(r) && !getWpS(r).includes("complete") && (() => { const d=daysUntil(r["Finish"]||r["End Date"]); return d!=null&&d>=0&&d<=14; })()) : [];
 
+  // Expand due leaf rows to include their ancestor group rows so WorkplanDrillModal can render hierarchy
+  const withAncestors = (dueLeaves) => {
+    if (!wp || !dueLeaves.length) return dueLeaves;
+    const allRows = wp.allRows;
+    const dueSet = new Set(dueLeaves);
+    const includeIdx = new Set();
+    for (let i = 0; i < allRows.length; i++) {
+      if (!dueSet.has(allRows[i])) continue;
+      includeIdx.add(i);
+      const leafLvl = Number(allRows[i]["Lvl"] ?? 99);
+      let lookFor = leafLvl - 1;
+      for (let j = i - 1; j >= 0 && lookFor >= 0; j--) {
+        const lvl = Number(allRows[j]["Lvl"] ?? 99);
+        if (lvl === lookFor) { includeIdx.add(j); lookFor--; }
+      }
+    }
+    return allRows.filter((_, i) => includeIdx.has(i));
+  };
+
   // ── Section 3: Sprint numbers ─────────────────────────────────────────────
   const sprintRows = req ? req.sprintOrder.map(sp => ({ name:sp, ...(req.bySprint[sp]||{complete:0,partial:0,inProgress:0,notStarted:0,blocked:0,total:0,rows:[]}) })) : [];
 
@@ -1120,14 +1139,37 @@ function ExecutiveSummaryTab({ wp, raid, req, cap, openModal }) {
             <KpiCard label="Due in 8 Days"     value={due8.length}              color={due8.length>0?C.delayed:C.muted}  onClick={due8.length  ? () => setRaidModal({ title:"RAID Due in 8 Days",  rows:due8  }) : null} />
             <KpiCard label="Due in 14 Days"    value={due14.length}             color={due14.length>0?C.gold:C.muted}    onClick={due14.length ? () => setRaidModal({ title:"RAID Due in 14 Days", rows:due14 }) : null} />
           </div>
-          {/* Priority chart */}
+          {/* Priority chart — exact same chart as RAID Analysis tab */}
           <Card>
-            <SecTitle title="Open RAID by Priority & Status" color={C.delayed} />
-            <HSBar
-              data={Object.entries(raid.byPriority).map(([name, d]) => ({ name, onTrack:d.onTrack, delayed:d.delayed, rows:d.rows }))}
-              valueKeys={["onTrack","delayed"]} colors={[C.onTrack, C.delayed]}
-              onBarClick={row => setRaidModal({ title:`Priority: ${row.name}`, rows:row.rows })} />
-            <Leg items={[{label:"On Track",color:C.onTrack},{label:"Delayed",color:C.delayed}]} />
+            <div style={{ fontSize:11, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:10 }}>
+              By Priority — Open vs Delayed
+            </div>
+            <div style={{ display:"flex", flexDirection:"column", gap:7 }}>
+              {Object.entries(raid.byPriority)
+                .sort((a,b) => String(a[0]).localeCompare(String(b[0])))
+                .map(([pri, d]) => {
+                  const maxTotal = Math.max(...Object.values(raid.byPriority).map(x=>x.total), 1);
+                  const openRows    = d.rows.filter(r => !String(r[K.status]||"").toLowerCase().includes("delay"));
+                  const delayedRows = d.rows.filter(r => String(r[K.status]||"").toLowerCase().includes("delay"));
+                  return (
+                    <div key={pri} style={{ display:"flex", alignItems:"center", gap:8 }}>
+                      <div style={{ minWidth:100, fontSize:11, fontWeight:700, color:C.text, whiteSpace:"nowrap" }}>{pri}</div>
+                      <div style={{ flex:1, display:"flex", height:20, borderRadius:4, overflow:"hidden", background:"#f0f2f5" }}>
+                        {d.open > 0 && <div style={{ width:`${(d.open/maxTotal)*100}%`, background:C.onTrack, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", minWidth:4 }} onClick={()=>setRaidModal({ title:`${pri}`, rows:d.rows })}>{d.open >= 2 && <span style={{ color:"#fff", fontSize:10, fontWeight:700 }}>{d.open}</span>}</div>}
+                        {d.delayed > 0 && <div style={{ width:`${(d.delayed/maxTotal)*100}%`, background:C.delayed, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", minWidth:4 }} onClick={()=>setRaidModal({ title:`${pri} — Delayed`, rows:delayedRows, initialStatusFilter:"Delayed" })}>{d.delayed >= 2 && <span style={{ color:"#fff", fontSize:10, fontWeight:700 }}>{d.delayed}</span>}</div>}
+                      </div>
+                      <div style={{ display:"flex", gap:5, minWidth:120 }}>
+                        <span style={{ background:C.onTrack+"20", color:"#856a00", border:`1px solid ${C.onTrack}50`, borderRadius:3, padding:"2px 7px", fontSize:10, fontWeight:700, cursor:"pointer" }} onClick={()=>openRows.length&&setRaidModal({ title:`${pri}`, rows:d.rows })}>Open: {d.open}</span>
+                        <span style={{ background:C.delayed+"20", color:C.delayed, border:`1px solid ${C.delayed}40`, borderRadius:3, padding:"2px 7px", fontSize:10, fontWeight:700, cursor:"pointer" }} onClick={()=>delayedRows.length&&setRaidModal({ title:`${pri} — Delayed`, rows:delayedRows, initialStatusFilter:"Delayed" })}>Del: {d.delayed}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+            <div style={{ display:"flex", gap:12, marginTop:8 }}>
+              <span style={{ display:"flex", alignItems:"center", gap:4, fontSize:10, color:C.muted }}><span style={{ width:10,height:10,borderRadius:2,background:C.onTrack,display:"inline-block" }} />Open</span>
+              <span style={{ display:"flex", alignItems:"center", gap:4, fontSize:10, color:C.muted }}><span style={{ width:10,height:10,borderRadius:2,background:C.delayed,display:"inline-block" }} />Delayed</span>
+            </div>
           </Card>
         </div>
       )}
@@ -1170,7 +1212,7 @@ function ExecutiveSummaryTab({ wp, raid, req, cap, openModal }) {
               </div>
             )}
             {/* Due in 8 days */}
-            <div onClick={due8wp.length ? () => setWpDrillModal({ title:"Activities Due ≤ 8 Days", rows:due8wp, initialFilter:"All" }) : undefined}
+            <div onClick={due8wp.length ? () => setWpDrillModal({ title:"Activities Due ≤ 8 Days", rows:withAncestors(due8wp), initialFilter:"All" }) : undefined}
               onMouseEnter={e=>{ if(due8wp.length) e.currentTarget.style.boxShadow="0 4px 14px rgba(0,0,0,0.12)"; }}
               onMouseLeave={e=>e.currentTarget.style.boxShadow="0 1px 3px rgba(0,0,0,0.06)"}
               style={{ background:C.white, border:`1px solid ${C.border}`, borderRadius:8,
@@ -1182,7 +1224,7 @@ function ExecutiveSummaryTab({ wp, raid, req, cap, openModal }) {
               {due8wp.length>0 && <div style={{ color:C.accent, fontSize:9, marginTop:2 }}>Details →</div>}
             </div>
             {/* Due in 14 days */}
-            <div onClick={due14wp.length ? () => setWpDrillModal({ title:"Activities Due ≤ 14 Days", rows:due14wp, initialFilter:"All" }) : undefined}
+            <div onClick={due14wp.length ? () => setWpDrillModal({ title:"Activities Due ≤ 14 Days", rows:withAncestors(due14wp), initialFilter:"All" }) : undefined}
               onMouseEnter={e=>{ if(due14wp.length) e.currentTarget.style.boxShadow="0 4px 14d rgba(0,0,0,0.12)"; }}
               onMouseLeave={e=>e.currentTarget.style.boxShadow="0 1px 3px rgba(0,0,0,0.06)"}
               style={{ background:C.white, border:`1px solid ${C.border}`, borderRadius:8,
@@ -1233,53 +1275,53 @@ function ExecutiveSummaryTab({ wp, raid, req, cap, openModal }) {
       )}
 
       {/* ══ SECTION 4: ACTION — IMPACT TECH BUILD RAIDS ════════════════════ */}
-      {impactRaids.length > 0 && (
+      {raid && (
         <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
           <div style={{ fontSize:11, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.07em" }}>
-            Action — Impact Tech Build RAIDs ({impactRaids.length})
+            Action — Impact Tech Build RAIDs{impactRaids.length > 0 ? ` (${impactRaids.length})` : ""}
           </div>
-          <Card style={{ padding:0 }}>
-            <div style={{ overflowY:"auto", maxHeight:320 }}>
-              <table style={{ width:"100%", borderCollapse:"collapse", fontSize:11 }}>
-                <thead>
-                  <tr style={{ background:"#162f50" }}>
-                    {["RAID ID","Status","Component","Experience","Description","Owner","Due Date"].map(h => (
-                      <th key={h} style={{ padding:"8px 10px", textAlign:"left", color:"#fff", fontSize:10, fontWeight:700, whiteSpace:"nowrap" }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {impactRaids.map((r, i) => {
-                    const sl = String(r[K.status]||"").toLowerCase();
-                    const sc = sl.includes("delay")?C.delayed:sl.includes("complete")?C.green:C.onTrack;
-                    const d  = daysUntil(r[K.date]);
-                    const dc = d!=null&&d<=8?C.delayed:d!=null&&d<=14?C.gold:C.muted;
-                    return (
-                      <tr key={i}
-                        onClick={() => openModal(`RAID: ${r[K.id]||""}`, [r])}
-                        onMouseEnter={e=>e.currentTarget.style.background="#eef4ff"}
-                        onMouseLeave={e=>e.currentTarget.style.background=i%2===0?C.white:"#f8fafc"}
-                        style={{ background:i%2===0?C.white:"#f8fafc", borderBottom:`1px solid ${C.border}`, cursor:"pointer" }}>
-                        <td style={{ padding:"7px 10px", fontWeight:700, color:C.navyLight, whiteSpace:"nowrap" }}>{r[K.id]||"—"}</td>
-                        <td style={{ padding:"7px 10px" }}><span style={{ background:sc+"20", color:sc, border:`1px solid ${sc}40`, borderRadius:4, padding:"2px 6px", fontSize:10, fontWeight:700 }}>{r[K.status]||"—"}</span></td>
-                        <td style={{ padding:"7px 10px", color:C.text }}>{r[K.component]||"—"}</td>
-                        <td style={{ padding:"7px 10px", color:C.muted }}>{r[K.experience]||"—"}</td>
-                        <td style={{ padding:"7px 10px", color:C.text, maxWidth:260, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={r[K.desc]||""}>{r[K.desc]||"—"}</td>
-                        <td style={{ padding:"7px 10px", color:C.muted, whiteSpace:"nowrap" }}>{r[K.owner]||"—"}</td>
-                        <td style={{ padding:"7px 10px", color:dc, fontWeight:600, whiteSpace:"nowrap" }}>{r[K.date]||"—"}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </Card>
-        </div>
-      )}
-      {impactRaids.length === 0 && tagKey && raid && (
-        <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-          <div style={{ fontSize:11, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.07em" }}>Action — Impact Tech Build RAIDs</div>
-          <Card><div style={{ color:C.muted, fontSize:12 }}>No RAIDs with Tag "Action - Impact Tech Build" found.</div></Card>
+          {impactRaids.length === 0 ? (
+            <Card><div style={{ color:C.muted, fontSize:12 }}>
+              {!tagKey ? "Tag column not found in RAID data — refresh data from Smartsheet." : "No RAIDs tagged \"Impact Tech Build\" found."}
+            </div></Card>
+          ) : (
+            <Card style={{ padding:0 }}>
+              <div style={{ overflowY:"auto", maxHeight:320 }}>
+                <table style={{ width:"100%", borderCollapse:"collapse", fontSize:11 }}>
+                  <thead>
+                    <tr style={{ background:"#162f50" }}>
+                      {["RAID ID","Status","Component","Experience","Description","Owner","Due Date"].map(h => (
+                        <th key={h} style={{ padding:"8px 10px", textAlign:"left", color:"#fff", fontSize:10, fontWeight:700, whiteSpace:"nowrap" }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {impactRaids.map((r, i) => {
+                      const sl = String(r[K.status]||"").toLowerCase();
+                      const sc = sl.includes("delay")?C.delayed:sl.includes("complete")?C.green:C.onTrack;
+                      const d  = daysUntil(r[K.date]);
+                      const dc = d!=null&&d<=8?C.delayed:d!=null&&d<=14?C.gold:C.muted;
+                      return (
+                        <tr key={i}
+                          onClick={() => setRaidModal({ title:`RAID: ${r[K.id]||""}`, rows:[r] })}
+                          onMouseEnter={e=>e.currentTarget.style.background="#eef4ff"}
+                          onMouseLeave={e=>e.currentTarget.style.background=i%2===0?C.white:"#f8fafc"}
+                          style={{ background:i%2===0?C.white:"#f8fafc", borderBottom:`1px solid ${C.border}`, cursor:"pointer" }}>
+                          <td style={{ padding:"7px 10px", fontWeight:700, color:C.navyLight, whiteSpace:"nowrap" }}>{r[K.id]||"—"}</td>
+                          <td style={{ padding:"7px 10px" }}><span style={{ background:sc+"20", color:sc, border:`1px solid ${sc}40`, borderRadius:4, padding:"2px 6px", fontSize:10, fontWeight:700 }}>{r[K.status]||"—"}</span></td>
+                          <td style={{ padding:"7px 10px", color:C.text }}>{r[K.component]||"—"}</td>
+                          <td style={{ padding:"7px 10px", color:C.muted }}>{r[K.experience]||"—"}</td>
+                          <td style={{ padding:"7px 10px", color:C.text, maxWidth:260, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={r[K.desc]||""}>{r[K.desc]||"—"}</td>
+                          <td style={{ padding:"7px 10px", color:C.muted, whiteSpace:"nowrap" }}>{r[K.owner]||"—"}</td>
+                          <td style={{ padding:"7px 10px", color:dc, fontWeight:600, whiteSpace:"nowrap" }}>{r[K.date]||"—"}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          )}
         </div>
       )}
 
