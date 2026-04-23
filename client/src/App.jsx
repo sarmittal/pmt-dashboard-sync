@@ -228,8 +228,8 @@ function parseRequirements(sheets) {
     bizReq:          ks.find(k => k === "Business Requirements") || ks.find(k => /business.?req/i.test(k)),
     acceptance:      ks.find(k => k === "Acceptance Criteria") || ks.find(k => /acceptance.?criteria/i.test(k)),
     pmExperience:    ks.find(k => k === "PM Experience") || ks.find(k => /pm.?experience|experience/i.test(k)),
-    // Main status column
-    status:          ks.find(k => k === "Status") || ks.find(k => /^status$/i.test(k)),
+    // Main status column — req sheet has no plain "Status"; fall back to derived status columns
+    status:          ks.find(k => k === "Status") || ks.find(k => k === "User Story Derived Status") || ks.find(k => /^status$/i.test(k)) || ks.find(k => /user.?story.?derived.?status/i.test(k)),
     // "User Story Review Status (D&A)" — used to filter Deprecated/Deferred rows
     derivedStatus:   ks.find(k => k === "User Story Review Status (D&A)")
                   || ks.find(k => /user.?story.?review.?status/i.test(k))
@@ -241,10 +241,10 @@ function parseRequirements(sheets) {
     closureSprint:   ks.find(k => k === "Targeted Closure Sprint") || ks.find(k => /target.?closure|closure.?sprint/i.test(k)),
     // Component = "Sub Process"
     component:       ks.find(k => k === "Sub Process") || ks.find(k => /sub.?process/i.test(k)) || ks.find(k => /component|module|feature/i.test(k)),
-    // "Functional Status Master List"
-    funcBuildStatus: ks.find(k => k === "Functional Status Master List") || ks.find(k => /functional.?status.?master/i.test(k)) || ks.find(k => /functional.?build/i.test(k)),
-    // "Technical Status Master List"
-    techBuildStatus: ks.find(k => k === "Technical Status Master List") || ks.find(k => /technical.?status.?master/i.test(k)) || ks.find(k => /tech.?build/i.test(k)),
+    // "Functional Build Status" (API name) or legacy "Functional Status Master List" (XLSX export name)
+    funcBuildStatus: ks.find(k => k === "Functional Build Status") || ks.find(k => k === "Functional Status Master List") || ks.find(k => /functional.?build/i.test(k)) || ks.find(k => /functional.?status/i.test(k)),
+    // "Tech Build Status" (API name) or legacy "Technical Status Master List" (XLSX export name)
+    techBuildStatus: ks.find(k => k === "Tech Build Status") || ks.find(k => k === "Technical Status Master List") || ks.find(k => /tech.?build/i.test(k)) || ks.find(k => /technical.?status/i.test(k)),
     assignee:        ks.find(k => /assign|owner/i.test(k)),
     priority:        ks.find(k => /priority/i.test(k)),
     // "Build Management Comments" or similar
