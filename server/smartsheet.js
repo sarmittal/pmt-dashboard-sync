@@ -37,13 +37,7 @@ const KEEP = {
     "Critical Path","Change Request Analysis",
     "Status of Decision Acceptance (PMO)","Hours Estimate",
   ],
-  req: [
-    "User Story","Req Id","Business Requirements","Acceptance Criteria",
-    "PM Experience","Status","User Story Review Status (D&A)",
-    "Build Cycle (Playback)","Build Cycle","Targeted Closure Sprint","Sub Process",
-    "Functional Status Master List","Technical Status Master List",
-    "Build Management Comments","Priority",
-  ],
+  req: null, // keep all columns so fuzzy-match in parseRequirements works regardless of exact Smartsheet title
   test: [
     "Scenarios","Scenario Id","SubProcess","Process Step ID","Step Description",
     "Persona","Estimated Test Cases","Primary User Story Ids","SIT Planned Testing",
