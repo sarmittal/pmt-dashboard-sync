@@ -50,6 +50,17 @@ async function doRefresh() {
 }
 
 // ── Routes ────────────────────────────────────────────────────────────────────
+
+// Returns first-row column names per sheet — helps diagnose title mismatches
+app.get("/api/debug/columns", (_req, res) => {
+  if (!cache) return res.status(503).json({ error: "No data cached — call /api/data first" });
+  const cols = {};
+  for (const [sheet, rows] of Object.entries(cache.data)) {
+    if (Array.isArray(rows) && rows.length > 0) cols[sheet] = Object.keys(rows[0]);
+  }
+  res.json(cols);
+});
+
 app.get("/api/health", (_req, res) => {
   res.json({
     status: "ok",
