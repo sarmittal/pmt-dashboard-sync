@@ -5140,15 +5140,30 @@ function ScorecardTab({ wp, raid, req, openModal }) {
 
       {/* ── KPI tiles ── */}
       {(() => {
-        // Pre-compute story rows by bucket across all components
-        const allCompRows = req ? Object.values(req.byComponent || {}).flatMap(d => d.rows || []) : [];
+        // Use pre-computed bucket counts from parseRequirements (already handles fallback to Status column)
+        const compData    = req ? Object.values(req.byComponent || {}) : [];
+        const allCompRows = compData.flatMap(d => d.rows || []);
+
+        // statusBucket with fallback: func/tech build status → Status column
         const statusBucket = r => {
           const fb = String(r[req?.keys?.funcBuildStatus] || "").toLowerCase();
           const tb = String(r[req?.keys?.techBuildStatus] || "").toLowerCase();
-          const worst = s => s.includes("block") ? 6 : s.includes("progress") ? 5 : s.includes("partial") ? 4 : s.includes("not start") ? 3 : s.includes("complete") ? 2 : s.includes("n/a") ? 1 : 0;
-          const w = Math.max(worst(fb), worst(tb));
-          return w === 6 ? "blocked" : w === 5 ? "inProgress" : w === 4 ? "partial" : w === 3 ? "notStarted" : w === 2 ? "complete" : "notStarted";
+          const rank = s => s.includes("block") ? 6 : s.includes("progress") ? 5 : s.includes("partial") ? 4 : s.includes("not start") ? 3 : s.includes("complete") ? 2 : s.includes("n/a") ? 1 : 0;
+          const w = Math.max(rank(fb), rank(tb));
+          if (w > 0) return w === 6 ? "blocked" : w === 5 ? "inProgress" : w === 4 ? "partial" : w === 3 ? "notStarted" : w === 2 ? "complete" : "na";
+          // Fallback to the generic Status column (mirrors parseRequirements logic)
+          const sv = String(r[req?.keys?.status] || "").toLowerCase();
+          return sv.includes("block") ? "blocked" : sv.includes("progress") ? "inProgress" : sv.includes("partial") ? "partial" : sv.includes("complete") ? "complete" : "notStarted";
         };
+
+        // Counts from pre-computed byComponent (most reliable — already uses same fallback)
+        const preCount = {
+          blocked:    compData.reduce((s,d)=>s+(d.blocked||0),0),
+          inProgress: compData.reduce((s,d)=>s+(d.inProgress||0),0),
+          partial:    compData.reduce((s,d)=>s+(d.partial||0),0),
+          complete:   compData.reduce((s,d)=>s+(d.complete||0),0),
+        };
+        // Row arrays for drill-down modals (filtered using statusBucket with fallback)
         const storyRows = {
           all:        allCompRows,
           blocked:    allCompRows.filter(r => statusBucket(r) === "blocked"),
@@ -5167,11 +5182,11 @@ function ScorecardTab({ wp, raid, req, openModal }) {
             val: allComps.filter(c => { const rc=getCompRaid(c); const rq=getCompReq(c); const cw=getCompWp(c); return rc.open>0||rc.delayed>0||(rq&&rq.total>0)||cw; }).length,
             col: C.navyLight, onClick: null,
           },
-          { lbl:"Total Stories", val: storyRows.all.length || "—",        col: C.navyLight, onClick: storyRows.all.length    ? () => setStoryModal({ title:"All Stories",    rows: storyRows.all        }) : null },
-          { lbl:"Blocked",       val: storyRows.blocked.length || "—",    col: C.delayed,   onClick: storyRows.blocked.length ? () => setStoryModal({ title:"Blocked Stories", rows: storyRows.blocked    }) : null },
-          { lbl:"In Progress",   val: storyRows.inProgress.length || "—", col: C.onTrack,   onClick: storyRows.inProgress.length ? () => setStoryModal({ title:"In Progress Stories", rows: storyRows.inProgress }) : null },
-          { lbl:"Partial",       val: storyRows.partial.length || "—",    col: "#0369a1",   onClick: storyRows.partial.length ? () => setStoryModal({ title:"Partial Build Stories", rows: storyRows.partial    }) : null },
-          { lbl:"Complete",      val: storyRows.complete.length || "—",   col: C.complete,  onClick: storyRows.complete.length ? () => setStoryModal({ title:"Complete Stories",  rows: storyRows.complete   }) : null },
+          { lbl:"Total Stories", val: storyRows.all.length || "—",   col: C.navyLight, onClick: storyRows.all.length       ? () => setStoryModal({ title:"All Stories",           rows: storyRows.all        }) : null },
+          { lbl:"Blocked",       val: preCount.blocked    || "—",   col: C.delayed,   onClick: preCount.blocked    > 0 ? () => setStoryModal({ title:"Blocked Stories",      rows: storyRows.blocked    }) : null },
+          { lbl:"In Progress",   val: preCount.inProgress || "—",   col: C.onTrack,   onClick: preCount.inProgress > 0 ? () => setStoryModal({ title:"In Progress Stories",  rows: storyRows.inProgress }) : null },
+          { lbl:"Partial",       val: preCount.partial    || "—",   col: "#0369a1",   onClick: preCount.partial    > 0 ? () => setStoryModal({ title:"Partial Build Stories", rows: storyRows.partial    }) : null },
+          { lbl:"Complete",      val: preCount.complete   || "—",   col: C.complete,  onClick: preCount.complete   > 0 ? () => setStoryModal({ title:"Complete Stories",     rows: storyRows.complete   }) : null },
           { lbl:"Open RAIDs",    val: raidOpenRows.length || "—",         col: C.gold,      onClick: raidOpenRows.length    ? () => setRaidModal({ title:"Open RAIDs — All Components",    rows: raidOpenRows    }) : null },
           { lbl:"Delayed RAIDs", val: raidDelayedRows.length || "—",      col: C.delayed,   onClick: raidDelayedRows.length ? () => setRaidModal({ title:"Delayed RAIDs — All Components", rows: raidDelayedRows }) : null },
         ];
