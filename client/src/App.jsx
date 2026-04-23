@@ -5657,10 +5657,11 @@ function ScorecardTab({ wp, raid, req, openModal }) {
                                 <div style={{ width:60, background:"#e2e8f0", borderRadius:4, height:7, overflow:"hidden" }}>
                                   <div style={{ width:`${cw.pctComplete}%`, height:"100%", borderRadius:4,
                                     background: (() => {
-                                      const s = String(cw.buildStatus || cw.designStatus || "").toLowerCase();
-                                      if (s.includes("off track"))  return C.delayed;
-                                      if (s.includes("on track"))   return C.gold;
-                                      if (s.includes("complete"))   return C.green;
+                                      const sd = String(cw.designStatus || "").toLowerCase();
+                                      const sb = String(cw.buildStatus  || "").toLowerCase();
+                                      if (sd.includes("off track") || sb.includes("off track")) return C.delayed;
+                                      if (sd.includes("on track")  || sb.includes("on track"))  return C.gold;
+                                      if (sd.includes("complete")  || sb.includes("complete"))  return C.green;
                                       return "#94a3b8"; // not started / unknown → grey
                                     })() }} />
                                 </div>
