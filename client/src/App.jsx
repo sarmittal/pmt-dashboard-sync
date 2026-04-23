@@ -1106,7 +1106,7 @@ function WorkstreamSummaryModal({ title, wsRows, onClose, onRowClick }) {
                   <td style={{ padding:"10px 12px", textAlign:"center" }}>
                     <div style={{ display:"flex", alignItems:"center", gap:6, justifyContent:"center" }}>
                       <div style={{ width:60, background:"#e2e8f0", borderRadius:4, height:7, overflow:"hidden" }}>
-                        <div style={{ width:`${pctVal}%`, height:"100%", background:pctVal>=75?C.green:pctVal>=40?C.gold:C.delayed, borderRadius:4 }} />
+                        <div style={{ width:`${pctVal}%`, height:"100%", background:healthColor, borderRadius:4 }} />
                       </div>
                       <span style={{ color:C.text, fontWeight:700, fontSize:11 }}>{pctVal}%</span>
                     </div>
@@ -1159,7 +1159,6 @@ function ExecutiveSummaryTab({ wp, raid, req, cap, openModal }) {
   const K = raid?.keys;
   const due8  = raid ? raid.open.filter(r => { const d=daysUntil(r[K.date]); return d!=null && d>=0 && d<=8;  }) : [];
   const due14 = raid ? raid.open.filter(r => { const d=daysUntil(r[K.date]); return d!=null && d>=0 && d<=14; }) : [];
-  const delayedRisks = raid ? raid.open.filter(r => String(r[K.type]||"").toLowerCase().includes("risk") && String(r[K.status]||"").toLowerCase().includes("delay")) : [];
   // Priority map with open/total fields to match RAID Analysis tab rendering
   const raidByPriority = raid ? (() => {
     const map = {};
@@ -1195,7 +1194,11 @@ function ExecutiveSummaryTab({ wp, raid, req, cap, openModal }) {
       const wsOff     = wsLeaves.filter(r => getWpS(r).includes("off track")).length;
       const wsOn      = wsLeaves.filter(r => getWpS(r).includes("on track")).length;
       const wsComplete= wsLeaves.filter(r => getWpS(r).includes("complete")).length;
-      const wsStatus  = String(wsHeader?.["Default Status"]||wsHeader?.["Status"]||"").trim() || (wsOff>0?"Off Track":wsPct===100?"Complete":wsOn>0?"On Track":"Not Started");
+      const wsNotStarted = wsLeaves.filter(r => { const s=getWpS(r); return !s||s.includes("not start"); }).length;
+      const wsStatus  = wsOff>0 ? "Off Track"
+                      : wsLeaves.length>0 && wsComplete>=wsLeaves.length ? "Complete"
+                      : wsLeaves.length===0 || wsNotStarted>=wsLeaves.length ? "Not Started"
+                      : "On Track";
       const wsDue14   = wsLeaves.filter(r => { const d=daysUntil(r["Finish"]||r["End Date"]); return d!=null&&d>=0&&d<=14&&!getWpS(r).includes("complete"); }).length;
       return { name, rows:wsAllRows, wsOff, wsOn, wsComplete, total:wsLeaves.length, pct:wsPct, status:wsStatus, due14:wsDue14 };
     }).filter(ws => ws.total > 0);
@@ -1232,9 +1235,16 @@ function ExecutiveSummaryTab({ wp, raid, req, cap, openModal }) {
 
   // ── Section 4: Impact Tech Build RAIDs ───────────────────────────────────
   const tagKey = K?.tag;
-  const impactRaids = raid && tagKey ? raid.items.filter(r => {
-    const tag = String(r[tagKey]||"").toLowerCase().trim();
-    return tag.includes("impact tech build");
+  // Search by tag column if found; otherwise scan all values (handles column name variants)
+  const impactRaids = raid ? raid.items.filter(r => {
+    if (tagKey) {
+      const tag = String(r[tagKey]||"").toLowerCase().trim();
+      return tag.includes("impact") && tag.includes("tech build");
+    }
+    return Object.values(r).some(v => {
+      const s = String(v||"").toLowerCase();
+      return s.includes("impact") && s.includes("tech build");
+    });
   }) : [];
 
   // ── Sub-component for workstream status pill ──────────────────────────────
@@ -1256,12 +1266,12 @@ function ExecutiveSummaryTab({ wp, raid, req, cap, openModal }) {
           <div style={{ fontSize:11, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.07em" }}>RAID</div>
           {/* KPI row */}
           <div style={{ display:"grid", gridTemplateColumns:"repeat(6,minmax(0,1fr))", gap:10 }}>
-            <KpiCard label="Total Open RAIDs" value={raid.open.length}         color={C.navyLight} onClick={() => setRaidModal({ title:"All Open RAIDs", rows:raid.open })} />
-            <KpiCard label="Open Issues"       value={raid.openIssues.length}   color={C.delayed}   onClick={() => setRaidModal({ title:"Open Issues",    rows:raid.openIssues, initialTypeFilter:"Issue" })} />
-            <KpiCard label="Open Risks"        value={raid.openRisks.length}    color={C.gold}      onClick={() => setRaidModal({ title:"Open Risks",     rows:raid.openRisks,  initialTypeFilter:"Risk"  })} />
-            <KpiCard label="Delayed Risks"     value={delayedRisks.length}      color={C.delayed}   onClick={delayedRisks.length ? () => setRaidModal({ title:"Delayed Risks", rows:delayedRisks, initialTypeFilter:"Risk", initialStatusFilter:"Delayed" }) : null} />
-            <KpiCard label="Due in 8 Days"     value={due8.length}              color={due8.length>0?C.delayed:C.muted}  onClick={due8.length  ? () => setRaidModal({ title:"RAID Due in 8 Days",  rows:due8  }) : null} />
-            <KpiCard label="Due in 14 Days"    value={due14.length}             color={due14.length>0?C.gold:C.muted}    onClick={due14.length ? () => setRaidModal({ title:"RAID Due in 14 Days", rows:due14 }) : null} />
+            <KpiCard label="Open Issues"   value={raid.openIssues.length}   color={C.delayed}    onClick={() => setRaidModal({ title:"Open Issues",    rows:raid.openIssues, hideType:true,  hideStatus:false })} />
+            <KpiCard label="Open Risks"    value={raid.openRisks.length}    color={C.gold}       onClick={() => setRaidModal({ title:"Open Risks",     rows:raid.openRisks,  hideType:true,  hideStatus:false })} />
+            <KpiCard label="Delayed RAIDs" value={raid.delayed.length}      color="#7b0d0d"      onClick={() => setRaidModal({ title:"Delayed RAIDs",  rows:raid.delayed,    hideType:false, hideStatus:true  })} />
+            <KpiCard label="Total Open"    value={raid.open.length}         color={C.navyLight}  onClick={() => setRaidModal({ title:"Total Open RAIDs",rows:raid.open,       hideType:false, hideStatus:false })} />
+            <KpiCard label="Due in 8 Days" value={due8.length}              color={due8.length>0?C.delayed:C.muted}    onClick={due8.length  ? () => setRaidModal({ title:"RAID Due in 8 Days",  rows:due8  }) : null} />
+            <KpiCard label="Due in 14 Days"value={due14.length}             color={due14.length>0?C.navyLight:C.muted} onClick={due14.length ? () => setRaidModal({ title:"RAID Due in 14 Days", rows:due14 }) : null} />
           </div>
           {/* Priority chart — exact same chart as RAID Analysis tab */}
           <Card>
