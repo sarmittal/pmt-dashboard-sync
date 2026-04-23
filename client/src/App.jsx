@@ -509,7 +509,7 @@ function UploadZone({ label, icon, loaded, onFile, hint, filename }) {
   );
 }
 
-function KpiCard({ label, value, color, sub, onClick }) {
+function KpiCard({ label, value, color, sub, subColor, onClick }) {
   const [hover, setHover] = useState(false);
   return (
     <div onClick={onClick} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
@@ -518,7 +518,7 @@ function KpiCard({ label, value, color, sub, onClick }) {
         cursor: onClick ? "pointer" : "default", transition: "box-shadow .15s" }}>
       <div style={{ color: C.muted, fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 3 }}>{label}</div>
       <div style={{ color, fontSize: 26, fontWeight: 800, lineHeight: 1 }}>{value}</div>
-      {sub && <div style={{ color: C.muted, fontSize: 10, marginTop: 3 }}>{sub}</div>}
+      {sub && <div style={{ color: subColor || C.muted, fontSize: 10, marginTop: 3, fontWeight: subColor ? 700 : 400 }}>{sub}</div>}
       {onClick && <div style={{ color: C.accent, fontSize: 10, marginTop: 3 }}>Click for details →</div>}
     </div>
   );
@@ -1263,50 +1263,16 @@ function ExecutiveSummaryTab({ wp, raid, req, cap, openModal }) {
       {raid && (
         <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
           <div style={{ fontSize:11, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.07em" }}>RAID</div>
-          {/* KPI row */}
-          <div style={{ display:"grid", gridTemplateColumns:"repeat(6,minmax(0,1fr))", gap:10 }}>
-            <KpiCard label="Open Issues"   value={raid.openIssues.length}   color={C.delayed}    onClick={() => setRaidModal({ title:"Open Issues",    rows:raid.openIssues, hideType:true,  hideStatus:false })} />
-            <KpiCard label="Open Risks"    value={raid.openRisks.length}    color={C.gold}       onClick={() => setRaidModal({ title:"Open Risks",     rows:raid.openRisks,  hideType:true,  hideStatus:false })} />
-            <KpiCard label="Delayed RAIDs" value={raid.delayed.length}      color="#7b0d0d"      onClick={() => setRaidModal({ title:"Delayed RAIDs",  rows:raid.delayed,    hideType:false, hideStatus:true  })} />
-            <KpiCard label="Total Open"    value={raid.open.length}         color={C.navyLight}  onClick={() => setRaidModal({ title:"Total Open RAIDs",rows:raid.open,       hideType:false, hideStatus:false })} />
-            <KpiCard label="Due in 8 Days" value={due8.length}              color={due8.length>0?C.delayed:C.muted}    onClick={due8.length  ? () => setRaidModal({ title:"RAID Due in 8 Days",  rows:due8  }) : null} />
-            <KpiCard label="Due in 14 Days"value={due14.length}             color={due14.length>0?C.navyLight:C.muted} onClick={due14.length ? () => setRaidModal({ title:"RAID Due in 14 Days", rows:due14 }) : null} />
-          </div>
-          {/* Impact Build + Blocked Stories cards */}
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
-            {/* RAIDs Impacting Build */}
-            <div
-              onClick={impactOpen.length ? () => setRaidModal({ title:"RAIDs Impacting Build", rows:impactRaids, hideType:false, hideStatus:false }) : undefined}
-              onMouseEnter={e=>{ if(impactOpen.length) e.currentTarget.style.boxShadow="0 4px 14px rgba(0,0,0,0.12)"; }}
-              onMouseLeave={e=>e.currentTarget.style.boxShadow="0 1px 3px rgba(0,0,0,0.06)"}
-              style={{ background:C.white, border:`1px solid ${C.border}`, borderRadius:8, padding:"14px 18px",
-                borderTop:`3px solid ${C.delayed}`, boxShadow:"0 1px 3px rgba(0,0,0,0.06)",
-                cursor:impactOpen.length?"pointer":"default" }}>
-              <div style={{ color:C.muted, fontSize:9, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.07em", marginBottom:8 }}>RAIDs Impacting Build</div>
-              <div style={{ display:"flex", gap:20, alignItems:"baseline" }}>
-                <div>
-                  <div style={{ color:C.navyLight, fontSize:26, fontWeight:800, lineHeight:1 }}>{impactOpen.length}</div>
-                  <div style={{ color:C.muted, fontSize:10, marginTop:3, fontWeight:600 }}>Open</div>
-                </div>
-                <div>
-                  <div style={{ color:C.delayed, fontSize:26, fontWeight:800, lineHeight:1 }}>{impactDelayed.length}</div>
-                  <div style={{ color:C.muted, fontSize:10, marginTop:3, fontWeight:600 }}>Delayed</div>
-                </div>
-              </div>
-              {impactOpen.length>0 && <div style={{ color:C.accent, fontSize:9, marginTop:6 }}>Click to view →</div>}
-            </div>
-            {/* Blocked User Stories */}
-            <div
-              onClick={blockedStories.length ? () => openModal("Blocked User Stories", blockedStories) : undefined}
-              onMouseEnter={e=>{ if(blockedStories.length) e.currentTarget.style.boxShadow="0 4px 14px rgba(0,0,0,0.12)"; }}
-              onMouseLeave={e=>e.currentTarget.style.boxShadow="0 1px 3px rgba(0,0,0,0.06)"}
-              style={{ background:C.white, border:`1px solid ${C.border}`, borderRadius:8, padding:"14px 18px",
-                borderTop:`3px solid ${C.blocked||"#8e44ad"}`, boxShadow:"0 1px 3px rgba(0,0,0,0.06)",
-                cursor:blockedStories.length?"pointer":"default" }}>
-              <div style={{ color:C.muted, fontSize:9, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.07em", marginBottom:8 }}>Blocked User Stories</div>
-              <div style={{ color:C.blocked||"#8e44ad", fontSize:30, fontWeight:800, lineHeight:1 }}>{blockedStories.length || (req ? 0 : "—")}</div>
-              {blockedStories.length>0 && <div style={{ color:C.accent, fontSize:9, marginTop:6 }}>Click to view →</div>}
-            </div>
+          {/* KPI row — all 8 cards in one row */}
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(8,minmax(0,1fr))", gap:10 }}>
+            <KpiCard label="Open Issues"          value={raid.openIssues.length}                 color={C.delayed}           onClick={() => setRaidModal({ title:"Open Issues",           rows:raid.openIssues, hideType:true,  hideStatus:false })} />
+            <KpiCard label="Open Risks"           value={raid.openRisks.length}                  color={C.gold}              onClick={() => setRaidModal({ title:"Open Risks",            rows:raid.openRisks,  hideType:true,  hideStatus:false })} />
+            <KpiCard label="Delayed RAIDs"        value={raid.delayed.length}                    color="#7b0d0d"             onClick={() => setRaidModal({ title:"Delayed RAIDs",         rows:raid.delayed,    hideType:false, hideStatus:true  })} />
+            <KpiCard label="Total Open"           value={raid.open.length}                       color={C.navyLight}         onClick={() => setRaidModal({ title:"Total Open RAIDs",      rows:raid.open,       hideType:false, hideStatus:false })} />
+            <KpiCard label="Due in 8 Days"        value={due8.length}                            color={C.delayed}           onClick={due8.length  ? () => setRaidModal({ title:"RAID Due in 8 Days",   rows:due8  }) : null} />
+            <KpiCard label="Due in 14 Days"       value={due14.length}                           color={C.navyLight}         onClick={due14.length ? () => setRaidModal({ title:"RAID Due in 14 Days",  rows:due14 }) : null} />
+            <KpiCard label="RAIDs Impacting Build" value={impactOpen.length}                     color={C.navyLight}         sub={`${impactDelayed.length} Delayed`} subColor={C.delayed} onClick={impactOpen.length ? () => setRaidModal({ title:"RAIDs Impacting Build", rows:impactRaids, hideType:false, hideStatus:false }) : null} />
+            <KpiCard label="Blocked User Stories" value={blockedStories.length || (req ? 0 : "—")} color={C.blocked||"#8e44ad"} onClick={blockedStories.length ? () => openModal("Blocked User Stories", blockedStories) : null} />
           </div>
           {/* Priority chart — exact same chart as RAID Analysis tab */}
           <Card>
