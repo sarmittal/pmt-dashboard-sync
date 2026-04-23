@@ -132,7 +132,10 @@ function parseWorkplan(sheets) {
 function parseRaid(sheets) {
   const key = Object.keys(sheets)[0];
   const rows = sheets[key]; if (!rows?.length) return null;
-  const ks = Object.keys(rows[0]);
+  // Scan up to 200 rows to find all column keys — sparse columns (e.g. "Tag") may be absent from rows[0]
+  const ksSet = new Set();
+  rows.slice(0, 200).forEach(r => Object.keys(r).forEach(k => ksSet.add(k)));
+  const ks = Array.from(ksSet);
   const K = {
     type:      ks.find(k => /^type$|category/i.test(k)) || ks[0],
     status:    ks.find(k => /status/i.test(k)),
@@ -1235,16 +1238,9 @@ function ExecutiveSummaryTab({ wp, raid, req, cap, openModal }) {
 
   // ── Section 4: Impact Tech Build RAIDs ───────────────────────────────────
   const tagKey = K?.tag;
-  // Search by tag column if found; otherwise scan all values (handles column name variants)
-  const impactRaids = raid ? raid.items.filter(r => {
-    if (tagKey) {
-      const tag = String(r[tagKey]||"").toLowerCase().trim();
-      return tag.includes("impact") && tag.includes("tech build");
-    }
-    return Object.values(r).some(v => {
-      const s = String(v||"").toLowerCase();
-      return s.includes("impact") && s.includes("tech build");
-    });
+  const impactRaids = raid && tagKey ? raid.items.filter(r => {
+    const tag = String(r[tagKey]||"").toLowerCase();
+    return tag.includes("impact") && tag.includes("tech build");
   }) : [];
 
   // ── Sub-component for workstream status pill ──────────────────────────────
