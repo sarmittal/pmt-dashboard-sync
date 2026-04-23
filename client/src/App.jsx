@@ -1050,6 +1050,18 @@ function ExecutiveSummaryTab({ wp, raid, req, cap, openModal }) {
   const due8  = raid ? raid.open.filter(r => { const d=daysUntil(r[K.date]); return d!=null && d>=0 && d<=8;  }) : [];
   const due14 = raid ? raid.open.filter(r => { const d=daysUntil(r[K.date]); return d!=null && d>=0 && d<=14; }) : [];
   const delayedRisks = raid ? raid.open.filter(r => String(r[K.type]||"").toLowerCase().includes("risk") && String(r[K.status]||"").toLowerCase().includes("delay")) : [];
+  // Priority map with open/total fields to match RAID Analysis tab rendering
+  const raidByPriority = raid ? (() => {
+    const map = {};
+    raid.items.filter(r => String(r[K.status]||"").toLowerCase() !== "complete").forEach(r => {
+      const p = String(r[K.priority]||"Unknown");
+      if (!map[p]) map[p] = { total:0, open:0, delayed:0, rows:[] };
+      map[p].total++; map[p].rows.push(r);
+      if (String(r[K.status]||"").toLowerCase().includes("delay")) map[p].delayed++;
+      else map[p].open++;
+    });
+    return map;
+  })() : {};
 
   // ── Section 2: Workplan tiles ─────────────────────────────────────────────
   const buildWpGroup = (lvl0Test) => {
@@ -1145,10 +1157,10 @@ function ExecutiveSummaryTab({ wp, raid, req, cap, openModal }) {
               By Priority — Open vs Delayed
             </div>
             <div style={{ display:"flex", flexDirection:"column", gap:7 }}>
-              {Object.entries(raid.byPriority)
+              {Object.entries(raidByPriority)
                 .sort((a,b) => String(a[0]).localeCompare(String(b[0])))
                 .map(([pri, d]) => {
-                  const maxTotal = Math.max(...Object.values(raid.byPriority).map(x=>x.total), 1);
+                  const maxTotal = Math.max(...Object.values(raidByPriority).map(x=>x.total), 1);
                   const openRows    = d.rows.filter(r => !String(r[K.status]||"").toLowerCase().includes("delay"));
                   const delayedRows = d.rows.filter(r => String(r[K.status]||"").toLowerCase().includes("delay"));
                   return (
