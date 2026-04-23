@@ -3141,7 +3141,7 @@ function OverviewTab({ wp, raid, req, cap, openModal }) {
       const compWords = comp.split(/[\s\-\/]+/).filter(w => w.length > 2);
       return compWords.some(w => c.includes(w)) || c.split(/[\s\-\/]+/).filter(w=>w.length>2).some(w => comp.includes(w));
     });
-    const open    = items.filter(r => String(r[raid.keys.status]||"").toLowerCase() !== "complete");
+    const open    = items.filter(r => { const s = String(r[raid.keys.status]||"").toLowerCase(); return s !== "complete" && s !== "deferred"; });
     const delayed = items.filter(r => String(r[raid.keys.status]||"").toLowerCase() === "delayed");
     const issues  = open.filter(r => String(r[raid.keys.type]||"").toLowerCase().includes("issue"));
     const risks   = open.filter(r => String(r[raid.keys.type]||"").toLowerCase().includes("risk"));
@@ -3671,14 +3671,13 @@ function ComponentCardsTab({ wp, raid, req, openModal }) {
     if (!raid) return { open:0, delayed:0, issues:[], risks:[], openItems:[] };
     const normComp = normaliseComp(compName);
     const items = raid.items.filter(r => normaliseComp(String(r[raid.keys.component]||"")) === normComp);
-    const open    = items.filter(r => String(r[raid.keys.status]||"").toLowerCase() !== "complete");
+    const open    = items.filter(r => { const s = String(r[raid.keys.status]||"").toLowerCase(); return s !== "complete" && s !== "deferred"; });
     const delayed = items.filter(r => String(r[raid.keys.status]||"").toLowerCase() === "delayed");
     const issues  = open.filter(r => String(r[raid.keys.type]||"").toLowerCase().includes("issue"));
     const risks   = open.filter(r => String(r[raid.keys.type]||"").toLowerCase().includes("risk"));
     return { open: open.length, delayed: delayed.length, issues, risks, openItems: open };
   };
 
-  const WP_STATUS_RANK = { "off track":4, "on track":3, "not started":2, "complete":1 };
   const wpWorstStatus = (rows) => {
     let worst = null, worstRank = -1;
     rows.forEach(r => {
@@ -4414,7 +4413,7 @@ function ScorecardClassicTab({ wp, raid, req, openModal }) {
     if (!raid) return { open:0, delayed:0, issues:[], risks:[], openItems:[] };
     const norm = normaliseComp(compName);
     const items = raid.items.filter(r => normaliseComp(String(r[raid.keys.component] || "")) === norm);
-    const open    = items.filter(r => String(r[raid.keys.status] || "").toLowerCase() !== "complete");
+    const open    = items.filter(r => { const s = String(r[raid.keys.status] || "").toLowerCase(); return s !== "complete" && s !== "deferred"; });
     const delayed = items.filter(r => String(r[raid.keys.status] || "").toLowerCase() === "delayed");
     return {
       open: open.length, delayed: delayed.length,
@@ -4831,7 +4830,7 @@ function ScorecardTab({ wp, raid, req, openModal }) {
       const c = normaliseComp(String(r[raid.keys.component]||""));
       return c === normComp;
     });
-    const open    = items.filter(r => String(r[raid.keys.status]||"").toLowerCase() !== "complete");
+    const open    = items.filter(r => { const s = String(r[raid.keys.status]||"").toLowerCase(); return s !== "complete" && s !== "deferred"; });
     const delayed = items.filter(r => String(r[raid.keys.status]||"").toLowerCase() === "delayed");
     const issues  = open.filter(r => String(r[raid.keys.type]||"").toLowerCase().includes("issue"));
     const risks   = open.filter(r => String(r[raid.keys.type]||"").toLowerCase().includes("risk"));
