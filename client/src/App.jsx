@@ -1236,12 +1236,15 @@ function ExecutiveSummaryTab({ wp, raid, req, cap, openModal }) {
   // ── Section 3: Sprint numbers ─────────────────────────────────────────────
   const sprintRows = req ? req.sprintOrder.map(sp => ({ name:sp, ...(req.bySprint[sp]||{complete:0,partial:0,inProgress:0,notStarted:0,blocked:0,total:0,rows:[]}) })) : [];
 
-  // ── Section 4: Impact Tech Build RAIDs ───────────────────────────────────
+  // ── Section 4: Impact Build RAIDs metric card ────────────────────────────
   const tagKey = K?.tag;
   const impactRaids = raid && tagKey ? raid.items.filter(r => {
     const tag = String(r[tagKey]||"").toLowerCase();
     return tag.includes("impact") && tag.includes("tech build");
   }) : [];
+  const impactOpen    = impactRaids.filter(r => { const s=String(r[K?.status]||"").toLowerCase(); return s!=="complete"&&s!=="deferred"; });
+  const impactDelayed = impactRaids.filter(r => String(r[K?.status]||"").toLowerCase().includes("delay"));
+  const blockedStories = req?.blocked || [];
 
   // ── Sub-component for workstream status pill ──────────────────────────────
   const WsPill = ({ status }) => {
@@ -1268,6 +1271,42 @@ function ExecutiveSummaryTab({ wp, raid, req, cap, openModal }) {
             <KpiCard label="Total Open"    value={raid.open.length}         color={C.navyLight}  onClick={() => setRaidModal({ title:"Total Open RAIDs",rows:raid.open,       hideType:false, hideStatus:false })} />
             <KpiCard label="Due in 8 Days" value={due8.length}              color={due8.length>0?C.delayed:C.muted}    onClick={due8.length  ? () => setRaidModal({ title:"RAID Due in 8 Days",  rows:due8  }) : null} />
             <KpiCard label="Due in 14 Days"value={due14.length}             color={due14.length>0?C.navyLight:C.muted} onClick={due14.length ? () => setRaidModal({ title:"RAID Due in 14 Days", rows:due14 }) : null} />
+          </div>
+          {/* Impact Build + Blocked Stories cards */}
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+            {/* RAIDs Impacting Build */}
+            <div
+              onClick={impactOpen.length ? () => setRaidModal({ title:"RAIDs Impacting Build", rows:impactRaids, hideType:false, hideStatus:false }) : undefined}
+              onMouseEnter={e=>{ if(impactOpen.length) e.currentTarget.style.boxShadow="0 4px 14px rgba(0,0,0,0.12)"; }}
+              onMouseLeave={e=>e.currentTarget.style.boxShadow="0 1px 3px rgba(0,0,0,0.06)"}
+              style={{ background:C.white, border:`1px solid ${C.border}`, borderRadius:8, padding:"14px 18px",
+                borderTop:`3px solid ${C.delayed}`, boxShadow:"0 1px 3px rgba(0,0,0,0.06)",
+                cursor:impactOpen.length?"pointer":"default" }}>
+              <div style={{ color:C.muted, fontSize:9, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.07em", marginBottom:8 }}>RAIDs Impacting Build</div>
+              <div style={{ display:"flex", gap:20, alignItems:"baseline" }}>
+                <div>
+                  <div style={{ color:C.navyLight, fontSize:26, fontWeight:800, lineHeight:1 }}>{impactOpen.length}</div>
+                  <div style={{ color:C.muted, fontSize:10, marginTop:3, fontWeight:600 }}>Open</div>
+                </div>
+                <div>
+                  <div style={{ color:C.delayed, fontSize:26, fontWeight:800, lineHeight:1 }}>{impactDelayed.length}</div>
+                  <div style={{ color:C.muted, fontSize:10, marginTop:3, fontWeight:600 }}>Delayed</div>
+                </div>
+              </div>
+              {impactOpen.length>0 && <div style={{ color:C.accent, fontSize:9, marginTop:6 }}>Click to view →</div>}
+            </div>
+            {/* Blocked User Stories */}
+            <div
+              onClick={blockedStories.length ? () => openModal("Blocked User Stories", blockedStories) : undefined}
+              onMouseEnter={e=>{ if(blockedStories.length) e.currentTarget.style.boxShadow="0 4px 14px rgba(0,0,0,0.12)"; }}
+              onMouseLeave={e=>e.currentTarget.style.boxShadow="0 1px 3px rgba(0,0,0,0.06)"}
+              style={{ background:C.white, border:`1px solid ${C.border}`, borderRadius:8, padding:"14px 18px",
+                borderTop:`3px solid ${C.blocked||"#8e44ad"}`, boxShadow:"0 1px 3px rgba(0,0,0,0.06)",
+                cursor:blockedStories.length?"pointer":"default" }}>
+              <div style={{ color:C.muted, fontSize:9, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.07em", marginBottom:8 }}>Blocked User Stories</div>
+              <div style={{ color:C.blocked||"#8e44ad", fontSize:30, fontWeight:800, lineHeight:1 }}>{blockedStories.length || (req ? 0 : "—")}</div>
+              {blockedStories.length>0 && <div style={{ color:C.accent, fontSize:9, marginTop:6 }}>Click to view →</div>}
+            </div>
           </div>
           {/* Priority chart — exact same chart as RAID Analysis tab */}
           <Card>
@@ -1401,57 +1440,6 @@ function ExecutiveSummaryTab({ wp, raid, req, cap, openModal }) {
               </tbody>
             </table>
           </Card>
-        </div>
-      )}
-
-      {/* ══ SECTION 4: ACTION — IMPACT TECH BUILD RAIDS ════════════════════ */}
-      {raid && (
-        <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-          <div style={{ fontSize:11, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.07em" }}>
-            Action — Impact Tech Build RAIDs{impactRaids.length > 0 ? ` (${impactRaids.length})` : ""}
-          </div>
-          {impactRaids.length === 0 ? (
-            <Card><div style={{ color:C.muted, fontSize:12 }}>
-              {!tagKey ? "Tag column not found in RAID data — refresh data from Smartsheet." : "No RAIDs tagged \"Impact Tech Build\" found."}
-            </div></Card>
-          ) : (
-            <Card style={{ padding:0 }}>
-              <div style={{ overflowY:"auto", maxHeight:320 }}>
-                <table style={{ width:"100%", borderCollapse:"collapse", fontSize:11 }}>
-                  <thead>
-                    <tr style={{ background:"#162f50" }}>
-                      {["RAID ID","Status","Component","Experience","Description","Owner","Due Date"].map(h => (
-                        <th key={h} style={{ padding:"8px 10px", textAlign:"left", color:"#fff", fontSize:10, fontWeight:700, whiteSpace:"nowrap" }}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {impactRaids.map((r, i) => {
-                      const sl = String(r[K.status]||"").toLowerCase();
-                      const sc = sl.includes("delay")?C.delayed:sl.includes("complete")?C.green:C.onTrack;
-                      const d  = daysUntil(r[K.date]);
-                      const dc = d!=null&&d<=8?C.delayed:d!=null&&d<=14?C.gold:C.muted;
-                      return (
-                        <tr key={i}
-                          onClick={() => setRaidModal({ title:`RAID: ${r[K.id]||""}`, rows:[r] })}
-                          onMouseEnter={e=>e.currentTarget.style.background="#eef4ff"}
-                          onMouseLeave={e=>e.currentTarget.style.background=i%2===0?C.white:"#f8fafc"}
-                          style={{ background:i%2===0?C.white:"#f8fafc", borderBottom:`1px solid ${C.border}`, cursor:"pointer" }}>
-                          <td style={{ padding:"7px 10px", fontWeight:700, color:C.navyLight, whiteSpace:"nowrap" }}>{r[K.id]||"—"}</td>
-                          <td style={{ padding:"7px 10px" }}><span style={{ background:sc+"20", color:sc, border:`1px solid ${sc}40`, borderRadius:4, padding:"2px 6px", fontSize:10, fontWeight:700 }}>{r[K.status]||"—"}</span></td>
-                          <td style={{ padding:"7px 10px", color:C.text }}>{r[K.component]||"—"}</td>
-                          <td style={{ padding:"7px 10px", color:C.muted }}>{r[K.experience]||"—"}</td>
-                          <td style={{ padding:"7px 10px", color:C.text, maxWidth:260, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={r[K.desc]||""}>{r[K.desc]||"—"}</td>
-                          <td style={{ padding:"7px 10px", color:C.muted, whiteSpace:"nowrap" }}>{r[K.owner]||"—"}</td>
-                          <td style={{ padding:"7px 10px", color:dc, fontWeight:600, whiteSpace:"nowrap" }}>{r[K.date]||"—"}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </Card>
-          )}
         </div>
       )}
 
