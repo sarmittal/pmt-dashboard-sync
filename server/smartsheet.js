@@ -35,7 +35,7 @@ const KEEP = {
     "Comments/Resolution History","Comments/ Resolution History",
     "Due Date","Target Date","ID","RAID ID","Item ID","Experience","Topic",
     "Critical Path","Change Request Analysis",
-    "Status of Decision Acceptance (PMO)","Hours Estimate",
+    "Status of Decision Acceptance (PMO)","Hours Estimate","Tag",
   ],
   req: [
     "User Story", "Req Id", "Business Requirements", "Acceptance Criteria",
