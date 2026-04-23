@@ -150,7 +150,7 @@ function parseRaid(sheets) {
     crAnalysis: ks.find(k => k === "Change Request Analysis") || ks.find(k => /change.?request.?analysis/i.test(k)),
     crStatus:   ks.find(k => k === "Status of Decision Acceptance (PMO)") || ks.find(k => /status.?of.?decision|decision.?acceptance/i.test(k)) || ks.find(k => /pmo.?status/i.test(k)),
     crHours:    ks.find(k => k === "Hours Estimate") || ks.find(k => /hours?.?estimate/i.test(k)),
-    tag:        ks.find(k => k === "Tag") || ks.find(k => /^tag$/i.test(k)),
+    tag:        ks.find(k => k === "Tag") || ks.find(k => k === "Tags") || ks.find(k => /^tags?$/i.test(k)),
     workstream: ks.find(k => k === "Workstream") || ks.find(k => /^workstream$/i.test(k)),
   };
   const byPriority = {}, byComponent = {}, byTeam = {};
@@ -1032,6 +1032,102 @@ export default function App() {
 const PRIORITY_COLORS = { "1 - Critical": "#7b0d0d", "1-Critical": "#7b0d0d", "Critical": "#7b0d0d", "2 - High": "#c0392b", "2-High": "#c0392b", "High": "#c0392b", "3 - Medium": "#f5a623", "3-Medium": "#f5a623", "Medium": "#f5a623", "4 - Low": "#1a73e8", "4-Low": "#1a73e8", "Low": "#1a73e8" };
 const getPriorityColor = (p) => { const k = Object.keys(PRIORITY_COLORS).find(k => String(p||"").toLowerCase().includes(k.toLowerCase().replace(/[^a-z0-9]/g,""))); return k ? PRIORITY_COLORS[k] : "#888"; };
 
+function WorkstreamSummaryModal({ title, wsRows, onClose, onRowClick }) {
+  const [filter, setFilter] = useState("All");
+  const WP_STATUS_FILTERS = [
+    { label:"All",         color:C.navyLight },
+    { label:"At Risk",     color:C.delayed   },
+    { label:"On Track",    color:C.onTrack   },
+    { label:"Complete",    color:C.complete  },
+    { label:"Not Started", color:C.muted     },
+  ];
+  const rows = wsRows.map(ws => {
+    const sl = String(ws.status||"").toLowerCase();
+    const health = sl.includes("off")||sl.includes("risk") ? "At Risk"
+                 : sl.includes("complete")                  ? "Complete"
+                 : sl.includes("on track")                  ? "On Track"
+                 : "Not Started";
+    const healthColor = health==="At Risk"?C.delayed:health==="On Track"?C.onTrack:health==="Complete"?C.complete:C.muted;
+    return { ...ws, health, healthColor, pctVal: ws.pct ?? 0 };
+  });
+  const statusCounts = {};
+  rows.forEach(r => { statusCounts[r.health] = (statusCounts[r.health]||0)+1; });
+  const filtered = filter==="All" ? rows : rows.filter(r => r.health===filter);
+  return (
+    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center" }} onClick={onClose}>
+      <div style={{ background:C.white, borderRadius:10, width:"92%", maxWidth:1100, maxHeight:"90vh", display:"flex", flexDirection:"column", boxShadow:"0 24px 60px rgba(0,0,0,0.3)" }} onClick={e=>e.stopPropagation()}>
+        <div style={{ background:C.headerBg, padding:"12px 20px", borderRadius:"10px 10px 0 0", display:"flex", justifyContent:"space-between", alignItems:"center", flexShrink:0 }}>
+          <span style={{ color:"#fff", fontWeight:700, fontSize:13 }}>{title} — Workstream Summary</span>
+          <button onClick={onClose} style={{ background:"rgba(255,255,255,0.15)", border:"none", color:"#fff", borderRadius:5, padding:"5px 14px", cursor:"pointer", fontSize:13, fontWeight:600 }}>✕</button>
+        </div>
+        <div style={{ padding:"10px 16px", borderBottom:`1px solid ${C.border}`, display:"flex", gap:6, flexWrap:"wrap" }}>
+          {WP_STATUS_FILTERS.map(({ label, color }) => {
+            const count = label==="All" ? rows.length : (statusCounts[label]||0);
+            const active = filter===label;
+            return (
+              <button key={label} onClick={() => setFilter(label)}
+                style={{ display:"flex", alignItems:"center", gap:5, padding:"4px 11px", borderRadius:20,
+                  border:`2px solid ${active?color:C.border}`, background:active?color:C.white,
+                  color:active?"#fff":C.muted, cursor:"pointer", fontSize:11, fontWeight:700,
+                  transition:"all .15s", boxShadow:active?`0 2px 8px ${color}40`:"none" }}>
+                {label}
+                <span style={{ background:active?"rgba(255,255,255,0.3)":C.border, color:active?"#fff":C.text, borderRadius:10, padding:"1px 6px", fontSize:10, fontWeight:800 }}>{count}</span>
+              </button>
+            );
+          })}
+        </div>
+        <div style={{ overflowY:"auto", flex:1 }}>
+          <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
+            <thead>
+              <tr style={{ background:"#162f50" }}>
+                {["Workstream","Total","On Track","Delayed","% Complete","Due ≤14 Days","Status"].map((h,i) => (
+                  <th key={h} style={{ textAlign:i===0?"left":"center", padding:"9px 12px", color:"#fff", fontSize:11, fontWeight:700, whiteSpace:"nowrap", borderRight:`1px solid rgba(255,255,255,0.1)` }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.length===0 ? (
+                <tr><td colSpan={7} style={{ padding:"24px", textAlign:"center", color:C.muted }}>No workstreams match "{filter}"</td></tr>
+              ) : filtered.map(({ name, rows:wsAllRows, wsOff, wsOn, total, pctVal, due14, health, healthColor }, i) => (
+                <tr key={name}
+                  onClick={() => onRowClick && onRowClick({ name, rows:wsAllRows, wsOff })}
+                  onMouseEnter={e=>e.currentTarget.style.background="#eef4ff"}
+                  onMouseLeave={e=>e.currentTarget.style.background=i%2===0?C.white:"#f7f9fc"}
+                  style={{ background:i%2===0?C.white:"#f7f9fc", borderBottom:`1px solid ${C.border}`, cursor:"pointer", transition:"background .1s" }}>
+                  <td style={{ padding:"10px 12px", color:C.text, fontWeight:600, fontSize:12 }}>
+                    <span style={{ display:"flex", alignItems:"center", gap:6 }}>
+                      <span style={{ width:3, height:14, background:healthColor, borderRadius:2, display:"inline-block", flexShrink:0 }} />
+                      {name.replace("Technology - ","")}
+                    </span>
+                  </td>
+                  <td style={{ padding:"10px 12px", textAlign:"center", color:C.text, fontWeight:700 }}>{total}</td>
+                  <td style={{ padding:"10px 12px", textAlign:"center", color:C.onTrack, fontWeight:700 }}>{wsOn}</td>
+                  <td style={{ padding:"10px 12px", textAlign:"center", color:wsOff>0?C.delayed:C.muted, fontWeight:700 }}>{wsOff}</td>
+                  <td style={{ padding:"10px 12px", textAlign:"center" }}>
+                    <div style={{ display:"flex", alignItems:"center", gap:6, justifyContent:"center" }}>
+                      <div style={{ width:60, background:"#e2e8f0", borderRadius:4, height:7, overflow:"hidden" }}>
+                        <div style={{ width:`${pctVal}%`, height:"100%", background:pctVal>=75?C.green:pctVal>=40?C.gold:C.delayed, borderRadius:4 }} />
+                      </div>
+                      <span style={{ color:C.text, fontWeight:700, fontSize:11 }}>{pctVal}%</span>
+                    </div>
+                  </td>
+                  <td style={{ padding:"10px 12px", textAlign:"center", color:due14>0?C.gold:C.muted, fontWeight:700 }}>{due14||"—"}</td>
+                  <td style={{ padding:"10px 12px", textAlign:"center" }}>
+                    <span style={{ background:healthColor+"20", color:healthColor, border:`1px solid ${healthColor}40`, borderRadius:4, padding:"2px 8px", fontSize:10, fontWeight:700 }}>{health}</span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div style={{ padding:"8px 16px", borderTop:`1px solid ${C.border}`, color:C.muted, fontSize:10, background:"#f8fafc" }}>
+          💡 Click any row to drill into task detail
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ExecutiveSummaryTab({ wp, raid, req, cap, openModal }) {
   const [wpGroupModal, setWpGroupModal] = useState(null); // { title, wsRows } — workstream summary modal
   const [wpDrillModal, setWpDrillModal] = useState(null); // { title, rows }   — WorkplanDrillModal
@@ -1355,63 +1451,15 @@ function ExecutiveSummaryTab({ wp, raid, req, cap, openModal }) {
 
       {/* ── Modals ─────────────────────────────────────────────────────────── */}
       {wpGroupModal && (
-        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center" }}
-          onClick={() => setWpGroupModal(null)}>
-          <div style={{ background:C.white, borderRadius:10, width:"90%", maxWidth:1000, maxHeight:"90vh",
-            display:"flex", flexDirection:"column", boxShadow:"0 24px 60px rgba(0,0,0,0.3)" }}
-            onClick={e=>e.stopPropagation()}>
-            <div style={{ background:C.headerBg, padding:"12px 20px", borderRadius:"10px 10px 0 0",
-              display:"flex", justifyContent:"space-between", alignItems:"center", flexShrink:0 }}>
-              <span style={{ color:"#fff", fontWeight:700, fontSize:13 }}>{wpGroupModal.title} — Workstream Summary</span>
-              <button onClick={() => setWpGroupModal(null)} style={{ background:"rgba(255,255,255,0.15)", border:"none", color:"#fff", borderRadius:5, padding:"5px 14px", cursor:"pointer", fontSize:13, fontWeight:600 }}>✕</button>
-            </div>
-            <div style={{ overflowY:"auto", flex:1 }}>
-              <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
-                <thead>
-                  <tr style={{ background:"#162f50" }}>
-                    {["Workstream","Total","On Track","Delayed","% Complete","Due ≤14 Days","Status"].map((h,i) => (
-                      <th key={h} style={{ padding:"9px 12px", textAlign:i===0?"left":"center", color:"#fff", fontSize:11, fontWeight:700, whiteSpace:"nowrap" }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {wpGroupModal.wsRows.map(({ name, rows:wsAllRows, wsOff, wsOn, total, pct, status, due14 }, i) => (
-                    <tr key={name}
-                      onClick={() => setWpDrillModal({ title:name, rows:wsAllRows, initialFilter:wsOff>0?"Off Track":"All" })}
-                      onMouseEnter={e=>e.currentTarget.style.background="#eef4ff"}
-                      onMouseLeave={e=>e.currentTarget.style.background=i%2===0?C.white:"#f7f9fc"}
-                      style={{ background:i%2===0?C.white:"#f7f9fc", borderBottom:`1px solid ${C.border}`, cursor:"pointer" }}>
-                      <td style={{ padding:"10px 12px", fontWeight:600, color:C.text }}>
-                        <span style={{ display:"flex", alignItems:"center", gap:6 }}>
-                          <span style={{ width:3, height:14, background:barBg(status), borderRadius:2, display:"inline-block", flexShrink:0 }} />
-                          {name}
-                        </span>
-                      </td>
-                      <td style={{ padding:"10px 12px", textAlign:"center", fontWeight:700, color:C.text }}>{total}</td>
-                      <td style={{ padding:"10px 12px", textAlign:"center", fontWeight:700, color:C.onTrack }}>{wsOn}</td>
-                      <td style={{ padding:"10px 12px", textAlign:"center", fontWeight:700, color:wsOff>0?C.delayed:C.muted }}>{wsOff}</td>
-                      <td style={{ padding:"10px 12px", textAlign:"center" }}>
-                        {pct!=null ? (
-                          <div style={{ display:"flex", alignItems:"center", gap:5, justifyContent:"center" }}>
-                            <div style={{ width:50, background:"#e2e8f0", borderRadius:3, height:6, overflow:"hidden" }}>
-                              <div style={{ width:`${pct}%`, height:"100%", background:barBg(status), borderRadius:3 }} />
-                            </div>
-                            <span style={{ fontWeight:700, fontSize:11 }}>{pct}%</span>
-                          </div>
-                        ) : <span style={{ color:C.muted }}>—</span>}
-                      </td>
-                      <td style={{ padding:"10px 12px", textAlign:"center", fontWeight:700, color:due14>0?C.gold:C.muted }}>{due14||"—"}</td>
-                      <td style={{ padding:"10px 12px", textAlign:"center" }}><WsPill status={status} /></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div style={{ padding:"8px 16px", borderTop:`1px solid ${C.border}`, color:C.muted, fontSize:10, background:"#f8fafc" }}>
-              💡 Click any row to drill into task detail
-            </div>
-          </div>
-        </div>
+        <WorkstreamSummaryModal
+          title={wpGroupModal.title}
+          wsRows={wpGroupModal.wsRows}
+          onClose={() => setWpGroupModal(null)}
+          onRowClick={({ name, rows:wsAllRows, wsOff }) => {
+            setWpGroupModal(null);
+            setWpDrillModal({ title:name, rows:wsAllRows, initialFilter:wsOff>0?"Off Track":"All" });
+          }}
+        />
       )}
       {wpDrillModal && <WorkplanDrillModal title={wpDrillModal.title} rows={wpDrillModal.rows} initialFilter={wpDrillModal.initialFilter} onClose={() => setWpDrillModal(null)} />}
       {raidModal && (() => {
