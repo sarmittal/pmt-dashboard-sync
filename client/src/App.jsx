@@ -1035,7 +1035,21 @@ const getPriorityColor = (p) => { const k = Object.keys(PRIORITY_COLORS).find(k 
 function ExecutiveSummaryTab({ wp, raid, req, cap, openModal }) {
   const [wpGroupModal, setWpGroupModal] = useState(null); // { title, wsRows } — workstream summary modal
   const [wpDrillModal, setWpDrillModal] = useState(null); // { title, rows }   — WorkplanDrillModal
-  const [raidModal,    setRaidModal]    = useState(null); // { title, rows }   — RaidDrillModal
+  const [raidModal,    setRaidModal]    = useState(null); // { title, rows }   — RaidKpiModal
+  const [modalColConfig, setModalColConfig] = useState({
+    raidId:    { label:"RAID ID",               visible:true,  width:90  },
+    status:    { label:"Status",                visible:true,  width:90  },
+    type:      { label:"Type",                  visible:true,  width:90  },
+    component: { label:"Component",             visible:true,  width:130 },
+    experience:{ label:"Experience",            visible:true,  width:90  },
+    topic:     { label:"Topic",                 visible:true,  width:90  },
+    desc:      { label:"Description",           visible:true,  width:260 },
+    comment:   { label:"Comments / Resolution", visible:true,  width:220 },
+    owner:     { label:"Owner",                 visible:true,  width:110 },
+    team:      { label:"Primary Team (Owner)",  visible:true,  width:140 },
+    critPath:  { label:"Critical Path",         visible:true,  width:100 },
+    dueDate:   { label:"Due Date",              visible:true,  width:85  },
+  });
 
   const anyData = wp || raid || req || cap;
   if (!anyData) return <Empty label="No data loaded. Connect to Smartsheet to populate the Executive Summary." />;
@@ -1114,6 +1128,8 @@ function ExecutiveSummaryTab({ wp, raid, req, cap, openModal }) {
     }
     return allRows.filter((_, i) => includeIdx.has(i));
   };
+
+  const statusCol = s => { const sl=String(s||"").toLowerCase(); return sl.includes("delay")?C.delayed:sl.includes("complete")?C.complete:C.onTrack; };
 
   // ── Section 3: Sprint numbers ─────────────────────────────────────────────
   const sprintRows = req ? req.sprintOrder.map(sp => ({ name:sp, ...(req.bySprint[sp]||{complete:0,partial:0,inProgress:0,notStarted:0,blocked:0,total:0,rows:[]}) })) : [];
@@ -1398,7 +1414,26 @@ function ExecutiveSummaryTab({ wp, raid, req, cap, openModal }) {
         </div>
       )}
       {wpDrillModal && <WorkplanDrillModal title={wpDrillModal.title} rows={wpDrillModal.rows} initialFilter={wpDrillModal.initialFilter} onClose={() => setWpDrillModal(null)} />}
-      {raidModal && <RaidDrillModal title={raidModal.title} rows={raidModal.rows} raidKeys={raid?.keys} initialStatusFilter={raidModal.initialStatusFilter} initialTypeFilter={raidModal.initialTypeFilter} onClose={() => setRaidModal(null)} />}
+      {raidModal && (() => {
+        const resolvedTeamKey = K?.team || "Primary Team (Owner)";
+        const allModalTeams = Array.from(new Set(raidModal.rows.map(r => String(r[resolvedTeamKey]||"").trim()).filter(Boolean))).sort();
+        const allModalTypes = Array.from(new Set(raidModal.rows.map(r => String(r[K?.type]||"").trim()).filter(Boolean))).sort();
+        const allModalComps = Array.from(new Set(raidModal.rows.map(r => String(r[K?.component]||"").trim()).filter(Boolean))).sort();
+        return (
+          <RaidKpiModal
+            title={raidModal.title}
+            rows={raidModal.rows}
+            K={K} teamKey={resolvedTeamKey}
+            allTeams={allModalTeams} allTypes={allModalTypes} allComps={allModalComps}
+            statusCol={statusCol}
+            hideType={raidModal.hideType || false}
+            hideStatus={raidModal.hideStatus || false}
+            colConfig={modalColConfig}
+            setColConfig={setModalColConfig}
+            onClose={() => setRaidModal(null)}
+          />
+        );
+      })()}
     </div>
   );
 }

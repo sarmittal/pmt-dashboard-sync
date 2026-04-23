@@ -27,16 +27,7 @@ const KEEP = {
     "Task Name","Default Status","Status","% Complete","Start","Finish","End Date",
     "Workstream","Support","Primary Owner","Secondary Owner","Comments",
   ],
-  raid: [
-    "Type","Category","Status","Description","Title","Summary",
-    "Primary Owner","Owner","Assignee","Priority","Severity","Component",
-    "Workstream","Area","Team","Primary Team","Primary Team (Owner)",
-    "Comment","Comments","Resolution",
-    "Comments/Resolution History","Comments/ Resolution History",
-    "Due Date","Target Date","ID","RAID ID","Item ID","Experience","Topic",
-    "Critical Path","Change Request Analysis",
-    "Status of Decision Acceptance (PMO)","Hours Estimate","Tag",
-  ],
+  raid: null, // keep all columns — Tag and other fields vary by sheet configuration
   req: [
     "User Story", "Req Id", "Business Requirements", "Acceptance Criteria",
     "PM Experience", "User Story Review Status (D&A)",
