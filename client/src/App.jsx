@@ -150,6 +150,8 @@ function parseRaid(sheets) {
     crAnalysis: ks.find(k => k === "Change Request Analysis") || ks.find(k => /change.?request.?analysis/i.test(k)),
     crStatus:   ks.find(k => k === "Status of Decision Acceptance (PMO)") || ks.find(k => /status.?of.?decision|decision.?acceptance/i.test(k)) || ks.find(k => /pmo.?status/i.test(k)),
     crHours:    ks.find(k => k === "Hours Estimate") || ks.find(k => /hours?.?estimate/i.test(k)),
+    tag:        ks.find(k => k === "Tag") || ks.find(k => /^tag$/i.test(k)),
+    workstream: ks.find(k => k === "Workstream") || ks.find(k => /^workstream$/i.test(k)),
   };
   const byPriority = {}, byComponent = {}, byTeam = {};
   rows.forEach(r => {
@@ -1031,223 +1033,416 @@ const PRIORITY_COLORS = { "1 - Critical": "#7b0d0d", "1-Critical": "#7b0d0d", "C
 const getPriorityColor = (p) => { const k = Object.keys(PRIORITY_COLORS).find(k => String(p||"").toLowerCase().includes(k.toLowerCase().replace(/[^a-z0-9]/g,""))); return k ? PRIORITY_COLORS[k] : "#888"; };
 
 function ExecutiveSummaryTab({ wp, raid, req, cap, openModal }) {
-  const [wpModal, setWpModal] = useState(null);
   const [raidModal, setRaidModal] = useState(null);
   const [storyModal, setStoryModal] = useState(null);
+  const [modalColConfig, setModalColConfig] = useState({
+    raidId:    { label:"RAID ID",               visible:true, width:90  },
+    status:    { label:"Status",                visible:true, width:90  },
+    type:      { label:"Type",                  visible:true, width:90  },
+    component: { label:"Component",             visible:true, width:130 },
+    experience:{ label:"Experience",            visible:true, width:90  },
+    topic:     { label:"Topic",                 visible:true, width:90  },
+    tag:       { label:"Tag",                   visible:true, width:140 },
+    desc:      { label:"Description",           visible:true, width:260 },
+    comment:   { label:"Comments / Resolution", visible:true, width:220 },
+    owner:     { label:"Owner",                 visible:true, width:110 },
+    team:      { label:"Primary Team (Owner)",  visible:true, width:140 },
+    critPath:  { label:"Critical Path",         visible:true, width:100 },
+    dueDate:   { label:"Due Date",              visible:true, width:85  },
+  });
 
   const anyData = wp || raid || req || cap;
-  if (!anyData) return <Empty label="Upload files above to populate the Executive Summary." />;
+  if (!anyData) return <Empty label="No data loaded. Connect to Smartsheet to populate the Executive Summary." />;
 
-  // ── 1. KPIs ────────────────────────────────────────────────────────────────
-  // Use leaf rows only (Children == 0) so counts match what the drill-down shows
-  const isWpLeaf = r => { const c = r["Children"]; if (c === null || c === undefined || c === "" || c === "0") return true; const n = Number(c); return isNaN(n) || n === 0; };
-  const wpLeaves   = wp ? wp.allRows.filter(isWpLeaf) : [];
-  const getWpS     = r => String(r["Default Status"] || r["Status"] || "").toLowerCase();
-  const wpTotal    = wpLeaves.length;
-  const wpOffTrack = wpLeaves.filter(r => getWpS(r).includes("off track")).length;
-  const wpOnTrack  = wpLeaves.filter(r => getWpS(r).includes("on track")).length;
-  const wpComplete = wpLeaves.filter(r => getWpS(r).includes("complete")).length;
-  const wpHealth   = wpTotal > 0 ? Math.round(((wpOnTrack + wpComplete) / wpTotal) * 100) : null;
+  // ── Helpers ───────────────────────────────────────────────────────────────
+  const normPct = v => { const s = String(v ?? "").replace("%","").trim(); if (!s || isNaN(Number(s))) return null; const n = Number(s); return n <= 1 ? Math.round(n*100) : Math.round(n); };
+  const isWpLeaf = r => { const c = r["Children"]; if (!c || c === "" || c === "0") return true; const n = Number(c); return isNaN(n) || n === 0; };
+  const getWpS = r => String(r["Default Status"] || r["Status"] || "").toLowerCase();
 
-  const raidOpen    = raid ? raid.open.length : null;
-  const raidDelayed = raid ? raid.delayed.length : null;
-
-  const reqDone  = req ? req.done.length : null;
-  const reqTotal = req ? req.total : null;
-  const reqPct   = reqTotal > 0 ? Math.round((reqDone / reqTotal) * 100) : null;
-
-  const latestSprint = cap ? cap.sprintChart[cap.sprintChart.length - 1] : null;
-  const capSurplus   = latestSprint ? latestSprint.diff : null;
-
-  // ── 2. Workstream status ───────────────────────────────────────────────────
-  const isWpLeafRow = r => { const c = r["Children"]; if (c === null || c === undefined || c === "" || c === "0") return true; const n = Number(c); return isNaN(n) || n === 0; };
-
-  const workstreams = wp ? Object.entries(wp.componentMap).map(([name, d]) => {
-    const total = d.total || 1;
-    const pctVal = Math.round(((d.complete + d.onTrack * 0.5) / total) * 100);
-    const health = d.offTrack > 0 ? "At Risk" : d.onTrack > 0 ? "On Track" : d.complete === d.total ? "Complete" : "Not Started";
-    const healthColor = health === "At Risk" ? C.delayed : health === "On Track" ? C.onTrack : health === "Complete" ? C.complete : C.muted;
-    // Count only leaf rows for the badge — matches what drill-down shows
-    const leafOffTrack = d.rows.filter(r => isWpLeafRow(r) && getWpS(r).includes("off track")).length;
-    return { name, d: { ...d, offTrack: leafOffTrack }, pctVal, health, healthColor };
-  }) : [];
-
-  // ── 3. Component RAG (Lvl 3 from scorecard workplan scope) ────────────────
-  const compRows = wp ? wp.allRows.filter(r =>
-    String(r["Activity Grp - Lvl 1"] || "").trim() === "Technology - SAP Configuration & Build" &&
-    String(r["Activity Grp - Lvl 2"] || "").trim() === "Component Build"
-  ) : [];
-  const compNames = Array.from(new Set(compRows.map(r => String(r["Activity Grp - Lvl 3"] || "").trim()).filter(Boolean))).sort();
-
-  const getCompStatus = (compName) => {
-    const rows = compRows.filter(r => String(r["Activity Grp - Lvl 3"] || "").trim() === compName);
-    const leaves = rows.filter(r => { const c = r["Children"]; return !c || Number(c) === 0; });
-    const getS = r => String(r["Default Status"] || r["Status"] || "").toLowerCase();
-    // Handle Excel decimal (0.92), whole number (92), string "0.92", string "92%", string "92"
-    const normPct = v => {
-      if (v === "" || v == null) return null;
-      const s = String(v).replace("%", "").trim();
-      if (s === "" || isNaN(Number(s))) return null;
-      const n = Number(s);
-      return n <= 1 ? Math.round(n * 100) : Math.round(n);
-    };
-    const isDone = r => getS(r).includes("complete") || normPct(r["% Complete"] ?? r["% complete"]) === 100;
-    const hasOffTrack = leaves.some(r => getS(r).includes("off track"));
-    const hasOnTrack  = leaves.some(r => getS(r).includes("on track"));
-    const allComplete = leaves.length > 0 && leaves.every(r => isDone(r));
-    const delayedCount = leaves.filter(r => getS(r).includes("off track")).length;
-    const lvl3Header = rows.find(r => Number(r["Lvl"] ?? 0) === 3);
-    const headerPct = lvl3Header ? normPct(lvl3Header["% Complete"] ?? lvl3Header["% complete"]) : null;
-    const status = hasOffTrack ? "Off Track" : (allComplete || headerPct === 100) ? "Complete" : hasOnTrack ? "On Track" : "Not Started";
-    const pctValues = leaves.map(r => normPct(r["% Complete"] ?? r["% complete"])).filter(v => v != null);
-    const pct2 = headerPct != null ? headerPct : (pctValues.length ? Math.round(pctValues.reduce((a, b) => a + b, 0) / pctValues.length) : null);
-    return { status, pct: pct2, rows, delayedCount };
-  };
-
-  // ── 4. Top RAIDs ──────────────────────────────────────────────────────────
-  const PRIORITY_RANK = { "1": 4, "critical": 4, "2": 3, "high": 3, "3": 2, "medium": 2, "4": 1, "low": 1 };
-  const getPRank = r => {
-    const p = String(r[raid?.keys?.priority] || "").toLowerCase();
-    for (const [k, v] of Object.entries(PRIORITY_RANK)) { if (p.includes(k)) return v; }
-    return 0;
-  };
-  const topRaids = raid ? [...raid.open]
-    .filter(r => { const t = String(r[raid.keys.type] || "").toLowerCase(); return t.includes("risk") || t.includes("issue"); })
-    .sort((a, b) => {
-      const pr = getPRank(b) - getPRank(a);
-      if (pr !== 0) return pr;
-      const da = daysUntil(a[raid.keys.date]), db = daysUntil(b[raid.keys.date]);
-      return (da ?? 999) - (db ?? 999);
-    })
-    .slice(0, 5) : [];
-
-  // ── 5. Key milestones ─────────────────────────────────────────────────────
-  const milestones = wp ? wp.allRows
-    .filter(r => {
-      const c = r["Children"]; const isLeaf = !c || Number(c) === 0;
-      const d = daysUntil(r["Finish"] || r["End Date"]);
-      const s = String(r["Default Status"] || r["Status"] || "").toLowerCase();
-      return isLeaf && d != null && d <= 30 && !s.includes("complete");
-    })
-    .sort((a, b) => daysUntil(a["Finish"] || a["End Date"]) - daysUntil(b["Finish"] || b["End Date"]))
-    .slice(0, 6) : [];
-
-  // ── Helpers ────────────────────────────────────────────────────────────────
   const StatusPill = ({ status }) => {
     const sl = String(status || "").toLowerCase();
-    const bg    = sl.includes("off track") || sl.includes("at risk") ? "#fee2e2" : sl.includes("on track") ? "#fef3c7" : sl.includes("complete") ? "#dbeafe" : "#f1f5f9";
-    const color = sl.includes("off track") || sl.includes("at risk") ? "#b91c1c" : sl.includes("on track") ? "#b45309" : sl.includes("complete") ? "#1d4ed8" : "#64748b";
-    const border= sl.includes("off track") || sl.includes("at risk") ? "#fca5a5" : sl.includes("on track") ? "#fcd34d" : sl.includes("complete") ? "#93c5fd" : "#cbd5e1";
-    return <span style={{ background: bg, color, border: `1px solid ${border}`, borderRadius: 4, padding: "2px 8px", fontSize: 10, fontWeight: 700, whiteSpace: "nowrap" }}>{status}</span>;
+    const bg    = sl.includes("off track") ? "#fee2e2" : sl.includes("on track") ? "#fef3c7" : sl.includes("complete") ? "#dbeafe" : "#f1f5f9";
+    const color = sl.includes("off track") ? "#b91c1c" : sl.includes("on track") ? "#b45309" : sl.includes("complete") ? "#1d4ed8" : "#64748b";
+    const border= sl.includes("off track") ? "#fca5a5" : sl.includes("on track") ? "#fcd34d" : sl.includes("complete") ? "#93c5fd" : "#cbd5e1";
+    return <span style={{ background:bg, color, border:`1px solid ${border}`, borderRadius:4, padding:"2px 8px", fontSize:10, fontWeight:700, whiteSpace:"nowrap" }}>{status||"—"}</span>;
   };
 
-  const PctBar = ({ pct, width = 80 }) => {
-    if (pct == null) return <span style={{ color: C.muted, fontSize: 11 }}>—</span>;
-    const bg = pct >= 75 ? C.green : pct >= 40 ? C.gold : C.delayed;
-    return (
-      <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-        <div style={{ width, background: "#e2e8f0", borderRadius: 4, height: 6, overflow: "hidden" }}>
-          <div style={{ width: `${pct}%`, height: "100%", background: bg, borderRadius: 4 }} />
-        </div>
-        <span style={{ fontSize: 11, fontWeight: 700, color: C.text, minWidth: 30 }}>{pct}%</span>
-      </div>
-    );
+  const barColor = status => { const s = String(status||"").toLowerCase(); return s.includes("off") ? C.delayed : s.includes("on") ? C.gold : s.includes("complete") ? C.green : "#94a3b8"; };
+
+  // ── Row 1: Program Health KPIs ────────────────────────────────────────────
+  const lvl3Rows   = wp ? wp.allRows.filter(r => Number(r["Lvl"]??0) === 3) : [];
+  const lvl3Pcts   = lvl3Rows.map(r => normPct(r["% Complete"]??r["% complete"])).filter(v => v != null);
+  const overallPct = lvl3Pcts.length > 0 ? Math.round(lvl3Pcts.reduce((a,b)=>a+b,0)/lvl3Pcts.length) : null;
+
+  const rOpenRisks  = raid ? raid.openRisks.length : null;
+  const rOpenIssues = raid ? raid.openIssues.length : null;
+  const openActions   = raid ? raid.open.filter(r => String(r[raid.keys.type]||"").toLowerCase().includes("action"))   : [];
+  const openDecisions = raid ? raid.open.filter(r => String(r[raid.keys.type]||"").toLowerCase().includes("decision")) : [];
+  const rOpenActDec = raid ? openActions.length + openDecisions.length : null;
+  const storiesBlocked = req ? req.blocked.length : null;
+
+  // ── Row 2: Workstream Health Tables ──────────────────────────────────────
+  const buildWorkstreams = (lvl0Filter, raidMatcher) => {
+    if (!wp) return [];
+    const filtered  = wp.allRows.filter(r => lvl0Filter(String(r["Activity Grp - Lvl 0"]||"").trim()));
+    const lvl1Names = Array.from(new Set(filtered.map(r => String(r["Activity Grp - Lvl 1"]||"").trim()).filter(Boolean)));
+    return lvl1Names.map(name => {
+      const rows      = filtered.filter(r => String(r["Activity Grp - Lvl 1"]||"").trim() === name);
+      const header    = rows.find(r => Number(r["Lvl"]??0) === 1);
+      const leaves    = rows.filter(isWpLeaf);
+      const status    = header ? String(header["Default Status"]||header["Status"]||"").trim() : null;
+      const pctH      = header ? normPct(header["% Complete"]??header["% complete"]) : null;
+      const leafPcts  = leaves.map(r => normPct(r["% Complete"]??r["% complete"])).filter(v=>v!=null);
+      const pct       = pctH != null ? pctH : leafPcts.length ? Math.round(leafPcts.reduce((a,b)=>a+b,0)/leafPcts.length) : null;
+      const offTrack  = leaves.filter(r => getWpS(r).includes("off track")).length;
+      const onTrack   = leaves.filter(r => getWpS(r).includes("on track")).length;
+      const resolvedStatus = status || (offTrack>0 ? "Off Track" : pct===100 ? "Complete" : onTrack>0 ? "On Track" : "Not Started");
+      const wsRaids   = raid ? raid.open.filter(r => raidMatcher(r, name)) : [];
+      const delayed   = wsRaids.filter(r => String(r[raid?.keys?.status]||"").toLowerCase()==="delayed");
+      return { name, status:resolvedStatus, pct, offTrack, onTrack, total:leaves.length, openRaids:wsRaids.length, delayedRaids:delayed.length, wsRaids, delayedWsRaids:delayed };
+    }).filter(ws => ws.name && ws.total > 0);
   };
 
-  const Rag = ({ status }) => {
-    const sl = String(status || "").toLowerCase();
-    const bg = sl.includes("off track") || sl.includes("at risk") ? "#ef4444" : sl.includes("on track") ? "#f59e0b" : sl.includes("complete") ? "#22c55e" : "#94a3b8";
-    return <span style={{ width: 9, height: 9, borderRadius: "50%", background: bg, display: "inline-block", flexShrink: 0 }} />;
+  const pmtFilter     = v => v.toLowerCase().includes("pmt") || v.toLowerCase().includes("performance management");
+  const epFilter      = v => v.toLowerCase().includes("e&p");
+  const pmtRaidMatch  = (r, wsName) => {
+    if (!raid?.keys?.workstream) return false;
+    const rws = String(r[raid.keys.workstream]||"").toLowerCase().trim();
+    const nm  = wsName.toLowerCase();
+    if (rws === nm) return true;
+    const words = nm.split(/\s+/).slice(0,3).join(" ");
+    return rws.includes(words) || nm.includes(rws.split(/\s+/).slice(0,3).join(" "));
   };
+  const epRaidMatch   = (r) => String(r[raid?.keys?.experience]||"").toLowerCase().includes("e&p");
+
+  const pmtWorkstreams = buildWorkstreams(pmtFilter, pmtRaidMatch);
+  const epWorkstreams  = buildWorkstreams(epFilter,  epRaidMatch);
+
+  // ── Row 3: RAID Overview ──────────────────────────────────────────────────
+  const PRIORITY_LABELS = ["1 - Critical","2 - High","3 - Medium","4 - Low"];
+  const PRIORITY_COLORS = { "1 - Critical":"#ef4444","2 - High":"#f59e0b","3 - Medium":"#3b82f6","4 - Low":"#94a3b8" };
+  const getPriorityLabel = r => { const p = String(r[raid?.keys?.priority]||""); if (/1|critical/i.test(p)) return "1 - Critical"; if (/2|high/i.test(p)) return "2 - High"; if (/3|medium/i.test(p)) return "3 - Medium"; return "4 - Low"; };
+  const priorityCounts = Object.fromEntries(PRIORITY_LABELS.map(l => [l, 0]));
+  const totalOpen = raid ? raid.open.length : 0;
+  if (raid) raid.open.forEach(r => { priorityCounts[getPriorityLabel(r)]++; });
+
+  // Design RAIDs Impacting Build: Tag non-empty and NOT "No impact to Tech Build"
+  const tagKey = raid?.keys?.tag;
+  const designImpactRaids = raid && tagKey ? raid.open.filter(r => {
+    const tag = String(r[tagKey]||"").toLowerCase().trim();
+    if (!tag) return false;
+    if (tag.startsWith("no impact")) return false;
+    return tag.includes("design") || tag.includes("tech build") || tag.includes("pending");
+  }) : [];
+
+  // ── Row 4: SAP Sprint Pipeline ────────────────────────────────────────────
+  const sprintRows = req ? req.sprintOrder.map(sp => ({ name:sp, ...(req.bySprint[sp]||{complete:0,partial:0,inProgress:0,notStarted:0,blocked:0,na:0,total:0,rows:[]}) })) : [];
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+    <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
 
-      {/* ── 1. KPIs + CR Summary ──────────────────────────────────────────── */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(0,1fr)) 4px repeat(4, minmax(0,1fr))", gap: 8, alignItems: "stretch" }}>
-
-          {/* ── 5 KPI tiles ── */}
-          {[
-            ["Workplan Health",  wpHealth != null ? `${wpHealth}%` : "—",
-              wpHealth == null ? C.muted : wpHealth >= 75 ? C.green : wpHealth >= 50 ? C.gold : C.delayed,
-              `${wpOnTrack} on track · ${wpOffTrack} at risk`,
-              wp ? () => setWpModal({ title: "Workplan Health", rows: wp.allRows, initialFilter: "Off Track" }) : null],
-
-            ["Open RAIDs",       raidOpen ?? "—",
-              raidDelayed > 0 ? C.delayed : C.navyLight,
-              `${raidDelayed ?? 0} delayed`,
-              raid ? () => setRaidModal({ title: "Open RAIDs", rows: raid.open, initialStatusFilter: raidDelayed > 0 ? "Delayed" : "All" }) : null],
-
-            ["Risks & Issues",   raid ? (raid.openRisks.length + raid.openIssues.length) : "—",
-              raid && (raid.openRisks.length + raid.openIssues.length) > 0 ? C.delayed : C.green,
-              raid ? `${raid.openRisks.length} risks · ${raid.openIssues.length} issues` : "—",
-              raid ? () => setRaidModal({ title: "Open Risks & Issues", rows: [...raid.openRisks, ...raid.openIssues], initialTypeFilter: "All" }) : null],
-
-            ["Stories Complete", reqPct != null ? `${reqPct}%` : "—",
-              reqPct == null ? C.muted : reqPct >= 75 ? C.green : reqPct >= 40 ? C.gold : C.delayed,
-              `${reqDone ?? 0} of ${reqTotal ?? 0} stories`,
-              req?.done?.length ? () => setStoryModal({ title: "Stories Complete", rows: req.done }) : null],
-
-            ["Stories Blocked",  req ? req.blocked.length : "—",
-              req && req.blocked.length > 0 ? C.delayed : C.green,
-              req && req.blocked.length > 0 ? "need attention" : "none blocked",
-              req?.blocked?.length ? () => setStoryModal({ title: "Stories Blocked", rows: req.blocked }) : null],
-          ].map(([label, value, color, sub, onClick]) => (
-            <div key={label} onClick={onClick}
-              onMouseEnter={e => { if (onClick) e.currentTarget.style.boxShadow = "0 3px 10px rgba(0,0,0,0.12)"; }}
-              onMouseLeave={e => { e.currentTarget.style.boxShadow = "0 1px 3px rgba(0,0,0,0.06)"; }}
-              style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 7,
-                padding: "10px 12px", borderTop: `3px solid ${color}`,
-                boxShadow: "0 1px 3px rgba(0,0,0,0.06)", cursor: onClick ? "pointer" : "default" }}>
-              <div style={{ color: C.muted, fontSize: 9, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 2 }}>{label}</div>
-              <div style={{ color, fontSize: 22, fontWeight: 800, lineHeight: 1 }}>{value}</div>
-              {sub && <div style={{ color: C.muted, fontSize: 9, marginTop: 2 }}>{sub}</div>}
-              {onClick && <div style={{ color: C.accent, fontSize: 9, marginTop: 2 }}>Details →</div>}
-            </div>
-          ))}
-
-          {/* ── Divider ── */}
-          <div style={{ background: C.border, borderRadius: 2, alignSelf: "stretch" }} />
-
-          {/* ── 4 CR tiles ── */}
-          {[
-            { label: "CR Approved",  rows: raid?.cr?.approved ?? [], hours: raid?.cr?.approvedHours ?? 0, color: C.green },
-            { label: "CR Rejected",  rows: raid?.cr?.rejected ?? [], hours: raid?.cr?.rejectedHours ?? 0, color: C.delayed },
-            { label: "CR Deferred",  rows: raid?.cr?.deferred ?? [], hours: raid?.cr?.deferredHours ?? 0, color: C.gold },
-            { label: "CR Pending",   rows: raid?.cr?.pending  ?? [], hours: raid?.cr?.pendingHours  ?? 0, color: C.complete },
-          ].map(({ label, rows, hours, color }) => (
-            <div key={label} onClick={() => rows.length && setRaidModal({ title: label, rows })}
-              onMouseEnter={e => { if (rows.length) e.currentTarget.style.boxShadow = "0 3px 10px rgba(0,0,0,0.12)"; }}
-              onMouseLeave={e => { e.currentTarget.style.boxShadow = "0 1px 3px rgba(0,0,0,0.06)"; }}
-              style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 7,
-                padding: "10px 12px", borderTop: `3px solid ${color}`,
-                boxShadow: "0 1px 3px rgba(0,0,0,0.06)", cursor: rows.length ? "pointer" : "default" }}>
-              <div style={{ color: C.muted, fontSize: 9, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 2 }}>{label}</div>
-              <div style={{ color, fontSize: 22, fontWeight: 800, lineHeight: 1 }}>{rows.length > 0 ? rows.length : "—"}</div>
-              <div style={{ color: C.muted, fontSize: 9, marginTop: 2 }}>{hours > 0 ? `${hours.toLocaleString()} hrs` : "—"}</div>
-              {rows.length > 0 && <div style={{ color: C.accent, fontSize: 9, marginTop: 2 }}>Details →</div>}
-            </div>
-          ))}
-        </div>
-
-        {/* Colour legend */}
-        <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
-          <span style={{ fontSize: 10, color: C.muted, fontWeight: 600 }}>KPI colours:</span>
-          {[[C.green, "Good"], [C.gold, "Watch"], [C.delayed, "At Risk"], [C.navyLight, "Informational"]].map(([col, lbl]) => (
-            <span key={lbl} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10, color: C.muted }}>
-              <span style={{ width: 10, height: 10, borderRadius: 2, background: col, display: "inline-block" }} />{lbl}
-            </span>
-          ))}
-        </div>
+      {/* ── Row 1: Program Health KPIs ───────────────────────────────────── */}
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(5,minmax(0,1fr))", gap:10 }}>
+        {[
+          { label:"Overall % Complete",        value: overallPct!=null?`${overallPct}%`:"—",
+            color: overallPct==null?C.muted:overallPct>=75?C.green:overallPct>=40?C.gold:C.delayed,
+            sub: wp?`${lvl3Rows.length} components`:"No workplan data",
+            onClick: null },
+          { label:"Open Risks",                value: rOpenRisks??"—",
+            color: rOpenRisks>0?C.delayed:C.green,
+            sub: raid?`${raid.delayed.filter(r=>String(r[raid.keys.type]||"").toLowerCase().includes("risk")).length} delayed`:"—",
+            onClick: raid&&rOpenRisks>0 ? ()=>setRaidModal({title:"Open Risks",rows:raid.openRisks}) : null },
+          { label:"Open Issues",               value: rOpenIssues??"—",
+            color: rOpenIssues>0?C.delayed:C.green,
+            sub: raid?`${raid.delayed.filter(r=>String(r[raid.keys.type]||"").toLowerCase().includes("issue")).length} delayed`:"—",
+            onClick: raid&&rOpenIssues>0 ? ()=>setRaidModal({title:"Open Issues",rows:raid.openIssues}) : null },
+          { label:"Open Actions & Decisions",  value: rOpenActDec??"—",
+            color: rOpenActDec>0?C.navyLight:C.green,
+            sub: raid?`${openActions.length} actions · ${openDecisions.length} decisions`:"—",
+            onClick: raid&&rOpenActDec>0 ? ()=>setRaidModal({title:"Open Actions & Decisions",rows:[...openActions,...openDecisions]}) : null },
+          { label:"Stories Blocked",           value: storiesBlocked??"—",
+            color: storiesBlocked>0?C.delayed:C.green,
+            sub: req?`of ${req.total} in-scope stories`:"No story data",
+            onClick: req&&storiesBlocked>0 ? ()=>setStoryModal({title:"Blocked Stories",rows:req.blocked}) : null },
+        ].map(({ label, value, color, sub, onClick }) => (
+          <div key={label} onClick={onClick}
+            onMouseEnter={e=>{ if(onClick) e.currentTarget.style.boxShadow="0 3px 10px rgba(0,0,0,0.12)"; }}
+            onMouseLeave={e=>{ e.currentTarget.style.boxShadow="0 1px 4px rgba(0,0,0,0.07)"; }}
+            style={{ background:C.white, border:`1px solid ${C.border}`, borderRadius:8,
+              padding:"12px 14px", borderTop:`3px solid ${color}`,
+              boxShadow:"0 1px 4px rgba(0,0,0,0.07)", cursor:onClick?"pointer":"default" }}>
+            <div style={{ color:C.muted, fontSize:9, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.07em", marginBottom:3 }}>{label}</div>
+            <div style={{ color, fontSize:26, fontWeight:800, lineHeight:1.1 }}>{value}</div>
+            <div style={{ color:C.muted, fontSize:9, marginTop:3 }}>{sub}</div>
+            {onClick && <div style={{ color:C.accent, fontSize:9, marginTop:2 }}>Details →</div>}
+          </div>
+        ))}
       </div>
 
+      {/* ── Row 2: Workstream Health ─────────────────────────────────────── */}
+      {(pmtWorkstreams.length > 0 || epWorkstreams.length > 0) && (
+        <div style={{ display:"grid", gridTemplateColumns: epWorkstreams.length>0?"1fr 1fr":"1fr", gap:12 }}>
+          {[
+            { title:"PMT Workstream Health", rows:pmtWorkstreams, raidLabel:"Delayed RAIDs" },
+            ...(epWorkstreams.length>0 ? [{ title:"E&P Workstream Health", rows:epWorkstreams, raidLabel:"E&P RAIDs" }] : []),
+          ].map(({ title, rows: wsRows, raidLabel }) => (
+            <Card key={title} title={title} style={{ padding:0 }}>
+              <table style={{ width:"100%", borderCollapse:"collapse", fontSize:11 }}>
+                <thead>
+                  <tr style={{ background:"#f8fafc" }}>
+                    {["Workstream","Status","% Complete",raidLabel].map(h => (
+                      <th key={h} style={{ padding:"7px 10px", textAlign:"left", color:C.muted, fontWeight:600, fontSize:10, borderBottom:`1px solid ${C.border}` }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {wsRows.map((ws, i) => (
+                    <tr key={ws.name} style={{ background:i%2===0?C.white:"#f8fafc", borderBottom:`1px solid ${C.border}` }}>
+                      <td style={{ padding:"7px 10px", fontWeight:600, color:C.text }}>{ws.name}</td>
+                      <td style={{ padding:"7px 10px" }}><StatusPill status={ws.status} /></td>
+                      <td style={{ padding:"7px 10px" }}>
+                        {ws.pct!=null ? (
+                          <div style={{ display:"flex", alignItems:"center", gap:5 }}>
+                            <div style={{ width:60, background:"#e2e8f0", borderRadius:3, height:5, overflow:"hidden" }}>
+                              <div style={{ width:`${ws.pct}%`, height:"100%", borderRadius:3, background:barColor(ws.status) }} />
+                            </div>
+                            <span style={{ fontWeight:700, color:C.text, fontSize:11 }}>{ws.pct}%</span>
+                          </div>
+                        ) : <span style={{ color:C.muted }}>—</span>}
+                      </td>
+                      <td style={{ padding:"7px 10px" }}>
+                        {ws.delayedRaids>0 ? (
+                          <span onClick={() => setRaidModal({ title:`${ws.name} — Delayed RAIDs`, rows:ws.delayedWsRaids })}
+                            style={{ color:C.delayed, fontWeight:700, cursor:"pointer", fontSize:12 }}>
+                            {ws.delayedRaids} ↗
+                          </span>
+                        ) : ws.openRaids>0 ? (
+                          <span onClick={() => setRaidModal({ title:`${ws.name} — Open RAIDs`, rows:ws.wsRaids })}
+                            style={{ color:C.navyLight, fontWeight:700, cursor:"pointer", fontSize:12 }}>
+                            {ws.openRaids} ↗
+                          </span>
+                        ) : <span style={{ color:C.muted }}>—</span>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </Card>
+          ))}
+        </div>
+      )}
 
+      {/* ── Row 3: RAID Overview + Design Impact RAIDs ───────────────────── */}
+      {raid && (
+        <div style={{ display:"grid", gridTemplateColumns:"320px 1fr", gap:12 }}>
 
+          {/* RAID Overview */}
+          <Card title="RAID Overview">
+            <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
 
-      {/* Modals */}
-      {wpModal    && <WorkplanDrillModal title={wpModal.title} rows={wpModal.rows} initialFilter={wpModal.initialFilter} onClose={() => setWpModal(null)} />}
-      {raidModal  && <RaidDrillModal title={raidModal.title} rows={raidModal.rows} raidKeys={raid?.keys} initialStatusFilter={raidModal.initialStatusFilter} initialTypeFilter={raidModal.initialTypeFilter} onClose={() => setRaidModal(null)} />}
+              {/* Type counts */}
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:6 }}>
+                {[
+                  { label:"Risks",     val:rOpenRisks,   color:C.delayed,   rows:raid.openRisks },
+                  { label:"Issues",    val:rOpenIssues,  color:C.delayed,   rows:raid.openIssues },
+                  { label:"Actions",   val:openActions.length,   color:C.navyLight, rows:openActions },
+                  { label:"Decisions", val:openDecisions.length, color:C.gold,      rows:openDecisions },
+                ].map(({ label, val, color, rows }) => (
+                  <div key={label} onClick={() => val>0 && setRaidModal({ title:`Open ${label}`, rows })}
+                    style={{ background:"#f8fafc", borderRadius:6, padding:"8px 6px", textAlign:"center",
+                      cursor:val>0?"pointer":"default", border:`1px solid ${C.border}` }}>
+                    <div style={{ color, fontSize:20, fontWeight:800 }}>{val??0}</div>
+                    <div style={{ color:C.muted, fontSize:9, fontWeight:600 }}>{label}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Delayed vs On Track bar */}
+              <div>
+                <div style={{ fontSize:10, color:C.muted, fontWeight:600, marginBottom:5 }}>
+                  {raid.delayed.length} Delayed · {totalOpen - raid.delayed.length} On Track
+                </div>
+                <div style={{ display:"flex", borderRadius:4, overflow:"hidden", height:16, background:"#e2e8f0" }}>
+                  {raid.delayed.length > 0 && <div title={`Delayed: ${raid.delayed.length}`}
+                    style={{ width:`${Math.round(raid.delayed.length/Math.max(totalOpen,1)*100)}%`, background:C.delayed }} />}
+                  {(totalOpen-raid.delayed.length) > 0 && <div title={`On Track: ${totalOpen-raid.delayed.length}`}
+                    style={{ flex:1, background:C.onTrack }} />}
+                </div>
+              </div>
+
+              {/* Priority stacked bar */}
+              <div>
+                <div style={{ fontSize:10, color:C.muted, fontWeight:600, marginBottom:5 }}>By Priority</div>
+                <div style={{ display:"flex", borderRadius:4, overflow:"hidden", height:18, background:"#f1f5f9" }}>
+                  {PRIORITY_LABELS.map(p => {
+                    const count = priorityCounts[p];
+                    if (!count || !totalOpen) return null;
+                    const w = Math.round(count/totalOpen*100);
+                    return (
+                      <div key={p} title={`${p}: ${count}`}
+                        onClick={() => setRaidModal({ title:`Open RAIDs — ${p}`, rows:raid.open.filter(r=>getPriorityLabel(r)===p) })}
+                        style={{ width:`${w}%`, background:PRIORITY_COLORS[p], height:"100%", display:"flex", alignItems:"center",
+                          justifyContent:"center", fontSize:9, color:"#fff", fontWeight:700, cursor:"pointer", overflow:"hidden" }}>
+                        {w>=10?count:""}
+                      </div>
+                    );
+                  })}
+                </div>
+                <div style={{ display:"flex", gap:8, marginTop:5, flexWrap:"wrap" }}>
+                  {PRIORITY_LABELS.map(p => (
+                    <span key={p} style={{ display:"inline-flex", alignItems:"center", gap:3, fontSize:9, color:C.muted }}>
+                      <span style={{ width:8, height:8, borderRadius:2, background:PRIORITY_COLORS[p], display:"inline-block" }} />
+                      {p} ({priorityCounts[p]})
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </Card>
+
+          {/* Design RAIDs Impacting Build */}
+          <Card title={`Open Design RAIDs Impacting Build (${designImpactRaids.length})`}>
+            {designImpactRaids.length === 0 ? (
+              <div style={{ color:C.muted, fontSize:12 }}>No open design-impacting RAIDs found.{!tagKey && " (Tag column not detected — check RAID data)"}</div>
+            ) : (
+              <div style={{ overflowY:"auto", maxHeight:240 }}>
+                <table style={{ width:"100%", borderCollapse:"collapse", fontSize:11 }}>
+                  <thead>
+                    <tr style={{ background:"#f8fafc" }}>
+                      {["RAID ID","Status","Component","Tag","Description","Owner"].map(h => (
+                        <th key={h} style={{ padding:"6px 8px", textAlign:"left", color:C.muted, fontWeight:600, fontSize:10,
+                          borderBottom:`1px solid ${C.border}`, whiteSpace:"nowrap" }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {designImpactRaids.map((r, i) => {
+                      const K = raid.keys;
+                      const sl = String(r[K.status]||"").toLowerCase();
+                      const sc = sl.includes("delay") ? C.delayed : sl.includes("complete") ? C.green : C.onTrack;
+                      return (
+                        <tr key={i} style={{ background:i%2===0?C.white:"#f8fafc", borderBottom:`1px solid ${C.border}` }}>
+                          <td style={{ padding:"6px 8px", fontWeight:700, color:C.navyLight, whiteSpace:"nowrap" }}>{r[K.id]||"—"}</td>
+                          <td style={{ padding:"6px 8px" }}><span style={{ color:sc, fontWeight:700, fontSize:10 }}>{r[K.status]||"—"}</span></td>
+                          <td style={{ padding:"6px 8px", color:C.text, whiteSpace:"nowrap" }}>{r[K.component]||"—"}</td>
+                          <td style={{ padding:"6px 8px" }}>
+                            <span style={{ background:"#fef3c7", color:"#92400e", border:"1px solid #fcd34d",
+                              borderRadius:3, padding:"1px 5px", fontSize:10, whiteSpace:"nowrap" }}>
+                              {r[K.tag]||"—"}
+                            </span>
+                          </td>
+                          <td style={{ padding:"6px 8px", color:C.text, maxWidth:220, overflow:"hidden",
+                            textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={r[K.desc]||""}>
+                            {r[K.desc]||"—"}
+                          </td>
+                          <td style={{ padding:"6px 8px", color:C.muted, whiteSpace:"nowrap" }}>{r[K.owner]||"—"}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Card>
+        </div>
+      )}
+
+      {/* ── Row 4: SAP Sprint Pipeline ───────────────────────────────────── */}
+      {req && (
+        <Card title="SAP Sprint Pipeline" style={{ padding:0 }}>
+          {sprintRows.length === 0 ? (
+            <div style={{ padding:16, color:C.muted, fontSize:12 }}>No sprint data loaded.</div>
+          ) : (
+            <div style={{ display:"flex", flexDirection:"column" }}>
+              {/* Header row */}
+              <div style={{ display:"grid", gridTemplateColumns:"200px 1fr 50px 50px 50px 60px 50px", gap:8,
+                padding:"7px 12px", background:"#f8fafc", borderBottom:`1px solid ${C.border}`,
+                fontSize:10, fontWeight:600, color:C.muted }}>
+                <span>Sprint</span>
+                <span>Progress</span>
+                <span style={{ textAlign:"center", color:"#1d4ed8" }}>Done</span>
+                <span style={{ textAlign:"center", color:"#15803d" }}>In Prog</span>
+                <span style={{ textAlign:"center", color:"#b91c1c" }}>Blocked</span>
+                <span style={{ textAlign:"center", color:"#475569" }}>Not Strt</span>
+                <span style={{ textAlign:"center" }}>Total</span>
+              </div>
+
+              {sprintRows.map((sp, i) => (
+                <div key={sp.name}
+                  onClick={() => setStoryModal({ title:`Sprint: ${sp.name}`, rows:sp.rows||[] })}
+                  onMouseEnter={e => e.currentTarget.style.background="#eff6ff"}
+                  onMouseLeave={e => e.currentTarget.style.background = i%2===0?C.white:"#f8fafc"}
+                  style={{ display:"grid", gridTemplateColumns:"200px 1fr 50px 50px 50px 60px 50px", gap:8,
+                    padding:"8px 12px", background:i%2===0?C.white:"#f8fafc",
+                    borderBottom:`1px solid ${C.border}`, cursor:"pointer", alignItems:"center" }}>
+
+                  <span style={{ fontSize:11, fontWeight:600, color:C.text, overflow:"hidden",
+                    textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={sp.name}>{sp.name}</span>
+
+                  {/* Stacked progress bar */}
+                  <div style={{ display:"flex", borderRadius:3, overflow:"hidden", height:14, background:"#e2e8f0" }}>
+                    {[
+                      [sp.complete,   "#1d4ed8","Complete"],
+                      [sp.partial,    "#0369a1","Partial"],
+                      [sp.inProgress, "#15803d","In Progress"],
+                      [sp.blocked,    "#dc2626","Blocked"],
+                      [sp.notStarted, "#94a3b8","Not Started"],
+                      [sp.na,         "#c084fc","N/A"],
+                    ].map(([count, color, label]) => {
+                      if (!count || !sp.total) return null;
+                      const w = Math.round(count/sp.total*100);
+                      return (
+                        <div key={label} title={`${label}: ${count}`}
+                          style={{ width:`${w}%`, background:color, height:"100%",
+                            display:"flex", alignItems:"center", justifyContent:"center",
+                            fontSize:8, color:"#fff", fontWeight:700, overflow:"hidden" }}>
+                          {w>=8?count:""}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <span style={{ fontSize:12, fontWeight:700, color:"#1d4ed8",  textAlign:"center" }}>{sp.complete||"—"}</span>
+                  <span style={{ fontSize:12, fontWeight:700, color:"#15803d",  textAlign:"center" }}>{sp.inProgress||"—"}</span>
+                  <span style={{ fontSize:12, fontWeight:700, color:"#b91c1c",  textAlign:"center" }}>{sp.blocked||"—"}</span>
+                  <span style={{ fontSize:12, fontWeight:700, color:"#475569",  textAlign:"center" }}>{sp.notStarted||"—"}</span>
+                  <span style={{ fontSize:12, fontWeight:600, color:C.muted,    textAlign:"center" }}>{sp.total}</span>
+                </div>
+              ))}
+
+              {/* Legend */}
+              <div style={{ display:"flex", gap:12, padding:"8px 12px", background:"#f8fafc",
+                borderTop:`1px solid ${C.border}`, flexWrap:"wrap", alignItems:"center" }}>
+                <span style={{ fontSize:10, color:C.muted, fontWeight:600 }}>Status:</span>
+                {[["#1d4ed8","Complete"],["#0369a1","Partial"],["#15803d","In Progress"],["#dc2626","Blocked"],["#94a3b8","Not Started"]].map(([col,lbl]) => (
+                  <span key={lbl} style={{ display:"inline-flex", alignItems:"center", gap:4, fontSize:10, color:C.muted }}>
+                    <span style={{ width:10, height:10, borderRadius:2, background:col, display:"inline-block" }} />{lbl}
+                  </span>
+                ))}
+                <span style={{ marginLeft:"auto", fontSize:10, color:C.muted }}>Click any row to drill down</span>
+              </div>
+            </div>
+          )}
+        </Card>
+      )}
+
+      {/* ── Modals ──────────────────────────────────────────────────────── */}
+      {raidModal && raid && (() => {
+        const K = raid.keys;
+        const teamKey = K.team || "Primary Team (Owner)";
+        const statusCol = s => { const sl = String(s||"").toLowerCase(); return sl.includes("delay") ? C.delayed : sl.includes("complete") ? C.complete : C.onTrack; };
+        const allModalTeams = Array.from(new Set(raidModal.rows.map(r => String(r[teamKey]||"").trim()).filter(Boolean))).sort();
+        const allModalTypes = Array.from(new Set(raidModal.rows.map(r => String(r[K.type]||"").trim()).filter(Boolean))).sort();
+        const allModalComps = Array.from(new Set(raidModal.rows.map(r => String(r[K.component]||"").trim()).filter(Boolean))).sort();
+        return (
+          <RaidKpiModal title={raidModal.title} rows={raidModal.rows}
+            K={K} teamKey={teamKey}
+            allTeams={allModalTeams} allTypes={allModalTypes} allComps={allModalComps}
+            statusCol={statusCol} hideType={false} hideStatus={false}
+            colConfig={modalColConfig} setColConfig={setModalColConfig}
+            onClose={() => setRaidModal(null)} />
+        );
+      })()}
       {storyModal && <StoryDrillModal title={storyModal.title} rows={storyModal.rows} reqKeys={req?.keys} onClose={() => setStoryModal(null)} />}
     </div>
   );
@@ -1397,7 +1592,7 @@ function RaidKpiModal({ title, rows, K, teamKey, allTeams, allTypes, allComps, s
             <thead style={{ position:"sticky", top:0, zIndex:2 }}>
               <tr style={{ background:"#162f50" }}>
                 {[["raidId","RAID ID"],["status","Status"],["type","Type"],["component","Component"],
-                  ["experience","Experience"],["topic","Topic"],["desc","Description"],
+                  ["experience","Experience"],["topic","Topic"],["tag","Tag"],["desc","Description"],
                   ["comment","Comments / Resolution"],["owner","Owner"],["team","Primary Team (Owner)"],
                   ["critPath","Critical Path"],["dueDate","Due Date"]
                 ].filter(([key]) => colConfig[key]?.visible).map(([key,label],idx,arr) => (
@@ -1436,6 +1631,7 @@ function RaidKpiModal({ title, rows, K, teamKey, allTeams, allTypes, allComps, s
                     {colConfig.component.visible && <td style={{ padding:"8px 10px", color:C.text, wordBreak:"break-word", width:colConfig.component.width }}>{String(r[K.component]||"—")}</td>}
                     {colConfig.experience.visible&& <td style={{ padding:"8px 10px", color:C.muted, wordBreak:"break-word", width:colConfig.experience.width }}>{String(r[K.experience]||"—")}</td>}
                     {colConfig.topic.visible     && <td style={{ padding:"8px 10px", color:C.muted, wordBreak:"break-word", width:colConfig.topic.width }}>{String(r[K.topic]||"—")}</td>}
+                    {colConfig.tag?.visible      && <td style={{ padding:"8px 10px", width:colConfig.tag?.width||140 }}>{(() => { const v=String(r[K.tag]||"").trim(); if(!v||v==="—") return <span style={{color:C.muted}}>—</span>; return <span style={{background:"#fef3c7",color:"#92400e",border:"1px solid #fcd34d",borderRadius:3,padding:"2px 6px",fontSize:10,whiteSpace:"nowrap"}}>{v}</span>; })()}</td>}
                     {colConfig.desc.visible      && <td style={{ padding:"8px 10px", color:C.text, wordBreak:"break-word", lineHeight:1.5, width:colConfig.desc.width }}>{String(r[K.desc]||"—")}</td>}
                     {colConfig.comment.visible   && <td style={{ padding:"8px 10px", color:C.muted, wordBreak:"break-word", lineHeight:1.5, width:colConfig.comment.width }}>{String(r[K.comment]||"—")}</td>}
                     {colConfig.owner?.visible     && <td style={{ padding:"8px 10px", color:C.text, wordBreak:"break-word", width:colConfig.owner.width }}>{String(r[K.owner]||"—")}</td>}
