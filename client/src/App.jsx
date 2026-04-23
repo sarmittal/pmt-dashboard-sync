@@ -228,8 +228,7 @@ function parseRequirements(sheets) {
     bizReq:          ks.find(k => k === "Business Requirements") || ks.find(k => /business.?req/i.test(k)),
     acceptance:      ks.find(k => k === "Acceptance Criteria") || ks.find(k => /acceptance.?criteria/i.test(k)),
     pmExperience:    ks.find(k => k === "PM Experience") || ks.find(k => /pm.?experience|experience/i.test(k)),
-    // Main status column — req sheet has no plain "Status"; fall back to derived status columns
-    status:          ks.find(k => k === "Status") || ks.find(k => k === "User Story Derived Status") || ks.find(k => /^status$/i.test(k)) || ks.find(k => /user.?story.?derived.?status/i.test(k)),
+    status:          ks.find(k => k === "Status") || ks.find(k => /^status$/i.test(k)),
     // "User Story Review Status (D&A)" — used to filter Deprecated/Deferred rows
     derivedStatus:   ks.find(k => k === "User Story Review Status (D&A)")
                   || ks.find(k => /user.?story.?review.?status/i.test(k))
