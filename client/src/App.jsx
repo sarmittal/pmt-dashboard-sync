@@ -5481,22 +5481,34 @@ function ScorecardTab({ wp, raid, req, openModal }) {
                     {req && (
                       <td style={{ padding:"7px 8px", textAlign:"center",
                         borderLeft:`1px solid ${C.border}`, cursor:rq?"pointer":"default",
-                        fontWeight:700, fontSize:12, color:C.navy }}
-                        onClick={()=>rq&&setStoryModal({title:`All Stories — ${comp}`, rows:rq.rows})}>
+                        fontWeight:700, fontSize:12, color:C.navy }}>
                         {rq ? (() => {
                           // Count stories assigned to a sprint (S1-S8 + N/A)
                           const assignedSprints = new Set([
                             ...sprintOrder.flatMap(e => e.raws),
                             ...naSprintRaws,
                           ]);
-                          const unassigned = rq.rows.filter(r => {
+                          const unassignedRows = rq.rows.filter(r => {
                             const sp = String(r[req.keys.sprint]||"").trim();
                             return !sp || sp === "No Sprint" || !assignedSprints.has(sp);
-                          }).length;
+                          });
+                          const unassigned = unassignedRows.length;
                           return (
                             <span title={unassigned > 0 ? `${rq.total} total = sprint-assigned + ${unassigned} with no sprint` : `${rq.total} total`}>
-                              {rq.total}
-                              {unassigned > 0 && <span style={{ fontSize:9, color:C.muted, fontWeight:500, marginLeft:3 }}>+{unassigned}?</span>}
+                              <span style={{ cursor:"pointer" }}
+                                onClick={() => setStoryModal({ title:`All Stories — ${comp}`, rows:rq.rows })}>
+                                {rq.total}
+                              </span>
+                              {unassigned > 0 && (
+                                <span
+                                  onClick={e => { e.stopPropagation(); setStoryModal({ title:`No Sprint Assigned — ${comp}`, rows:unassignedRows }); }}
+                                  title={`${unassigned} stories with no sprint assigned — click to view`}
+                                  style={{ fontSize:9, color:"#b45309", fontWeight:700, marginLeft:4,
+                                    cursor:"pointer", background:"#fef3c7", border:"1px solid #fcd34d",
+                                    borderRadius:3, padding:"1px 4px" }}>
+                                  +{unassigned}?
+                                </span>
+                              )}
                             </span>
                           );
                         })() : <span style={{ color:C.muted }}>—</span>}
