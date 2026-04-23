@@ -4953,31 +4953,43 @@ function ScorecardTab({ wp, raid, req, openModal }) {
     const designStatus = designLeaves.length ? wpWorstStatus(designLeaves) : null;
     const buildStatus  = buildLeaves.length  ? wpWorstStatus(buildLeaves)  : null;
 
-    // % Complete — average of all leaf rows in the full subtree
-    // Values in workplan are already 0-100 whole numbers, do NOT use pct() which would multiply by 100
+    // % Complete — prefer the Lvl 3 header row value (same source as Workplan tab)
+    // Fall back to average of all leaf rows when header has no value
+    const normPct = v => {
+      const s = String(v ?? "").replace("%","").trim();
+      if (!s || isNaN(Number(s))) return null;
+      const n = Number(s); return n <= 1 ? Math.round(n * 100) : Math.round(n);
+    };
+    const lvl3HeaderRow = subtreeRows.find(r => Number(r["Lvl"] ?? 0) === 3);
+    const headerPct = lvl3HeaderRow ? normPct(lvl3HeaderRow["% Complete"] ?? lvl3HeaderRow["% complete"]) : null;
     const leafRows = subtreeRows.filter(isLeafRow);
-    const pctValues = leafRows
-      .map(r => {
-        const v = r["% Complete"] ?? r["% complete"];
-        const s2 = String(v ?? "").replace("%","").trim();
-        if (s2 !== "" && !isNaN(Number(s2))) { const n = Number(s2); return n <= 1 ? Math.round(n * 100) : Math.round(n); }
-        // Fallback: derive from status when no numeric value present
+    const pctValues = leafRows.map(r => {
+        const pv = normPct(r["% Complete"] ?? r["% complete"]);
+        if (pv != null) return pv;
         const s = String(r["Default Status"] || r["Status"] || "").toLowerCase();
         if (s.includes("complete")) return 100;
         if (s.includes("on track") || s.includes("in progress")) return 50;
         if (s.includes("off track") || s.includes("delayed")) return 25;
         if (s.includes("not start")) return 0;
         return null;
-      })
-      .filter(v => v != null);
-    const pctComplete = pctValues.length ? Math.round(pctValues.reduce((a, b) => a + b, 0) / pctValues.length) : null;
+      }).filter(v => v != null);
+    const leafAvg = pctValues.length ? Math.round(pctValues.reduce((a,b) => a+b,0) / pctValues.length) : null;
+    const pctComplete = headerPct != null ? headerPct : leafAvg;
+
+    // If header shows 100% or all leaves complete, treat Build as Complete when
+    // keyword split found no build-tagged tasks (avoids "Not started" on done components)
+    const allLeavesComplete = leafRows.length > 0 && leafRows.every(r => {
+      const s = String(r["Default Status"] || r["Status"] || "").toLowerCase();
+      return s.includes("complete") || normPct(r["% Complete"] ?? r["% complete"]) === 100;
+    });
+    const resolvedBuildStatus = buildStatus ?? ((headerPct === 100 || allLeavesComplete) ? "Complete" : null);
 
     return {
       designStatus,
-      buildStatus,
+      buildStatus: resolvedBuildStatus,
       pctComplete,
-      designRows:     designDrillRows,   // full hierarchy rows for popup
-      buildRows:      buildDrillRows_,   // full hierarchy rows for popup
+      designRows:     designDrillRows,
+      buildRows:      buildDrillRows_,
       allRows:        subtreeRows,
     };
   };
