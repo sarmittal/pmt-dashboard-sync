@@ -487,57 +487,66 @@ function parseCapacity(sheets) {
   rows.slice(0, 100).forEach(r => Object.keys(r).forEach(k => ksSet.add(k)));
   const ks = Array.from(ksSet);
 
-  // Row-label column — "Workstream" in the SAP Tech Sprint Capacity sheet
-  const wsKey = ks.find(k => k === "Workstream") || ks.find(k => /^workstream$/i.test(k))
-             || ks.find(k => /workstream/i.test(k)) || ks[2] || ks[1] || ks[0];
-
-  // Find sprint columns — match "Sprint 7", "Sprint7 (5.11 - 6.12)", "Sprint 7 (dates)", etc.
-  const sprintColMap = {}; // sprint number → column key
+  // Find sprint columns — match "Sprint 7", "Sprint7 (5.11–6.12)", etc.
+  const sprintColMap = {};
   for (const k of ks) {
     const m = String(k).match(/sprint\s*(\d+)/i);
     if (m) sprintColMap[parseInt(m[1], 10)] = k;
   }
-  console.log("[parseCapacity] wsKey:", wsKey, "| sprintColMap:", sprintColMap);
+  console.log("[parseCapacity] columns:", ks, "| sprintColMap:", sprintColMap);
 
   const sprintCapacity = {};
   for (const sp of [7, 8, 9]) sprintCapacity[sp] = { func: null, tech: null };
 
+  // Scan every row:
+  // - Detect section by scanning ALL cell values (section header may be in any column)
+  // - Detect "Available" rows by checking if any cell = "available" (regardless of column)
   let section = null;
-  for (const row of rows) {
-    // Scan ALL cell values in the row to reliably detect section headers
-    // (section headers may be in any column depending on sheet structure)
-    const allCellText = Object.values(row).map(v => String(v || "").toLowerCase()).join("|");
-    const ws = String(row[wsKey] || "").trim().toLowerCase();
+  const availRows = []; // ordered list of {row, section} for all "Available" rows
 
-    if ((allCellText.includes("func") && allCellText.includes("team") && allCellText.includes("capac"))
-      || ws.includes("func. team") || ws.includes("functional team")) {
+  for (const row of rows) {
+    const allCellVals = Object.values(row).map(v => String(v || "").trim().toLowerCase());
+    const allText     = allCellVals.join("|");
+
+    // Section detection — look across all cells
+    if (allText.includes("func") && allText.includes("team") && allText.includes("capac")) {
       section = "func";
-    } else if ((allCellText.includes("tech") && allCellText.includes("team") && allCellText.includes("capac"))
-      || ws.includes("tech team")) {
+    } else if (allText.includes("tech") && allText.includes("team") && allText.includes("capac")) {
       section = "tech";
-    } else if ((allCellText.includes("overall") && allCellText.includes("team") && allCellText.includes("capac"))
-      || ws.includes("overall team")) {
+    } else if (allText.includes("overall") && allText.includes("team") && allText.includes("capac")) {
       section = "overall";
     }
 
-    // "Available" net capacity row — exact or trimmed match
-    const isAvailRow = ws === "available" || ws === "available:";
-    if (isAvailRow && section !== "overall" && section !== null) {
-      for (const sp of [7, 8, 9]) {
-        const col = sprintColMap[sp];
-        if (!col) continue;
-        const raw = String(row[col] ?? "").replace(/[^-0-9]/g, "");
-        const val = parseInt(raw, 10);
-        if (!isNaN(val)) {
-          if (section === "func") sprintCapacity[sp].func = val;
-          else if (section === "tech") sprintCapacity[sp].tech = val;
-        }
-      }
-      console.log("[parseCapacity] Available row found — section:", section, "| values:", Object.fromEntries([7,8,9].map(sp=>[sp, row[sprintColMap[sp]]])));
+    // "Available" row — any cell equals exactly "available"
+    const isAvailRow = allCellVals.some(v => v === "available");
+    if (isAvailRow) {
+      availRows.push({ row, section });
+      console.log("[parseCapacity] Available row — section:", section, "| cells:", Object.fromEntries(ks.map(k=>[k,row[k]])));
     }
   }
 
-  console.log("[parseCapacity] sprintCapacity:", sprintCapacity);
+  // Primary: use section-tagged Available rows
+  // Fallback: positional order (1st=overall, 2nd=func, 3rd=tech)
+  const funcAvail = availRows.find(x => x.section === "func")?.row
+                 || (availRows.length >= 2 ? availRows[1].row : null);
+  const techAvail = availRows.find(x => x.section === "tech")?.row
+                 || (availRows.length >= 3 ? availRows[2].row : null);
+
+  for (const sp of [7, 8, 9]) {
+    const col = sprintColMap[sp];
+    if (!col) continue;
+    if (funcAvail) {
+      const v = parseInt(String(funcAvail[col] ?? "").replace(/[^-0-9]/g, ""), 10);
+      if (!isNaN(v)) sprintCapacity[sp].func = v;
+    }
+    if (techAvail) {
+      const v = parseInt(String(techAvail[col] ?? "").replace(/[^-0-9]/g, ""), 10);
+      if (!isNaN(v)) sprintCapacity[sp].tech = v;
+    }
+  }
+
+  console.log("[parseCapacity] result:", sprintCapacity);
+  const wsKey = ks.find(k => k === "Workstream") || ks.find(k => /workstream/i.test(k)) || ks[0];
   const K = { resource: wsKey, sprint: null, available: null, planned: null, workstream: wsKey };
   return { total: rows.length, bySprint: {}, sprintChart: [], items: rows, keys: K, sprintCapacity, sprintColMap };
 }
@@ -1912,14 +1921,19 @@ function ChangeRequestTab({ raid, cap }) {
     return sortDir==="asc" ? av.localeCompare(bv) : bv.localeCompare(av);
   }) : filtered;
 
-  // ── Capacity ── demand = checked rows if any selected, otherwise all TBP rows
+  // Normalize sprint string to just the number ("Sprint 7 (5.11-6.12)" → "7")
+  const sprintNum = s => { const m = String(s||"").match(/sprint\s*(\d+)/i); return m ? m[1] : null; };
+
+  // Demand = union of (checked by checkbox) + (Target Sprint matches selected sprint)
   const sprintCap   = cap?.sprintCapacity?.[parseInt(sprintSel)] || null;
-  const demandRows  = checkedIds.size > 0
-    ? sorted.filter(r => checkedIds.has(String(r[K.id]||"")))
-    : tbp;
+  const demandRows  = tbp.filter(r =>
+    checkedIds.has(String(r[K.id]||"")) || sprintNum(r[K.crTargetSprint]) === sprintSel
+  );
+  const checkedCount  = tbp.filter(r => checkedIds.has(String(r[K.id]||""))).length;
+  const sprintMatched = tbp.filter(r => sprintNum(r[K.crTargetSprint]) === sprintSel).length;
   const funcDemand  = demandRows.reduce((s,r)=>s+parseHrs(r,K.crSapFunc),0);
   const techDemand  = demandRows.reduce((s,r)=>s+parseHrs(r,K.crSapTech),0);
-  const demandLabel = checkedIds.size > 0 ? `${checkedIds.size} selected CRs` : `all ${tbp.length} TBP CRs`;
+  const demandLabel = `${demandRows.length} CRs (${checkedCount} checked + ${sprintMatched} in Sprint ${sprintSel})`;
 
   const toggleCheck = id => setCheckedIds(prev => {
     const next = new Set(prev);
@@ -1930,23 +1944,24 @@ function ChangeRequestTab({ raid, cap }) {
   const allChecked   = allSortedIds.length > 0 && allSortedIds.every(id => checkedIds.has(id));
   const toggleAll    = () => setCheckedIds(prev => allChecked ? new Set() : new Set(allSortedIds));
 
+  // Subtotals for currently filtered (sorted) rows
+  const subHrs = kk => sorted.reduce((s,r)=>s+parseHrs(r,kk),0);
+
   const CapBar = ({ label, available, demand, color }) => {
     const over = available != null && demand > available;
     const pct  = available != null && available !== 0 ? Math.min(Math.abs(demand / available) * 100, 100) : 0;
     const net  = available != null ? demand - available : null;
     return (
-      <div>
-        <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4, fontSize:11 }}>
-          <span style={{ fontWeight:700, color:C.text }}>{label}</span>
-          <span style={{ fontWeight:700, color:over?C.delayed:"#166534" }}>
-            {available != null
-              ? `Demand (${demandLabel}): ${demand} hrs | Available: ${available} hrs | ${over ? `⚠ Over by ${Math.abs(net)} hrs` : `✓ ${Math.abs(net)} hrs headroom`}`
-              : `Demand (${demandLabel}): ${demand} hrs | Capacity: no data`}
-          </span>
-        </div>
+      <div style={{ display:"grid", gridTemplateColumns:"200px 1fr auto", gap:12, alignItems:"center" }}>
+        <span style={{ fontWeight:700, color:C.text, fontSize:11 }}>{label}</span>
         <div style={{ height:10, background:"#e5e7eb", borderRadius:5, overflow:"hidden" }}>
-          <div style={{ width:`${pct}%`, height:"100%", background:over?C.delayed:color, borderRadius:5, transition:"width .4s" }} />
+          {available != null && <div style={{ width:`${pct}%`, height:"100%", background:over?C.delayed:color, borderRadius:5, transition:"width .4s" }} />}
         </div>
+        <span style={{ fontWeight:700, fontSize:11, color:over?C.delayed:available!=null?"#166534":C.muted, whiteSpace:"nowrap" }}>
+          {available != null
+            ? `Available: ${available} hrs | Demand: ${demand} hrs | ${over ? `⚠ +${Math.abs(net)} over` : `✓ ${Math.abs(net)} free`}`
+            : `Demand: ${demand} hrs | Available: no data`}
+        </span>
       </div>
     );
   };
@@ -2017,12 +2032,21 @@ function ChangeRequestTab({ raid, cap }) {
           </div>
 
           {/* STEP 4: Capacity bars */}
-          <div style={{ padding:"14px 20px", background:"#f8fafc", borderBottom:`1px solid ${C.border}`, display:"flex", flexDirection:"column", gap:10 }}>
+          <div style={{ padding:"12px 20px", background:"#f8fafc", borderBottom:`1px solid ${C.border}`, display:"flex", flexDirection:"column", gap:8 }}>
+            <div style={{ fontSize:10, color:C.muted, marginBottom:2 }}>
+              Demand based on: <b style={{ color:C.text }}>{demandLabel}</b>
+              <span style={{ marginLeft:6, color:C.muted }}>(checked rows + rows with Target Sprint = Sprint {sprintSel})</span>
+            </div>
             <CapBar label="SAP Functional Capacity" available={sprintCap?.func} demand={funcDemand} color={C.onTrack} />
             <CapBar label="SAP Tech Capacity"       available={sprintCap?.tech} demand={techDemand} color={C.navyLight} />
-            {!sprintCap?.func && !sprintCap?.tech && (
-              <div style={{ fontSize:10, color:C.muted, fontStyle:"italic", marginTop:2 }}>
-                No capacity data found for Sprint {sprintSel}. Ensure the "07. SAP Tech Sprint Capacity Management" sheet is loaded.
+            {!sprintCap?.func && !sprintCap?.tech && !cap && (
+              <div style={{ fontSize:10, color:C.delayed, fontStyle:"italic" }}>
+                Capacity sheet not loaded. Upload "07. SAP Tech Sprint Capacity Management" above or refresh from Smartsheet.
+              </div>
+            )}
+            {!sprintCap?.func && !sprintCap?.tech && cap && (
+              <div style={{ fontSize:10, color:C.muted, fontStyle:"italic" }}>
+                Sprint {sprintSel} not found in capacity sheet. Check browser console for parseCapacity debug output.
               </div>
             )}
           </div>
@@ -2069,6 +2093,18 @@ function ChangeRequestTab({ raid, cap }) {
                 </tr>
               </thead>
               <tbody>
+                {/* Subtotals row — updates live with filters */}
+                <tr style={{ background:"#e8eef7", borderBottom:`2px solid ${C.border}`, fontWeight:700, fontSize:11 }}>
+                  <td colSpan={7} style={{ padding:"6px 8px", color:C.navyLight }}>
+                    Subtotal ({sorted.length} shown)
+                  </td>
+                  {[K.crHours, K.crSapFunc, K.crSapTech, K.crSdOps, K.crOcm, K.crUx].map(kk => (
+                    <td key={kk} style={{ padding:"6px 8px", textAlign:"right", color:C.navyLight }}>
+                      {subHrs(kk) || "—"}
+                    </td>
+                  ))}
+                  <td />
+                </tr>
                 {sorted.map((r,i) => {
                   const url     = String(r[K.crUrl]||"");
                   const raidId  = String(r[K.id]||"");
@@ -2098,16 +2134,6 @@ function ChangeRequestTab({ raid, cap }) {
                     </tr>
                   );
                 })}
-                {/* Totals row */}
-                <tr style={{ background:"#162f50", color:"#fff", fontWeight:700, fontSize:11 }}>
-                  <td colSpan={7} style={{ padding:"7px 8px", textAlign:"right" }}>Totals ({sorted.length} shown{checkedIds.size>0?` · ${checkedIds.size} selected`:""})</td>
-                  {[K.crHours, K.crSapFunc, K.crSapTech, K.crSdOps, K.crOcm, K.crUx].map(kk => (
-                    <td key={kk} style={{ padding:"7px 8px", textAlign:"right", fontWeight:800 }}>
-                      {sorted.reduce((s,r)=>s+parseHrs(r,kk),0) || "—"}
-                    </td>
-                  ))}
-                  <td />
-                </tr>
               </tbody>
             </table>
           </div>
