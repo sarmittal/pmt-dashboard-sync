@@ -117,6 +117,22 @@ function slim(rows, cols) {
   });
 }
 
+// For the capacity sheet, remove "Sprint N Actual" and "Sprint N." columns so the
+// client parser always maps sprint numbers to the plain "Sprint N" column (which holds
+// the planned/available capacity values the user actually wants).
+function cleanCapacityColumns(rows) {
+  if (!rows?.length) return rows;
+  return rows.map(row => {
+    const out = {};
+    for (const [k, v] of Object.entries(row)) {
+      const isSprint = /sprint/i.test(k);
+      if (isSprint && (/actual/i.test(k) || k.trimEnd().endsWith("."))) continue;
+      out[k] = v;
+    }
+    return out;
+  });
+}
+
 export async function fetchAllSheets(token) {
   if (!token) throw new Error("SMARTSHEET_TOKEN is not set");
 
@@ -128,7 +144,8 @@ export async function fetchAllSheets(token) {
       try {
         // Fetch row attachments for RAID sheet only (SharePoint links)
         const rows = await fetchSheet(id, token, key === "raid");
-        results[key] = slim(rows, KEEP[key]);
+        const slimmed = slim(rows, KEEP[key]);
+        results[key] = key === "cap" ? cleanCapacityColumns(slimmed) : slimmed;
         console.log(`[smartsheet] ${key}: ${rows.length} rows`);
       } catch (err) {
         errors.push(`${key}: ${err.message}`);
