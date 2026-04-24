@@ -150,11 +150,19 @@ function parseRaid(sheets) {
     topic:     ks.find(k => /topic/i.test(k)),
     critPath:  ks.find(k => /critical.?path/i.test(k)),
     date:      ks.find(k => k === "Due Date") || ks.find(k => /due.?date|target.?date/i.test(k)),
-    crAnalysis: ks.find(k => k === "Change Request Analysis") || ks.find(k => /change.?request.?analysis/i.test(k)),
-    crStatus:   ks.find(k => k === "Status of Decision Acceptance (PMO)") || ks.find(k => /status.?of.?decision|decision.?acceptance/i.test(k)) || ks.find(k => /pmo.?status/i.test(k)),
-    crHours:    ks.find(k => k === "Hours Estimate") || ks.find(k => /hours?.?estimate/i.test(k)),
-    tag:        ks.find(k => k === "Tag") || ks.find(k => k === "Tags") || ks.find(k => /^tags?$/i.test(k)),
-    workstream: ks.find(k => k === "Workstream") || ks.find(k => /^workstream$/i.test(k)),
+    crAnalysis:     ks.find(k => k === "Change Request Analysis") || ks.find(k => /change.?request.?analysis/i.test(k)),
+    crStatus:       ks.find(k => k === "Status of Decision Acceptance (PMO)") || ks.find(k => /status.?of.?decision|decision.?acceptance/i.test(k)) || ks.find(k => /pmo.?status/i.test(k)),
+    crHours:        ks.find(k => k === "Total Hours Estimate") || ks.find(k => /total.?hours.?estimate/i.test(k)) || ks.find(k => k === "Hours Estimate") || ks.find(k => /hours?.?estimate/i.test(k)),
+    crSapFunc:      ks.find(k => k === "SAP Functional Effort (Hours)") || ks.find(k => /sap.?functional.?effort/i.test(k)),
+    crSapTech:      ks.find(k => k === "SAP Tech Effort (Hours)") || ks.find(k => /sap.?tech.?effort/i.test(k)),
+    crSdOps:        ks.find(k => k === "SD / Ops Docs Effort (Hours)") || ks.find(k => /sd.?.?ops.?docs/i.test(k)),
+    crOcm:          ks.find(k => k === "OCM Effort (Hours)") || ks.find(k => /^ocm.?effort/i.test(k)),
+    crUx:           ks.find(k => k === "UX Effort (Hours)") || ks.find(k => /^ux.?effort/i.test(k)),
+    crTargetSprint: ks.find(k => k === "Targeted Build Sprint") || ks.find(k => /targeted.?build.?sprint/i.test(k)),
+    crCompletion:   ks.find(k => k === "Completion Status") || ks.find(k => /completion.?status/i.test(k)),
+    crUrl:          ks.find(k => /^url$|^link$/i.test(k)) || ks.find(k => /attached.?url|row.?url/i.test(k)),
+    tag:            ks.find(k => k === "Tag") || ks.find(k => k === "Tags") || ks.find(k => /^tags?$/i.test(k)),
+    workstream:     ks.find(k => k === "Workstream") || ks.find(k => /^workstream$/i.test(k)),
   };
   const byPriority = {}, byComponent = {}, byTeam = {};
   rows.forEach(r => {
@@ -185,34 +193,35 @@ function parseRaid(sheets) {
   const statusValues = Array.from(new Set(rows.map(r => String(r[K.status] || "")))).sort();
 
   // ── Change Request buckets ──────────────────────────────────────────────────
-  // CR-warranted rows = those whose Change Request Analysis contains one of the trigger values
-  const CR_ANALYSIS_VALUES = [
-    "tech reviewed - change request needed (inform)",
-    "tech reviewed - change request needed (for decisioning)",
-    "sd reviewed - change request needed (inform)",
-    "sd reviewed - change request needed (for decisioning)",
-    "ocm reviewed - change request needed (inform)",
-    "ocm reviewed - change request needed (for decisioning)",
+  // CR rows = "Change Request Analysis" contains any of these trigger prefixes
+  const CR_ANALYSIS_TRIGGERS = [
+    "tech reviewed - change request needed",
+    "sd reviewed - change request needed",
+    "ocm reviewed - change request needed",
+    "ux reviewed - change request needed",
+    "training reviewed - change request needed",
   ];
-  const isCR = r => { const v = String(r[K.crAnalysis] || "").toLowerCase().trim(); return CR_ANALYSIS_VALUES.some(t => v.includes(t.slice(0, 20))); };
+  const isCR = r => { const v = String(r[K.crAnalysis] || "").toLowerCase().trim(); return CR_ANALYSIS_TRIGGERS.some(t => v.includes(t)); };
   const crRows = rows.filter(isCR);
 
   const getCrStatus = r => String(r[K.crStatus] || "").trim();
   const getCrHours  = r => { const v = String(r[K.crHours] || "").replace(/[^0-9.]/g, ""); const n = parseFloat(v); return isNaN(n) ? 0 : Math.round(n); };
   const sumHours    = arr => arr.reduce((s, r) => s + getCrHours(r), 0);
 
-  // Status buckets — Approved = "Approved" + "Inform-Accepted (Reviewed)"
-  const crApproved  = crRows.filter(r => { const s = getCrStatus(r).toLowerCase(); return s.includes("approved") || s.includes("inform-accepted (reviewed)"); });
-  const crRejected  = crRows.filter(r => getCrStatus(r).toLowerCase().includes("rejected"));
-  const crDeferred  = crRows.filter(r => getCrStatus(r).toLowerCase().includes("deferred"));
-  const crPending   = crRows.filter(r => { const s = getCrStatus(r).toLowerCase(); return s.includes("pending") || s.includes("inform-accepted(not reviewed)") || s.includes("inform-accepted (not reviewed)"); });
+  // Status buckets
+  const crApproved        = crRows.filter(r => { const s = getCrStatus(r).toLowerCase(); return s.includes("approved") || s.includes("inform-accepted (reviewed)"); });
+  const crPending         = crRows.filter(r => { const s = getCrStatus(r).toLowerCase(); return s.includes("pending") || s.includes("inform-accepted(not reviewed)") || s.includes("inform-accepted (not reviewed)"); });
+  const crToBePrioritized = crRows.filter(r => getCrStatus(r).toLowerCase().includes("to be prioritized"));
+  const crRejected        = crRows.filter(r => getCrStatus(r).toLowerCase().includes("rejected"));
+  const crDeferred        = crRows.filter(r => getCrStatus(r).toLowerCase().includes("deferred"));
 
   const cr = {
     all: crRows,
-    approved: crApproved, approvedHours: sumHours(crApproved),
-    rejected: crRejected, rejectedHours: sumHours(crRejected),
-    deferred: crDeferred, deferredHours: sumHours(crDeferred),
-    pending:  crPending,  pendingHours:  sumHours(crPending),
+    approved:        crApproved,        approvedHours:        sumHours(crApproved),
+    pending:         crPending,         pendingHours:         sumHours(crPending),
+    toBePrioritized: crToBePrioritized, toBePrioritizedHours: sumHours(crToBePrioritized),
+    rejected:        crRejected,        rejectedHours:        sumHours(crRejected),
+    deferred:        crDeferred,        deferredHours:        sumHours(crDeferred),
     totalHours: sumHours(crRows),
   };
 
@@ -473,23 +482,49 @@ function parseTestScenarios(sheets) {
 function parseCapacity(sheets) {
   const key = Object.keys(sheets)[0];
   const rows = sheets[key]; if (!rows?.length) return null;
-  const ks = Object.keys(rows[0]);
-  const K = {
-    resource: ks.find(k => /resource|person|name|team.?member/i.test(k)) || ks[0],
-    sprint: ks.find(k => /sprint/i.test(k)),
-    available: ks.find(k => /available|capacity/i.test(k)),
-    planned: ks.find(k => /planned|allocated/i.test(k)),
-    workstream: ks.find(k => /workstream|team|component/i.test(k)),
-  };
-  const bySprint = {};
-  rows.forEach(r => {
-    const sp = r[K.sprint] || "Overall";
-    const avail = Number(r[K.available] || 0), planned = Number(r[K.planned] || 0);
-    if (!bySprint[sp]) bySprint[sp] = { available: 0, planned: 0, rows: [] };
-    bySprint[sp].available += avail; bySprint[sp].planned += planned; bySprint[sp].rows.push(r);
-  });
-  const sprintChart = Object.entries(bySprint).map(([name, d]) => ({ name, ...d, diff: d.available - d.planned }));
-  return { total: rows.length, bySprint, sprintChart, items: rows, keys: K };
+
+  const ksSet = new Set();
+  rows.slice(0, 100).forEach(r => Object.keys(r).forEach(k => ksSet.add(k)));
+  const ks = Array.from(ksSet);
+
+  // Row-label column — "Workstream" in the SAP Tech Sprint Capacity sheet
+  const wsKey = ks.find(k => k === "Workstream") || ks.find(k => /workstream/i.test(k)) || ks[1] || ks[0];
+
+  // Find sprint columns — keys like "Sprint 7", "Sprint7 (5.11 - 6.12)", etc.
+  const sprintColMap = {}; // sprint number → column key
+  for (const k of ks) {
+    const m = String(k).match(/sprint\s*(\d+)/i);
+    if (m) sprintColMap[parseInt(m[1], 10)] = k;
+  }
+
+  // Extract available capacity per sprint for Functional and Tech teams
+  // Strategy: track which section we're in (Overall / Func / Tech) and grab "Available" rows
+  const sprintCapacity = {}; // { 7: { func, tech }, 8: {...}, 9: {...} }
+  for (const sp of [7, 8, 9]) sprintCapacity[sp] = { func: null, tech: null };
+
+  let section = null;
+  for (const row of rows) {
+    const ws = String(row[wsKey] || "").trim().toLowerCase();
+    if (ws.includes("func") && ws.includes("team")) section = "func";
+    else if (ws.includes("tech") && ws.includes("team")) section = "tech";
+    else if (ws.includes("overall") && ws.includes("team")) section = "overall";
+
+    if (ws === "available") {
+      for (const sp of [7, 8, 9]) {
+        const col = sprintColMap[sp];
+        if (!col) continue;
+        const raw = String(row[col] ?? "").replace(/[^-0-9]/g, "");
+        const val = parseInt(raw, 10);
+        if (!isNaN(val)) {
+          if (section === "func") sprintCapacity[sp].func = val;
+          else if (section === "tech") sprintCapacity[sp].tech = val;
+        }
+      }
+    }
+  }
+
+  const K = { resource: wsKey, sprint: null, available: null, planned: null, workstream: wsKey };
+  return { total: rows.length, bySprint: {}, sprintChart: [], items: rows, keys: K, sprintCapacity, sprintColMap };
 }
 
 // ─── SHARED UI ───────────────────────────────────────────────────────────────
@@ -993,7 +1028,7 @@ export default function App() {
         {tab === "executive"    && <ExecutiveSummaryTab wp={wp} raid={raid} req={req} cap={cap} openModal={openModal} />}
         {tab === "workplan"     && <WorkplanTab wp={wp} raid={raid} openModal={openModal} />}
         {tab === "raid"         && <RaidAnalysisTab raid={raid} />}
-        {tab === "cr"           && <ChangeRequestTab raid={raid} />}
+        {tab === "cr"           && <ChangeRequestTab raid={raid} cap={cap} />}
         {tab === "backlog"      && <BacklogTab raid={raid} />}
         {tab === "overview"     && <OverviewTab wp={wp} raid={raid} req={req} cap={cap} openModal={openModal} />}
         {tab === "scorecard"    && <ScorecardTab wp={wp} raid={raid} req={req} openModal={openModal} />}
@@ -1651,145 +1686,385 @@ function RaidKpiModal({ title, rows, K, teamKey, allTeams, allTypes, allComps, s
   );
 }
 
-// ─── CHANGE REQUEST TAB ──────────────────────────────────────────────────────
-function ChangeRequestTab({ raid }) {
-  const [modal, setModal] = useState(null);
+// ─── CR DRILL-DOWN MODAL (Step 2) ────────────────────────────────────────────
+function CRDrillModal({ title, rows, K, showCompletion, onClose }) {
+  const [typeF,    setTypeF]    = useState("All");
+  const [priF,     setPriF]     = useState("All");
+  const [expF,     setExpF]     = useState("All");
+  const [compF,    setCompF]    = useState("All");
+  const [sprintF,  setSprintF]  = useState("All");
+  const [compSF,   setCompSF]   = useState("All");
 
-  if (!raid) return <Empty label="Upload RAID Log file above to view this tab." />;
-  if (!raid.cr || raid.cr.all.length === 0) return (
-    <Card>
-      <div style={{ textAlign:"center", padding:"32px 0", color:C.muted, fontSize:13 }}>
-        No Change Requests detected in RAID log.<br/>
-        <span style={{ fontSize:11 }}>Ensure "Change Request Analysis" column is populated.</span>
-      </div>
-    </Card>
+  const uniq = (arr) => ["All", ...Array.from(new Set(arr.filter(Boolean))).sort()];
+  const allTypes   = uniq(rows.map(r => String(r[K.type]||"").trim()));
+  const allPris    = uniq(rows.map(r => String(r[K.priority]||"").trim()));
+  const allExps    = uniq(rows.map(r => String(r[K.experience]||"").trim()));
+  const allComps   = uniq(rows.map(r => String(r[K.component]||"").trim()));
+  const allSprints = uniq(rows.map(r => String(r[K.crTargetSprint]||"").trim()));
+  const allCompS   = uniq(rows.map(r => String(r[K.crCompletion]||"").trim()));
+
+  const filtered = rows.filter(r =>
+    (typeF   === "All" || String(r[K.type]||"").trim()           === typeF)   &&
+    (priF    === "All" || String(r[K.priority]||"").trim()       === priF)    &&
+    (expF    === "All" || String(r[K.experience]||"").trim()     === expF)    &&
+    (compF   === "All" || String(r[K.component]||"").trim()      === compF)   &&
+    (sprintF === "All" || String(r[K.crTargetSprint]||"").trim() === sprintF) &&
+    (compSF  === "All" || String(r[K.crCompletion]||"").trim()   === compSF)
   );
 
-  const K = raid.keys;
-  const cr = raid.cr;
-  const teamKey = K.team || "Primary Team (Owner)";
+  const Pill = ({ val, cur, setter }) => (
+    <button onClick={() => setter(val)}
+      style={{ padding:"3px 9px", borderRadius:20, fontSize:10, fontWeight:700, cursor:"pointer",
+        border:`2px solid ${cur===val?C.navyLight:C.border}`,
+        background:cur===val?C.navyLight:C.white, color:cur===val?"#fff":C.text }}>
+      {val}
+    </button>
+  );
 
-  const BUCKETS = [
-    { lbl:"Approved",       rows:cr.approved, hours:cr.approvedHours, textCol:"#166534", bg:"#dcfce7", borderC:"#86efac" },
-    { lbl:"Pending Review", rows:cr.pending,  hours:cr.pendingHours,  textCol:"#1d4ed8", bg:"#dbeafe", borderC:"#93c5fd" },
-    { lbl:"Rejected",       rows:cr.rejected, hours:cr.rejectedHours, textCol:"#b91c1c", bg:"#fee2e2", borderC:"#fca5a5" },
-    { lbl:"Deferred",       rows:cr.deferred, hours:cr.deferredHours, textCol:"#92400e", bg:"#fef3c7", borderC:"#fcd34d" },
-  ];
+  const numCell = (r, kk) => {
+    const v = String(r[kk]||"").replace(/[^0-9.]/g,""); const n=parseFloat(v);
+    return <td style={{ padding:"6px 8px", textAlign:"right", color:isNaN(n)?"#ccc":"#166534", fontWeight:600, whiteSpace:"nowrap" }}>{isNaN(n)?"—":Math.round(n)}</td>;
+  };
 
   return (
-    <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.55)", zIndex:1200, display:"flex", alignItems:"center", justifyContent:"center" }}
+      onClick={onClose}>
+      <div style={{ background:C.white, borderRadius:10, width:"97%", maxWidth:1400, maxHeight:"90vh", display:"flex", flexDirection:"column", boxShadow:"0 24px 60px rgba(0,0,0,0.35)" }}
+        onClick={e => e.stopPropagation()}>
 
-      {/* KPI tiles */}
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))", gap:10 }}>
-        {BUCKETS.map(({ lbl, rows, hours, textCol, bg, borderC }) => (
-          <div key={lbl}
-            onClick={() => rows.length && setModal({ title:`CR — ${lbl}`, rows })}
-            style={{ background:bg, border:`1.5px solid ${borderC}`, borderRadius:8, padding:"14px 16px",
-              cursor:rows.length?"pointer":"default", transition:"box-shadow .15s, transform .15s" }}
-            onMouseEnter={e => { if(rows.length){e.currentTarget.style.boxShadow="0 4px 12px rgba(0,0,0,0.12)";e.currentTarget.style.transform="translateY(-1px)";}}}
-            onMouseLeave={e => { e.currentTarget.style.boxShadow="none";e.currentTarget.style.transform="none"; }}>
-            <div style={{ fontSize:10, fontWeight:700, color:textCol, textTransform:"uppercase", letterSpacing:"0.07em", marginBottom:4 }}>{lbl}</div>
-            <div style={{ fontSize:28, fontWeight:800, color:textCol, lineHeight:1 }}>{rows.length}</div>
-            <div style={{ fontSize:11, color:textCol, opacity:0.8, marginTop:4, fontWeight:600 }}>
-              {hours > 0 ? `${hours.toLocaleString()} hrs estimated` : "—"}
-            </div>
-            {rows.length > 0 && <div style={{ fontSize:10, color:textCol, opacity:0.7, marginTop:4 }}>Click to drill down →</div>}
-          </div>
-        ))}
-      </div>
-
-      {/* Summary bar */}
-      <div style={{ background:"#f8fafc", border:`1px solid ${C.border}`, borderRadius:8, padding:"10px 14px", display:"flex", gap:20, flexWrap:"wrap", alignItems:"center" }}>
-        <span style={{ fontSize:12, color:C.muted }}><b style={{ color:C.text }}>Total CRs:</b> {cr.all.length}</span>
-        <span style={{ fontSize:12, color:C.muted }}><b style={{ color:C.text }}>Total Hours:</b> {cr.totalHours.toLocaleString()}</span>
-        <span style={{ fontSize:11, color:C.muted, fontStyle:"italic" }}>Approved includes Inform-Accepted (Reviewed)</span>
-      </div>
-
-      {/* Full CR table */}
-      <Card style={{ padding:0 }}>
-        <div style={{ padding:"12px 16px", background:"#d0d5de", borderRadius:"10px 10px 0 0", borderBottom:`1px solid ${C.border}` }}>
-          <div style={{ fontSize:10, fontWeight:700, color:C.text, textTransform:"uppercase", letterSpacing:"0.06em" }}>
-            All Change Requests
-            <span style={{ fontSize:9, color:C.muted, fontWeight:400, textTransform:"none", marginLeft:6 }}>· {cr.all.length} total</span>
-          </div>
+        {/* Header */}
+        <div style={{ background:C.headerBg, padding:"12px 20px", borderRadius:"10px 10px 0 0", display:"flex", justifyContent:"space-between", alignItems:"center", flexShrink:0 }}>
+          <div style={{ color:"#fff", fontWeight:700, fontSize:14 }}>{title} <span style={{ opacity:.6, fontWeight:400, fontSize:12 }}>· {filtered.length} of {rows.length}</span></div>
+          <button onClick={onClose} style={{ background:"rgba(255,255,255,0.15)", border:"none", color:"#fff", borderRadius:5, padding:"5px 14px", cursor:"pointer", fontSize:13, fontWeight:600 }}>✕</button>
         </div>
-        <div style={{ overflowX:"auto" }}>
+
+        {/* Filter chips */}
+        <div style={{ padding:"10px 16px", borderBottom:`1px solid ${C.border}`, display:"flex", flexWrap:"wrap", gap:10 }}>
+          {[["Type",allTypes,typeF,setTypeF],["Priority",allPris,priF,setPriF],
+            ["Experience",allExps,expF,setExpF],["Component",allComps,compF,setCompF],
+            ["Sprint",allSprints,sprintF,setSprintF],
+            ...(showCompletion?[["Completion",allCompS,compSF,setCompSF]]:[])
+          ].map(([lbl,vals,cur,setter]) => (
+            <div key={lbl} style={{ display:"flex", gap:4, alignItems:"center", flexWrap:"wrap" }}>
+              <span style={{ fontSize:10, fontWeight:700, color:C.muted, marginRight:2 }}>{lbl}:</span>
+              {vals.map(v => <Pill key={v} val={v} cur={cur} setter={setter} />)}
+            </div>
+          ))}
+        </div>
+
+        {/* Table */}
+        <div style={{ overflowY:"auto", overflowX:"auto", flex:1 }}>
           <table style={{ width:"100%", borderCollapse:"collapse", fontSize:11 }}>
-            <thead>
+            <thead style={{ position:"sticky", top:0, zIndex:2 }}>
               <tr style={{ background:"#162f50" }}>
-                {["RAID ID","Decision Status","Hours Est.","Component","Experience","Description","Owner","Primary Team"].map((h,i,arr) => (
-                  <th key={h} style={{ padding:"8px 10px", textAlign:"left", color:"#fff", fontWeight:700, fontSize:10,
-                    whiteSpace:"nowrap", borderRight:i<arr.length-1?"1px solid rgba(255,255,255,0.1)":"none" }}>{h}</th>
+                {[["Link",50],["RAID ID",90],["Status",100],["Priority",70],["Type",70],
+                  ["Experience",100],["Component",110],["Topic",110],["Description",220],
+                  ["Comments",180],["Owner",100],["Due Date",80],
+                  ["Total Hrs",70],["SAP Func Hrs",80],["SAP Tech Hrs",80],
+                  ["SD/Ops Hrs",80],["OCM Hrs",70],["UX Hrs",70],
+                  ["Target Sprint",90],
+                  ...(showCompletion?[["Completion",90]]:[])
+                ].map(([h,w],i,arr) => (
+                  <th key={h} style={{ padding:"7px 8px", textAlign:"left", color:"#fff", fontWeight:700, fontSize:10,
+                    whiteSpace:"nowrap", minWidth:w, borderRight:i<arr.length-1?"1px solid rgba(255,255,255,0.1)":"none" }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {cr.all.map((r,i) => {
-                const bucket = BUCKETS.find(b => b.rows.includes(r));
-                const decStatus = bucket ? bucket.lbl : String(r[K.crStatus]||"—").trim();
-                const textCol = bucket ? bucket.textCol : C.muted;
-                const bg = bucket ? bucket.bg : "#f8fafc";
-                const hours = (() => { const v=String(r[K.crHours]||"").replace(/[^0-9.]/g,""); const n=parseFloat(v); return isNaN(n)?null:Math.round(n); })();
+              {filtered.map((r,i) => {
+                const url = String(r[K.crUrl]||"");
+                const decStatus = String(r[K.crStatus]||"—").trim();
                 return (
                   <tr key={i} style={{ background:i%2===0?C.white:"#f7f9fc", borderBottom:`1px solid ${C.border}`, verticalAlign:"top" }}>
-                    <td style={{ padding:"8px 10px", fontWeight:700, color:C.navyLight, whiteSpace:"nowrap" }}>{String(r[K.id]||"—")}</td>
-                    <td style={{ padding:"8px 10px" }}>
-                      <span style={{ background:bg, color:textCol, border:`1px solid ${bucket?bucket.borderC:C.border}`, borderRadius:4, padding:"2px 8px", fontSize:10, fontWeight:700, whiteSpace:"nowrap" }}>{decStatus}</span>
+                    <td style={{ padding:"6px 8px", textAlign:"center" }}>
+                      {url ? <a href={url} target="_blank" rel="noreferrer" style={{ color:C.accent, fontWeight:700 }}>↗</a> : "—"}
                     </td>
-                    <td style={{ padding:"8px 10px", color:C.text, textAlign:"right", fontWeight:600 }}>{hours ? `${hours}h` : "—"}</td>
-                    <td style={{ padding:"8px 10px", color:C.text, wordBreak:"break-word", maxWidth:130 }}>{String(r[K.component]||"—")}</td>
-                    <td style={{ padding:"8px 10px", color:C.muted, wordBreak:"break-word", maxWidth:90 }}>{String(r[K.experience]||"—")}</td>
-                    <td style={{ padding:"8px 10px", color:C.text, wordBreak:"break-word", maxWidth:300, lineHeight:1.5 }}>{String(r[K.desc]||"—")}</td>
-                    <td style={{ padding:"8px 10px", color:C.muted, whiteSpace:"nowrap" }}>{String(r[K.owner]||"—")}</td>
-                    <td style={{ padding:"8px 10px", color:C.muted, whiteSpace:"nowrap" }}>{String(r[teamKey]||"—")}</td>
+                    <td style={{ padding:"6px 8px", fontWeight:700, color:C.navyLight, whiteSpace:"nowrap" }}>{String(r[K.id]||"—")}</td>
+                    <td style={{ padding:"6px 8px" }}>
+                      <span style={{ background:"#f0f4f8", color:C.text, border:`1px solid ${C.border}`, borderRadius:4, padding:"2px 7px", fontSize:10, fontWeight:600, whiteSpace:"nowrap" }}>{decStatus}</span>
+                    </td>
+                    <td style={{ padding:"6px 8px", color:C.text, whiteSpace:"nowrap" }}>{String(r[K.priority]||"—")}</td>
+                    <td style={{ padding:"6px 8px", color:C.muted, whiteSpace:"nowrap" }}>{String(r[K.type]||"—")}</td>
+                    <td style={{ padding:"6px 8px", color:C.text, wordBreak:"break-word", maxWidth:110 }}>{String(r[K.experience]||"—")}</td>
+                    <td style={{ padding:"6px 8px", color:C.text, wordBreak:"break-word", maxWidth:120 }}>{String(r[K.component]||"—")}</td>
+                    <td style={{ padding:"6px 8px", color:C.muted, wordBreak:"break-word", maxWidth:120 }}>{String(r[K.topic]||"—")}</td>
+                    <td style={{ padding:"6px 8px", color:C.text, wordBreak:"break-word", maxWidth:240, lineHeight:1.5 }}>{String(r[K.desc]||"—")}</td>
+                    <td style={{ padding:"6px 8px", color:C.muted, wordBreak:"break-word", maxWidth:190, lineHeight:1.5 }}>{String(r[K.comment]||"—")}</td>
+                    <td style={{ padding:"6px 8px", color:C.muted, whiteSpace:"nowrap" }}>{String(r[K.owner]||"—")}</td>
+                    <td style={{ padding:"6px 8px", color:C.muted, whiteSpace:"nowrap" }}>{String(r[K.date]||"—")}</td>
+                    {numCell(r, K.crHours)}
+                    {numCell(r, K.crSapFunc)}
+                    {numCell(r, K.crSapTech)}
+                    {numCell(r, K.crSdOps)}
+                    {numCell(r, K.crOcm)}
+                    {numCell(r, K.crUx)}
+                    <td style={{ padding:"6px 8px", color:C.muted, whiteSpace:"nowrap" }}>{String(r[K.crTargetSprint]||"—")}</td>
+                    {showCompletion && <td style={{ padding:"6px 8px" }}>
+                      <span style={{ background:String(r[K.crCompletion]||"").toLowerCase().includes("complet")?"#dcfce7":"#f3f4f6",
+                        color:String(r[K.crCompletion]||"").toLowerCase().includes("complet")?"#166534":"#6b7280",
+                        borderRadius:4, padding:"2px 7px", fontSize:10, fontWeight:700 }}>
+                        {String(r[K.crCompletion]||"—")}
+                      </span>
+                    </td>}
                   </tr>
                 );
               })}
             </tbody>
           </table>
         </div>
-      </Card>
+      </div>
+    </div>
+  );
+}
 
-      {/* Drill-down modal */}
-      {modal && (
-        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center" }}
-          onClick={() => setModal(null)}>
-          <div style={{ background:C.white, borderRadius:10, width:"95%", maxWidth:1000, maxHeight:"88vh", display:"flex", flexDirection:"column", boxShadow:"0 24px 60px rgba(0,0,0,0.3)" }}
-            onClick={e => e.stopPropagation()}>
-            <div style={{ background:C.headerBg, padding:"12px 20px", borderRadius:"10px 10px 0 0", display:"flex", justifyContent:"space-between", alignItems:"center", flexShrink:0 }}>
-              <div style={{ color:"#fff", fontWeight:700, fontSize:13 }}>{modal.title} <span style={{ opacity:.6, fontWeight:400 }}>({modal.rows.length})</span></div>
-              <button onClick={() => setModal(null)} style={{ background:"rgba(255,255,255,0.15)", border:"none", color:"#fff", borderRadius:5, padding:"5px 14px", cursor:"pointer", fontSize:13, fontWeight:600 }}>✕</button>
+// ─── CHANGE REQUEST TAB ──────────────────────────────────────────────────────
+function CRKpiCard({ lbl, rows, hours, builtCount, textCol, bg, borderC, showCompletion, onClick }) {
+  const [hover, setHover] = useState(false);
+  return (
+    <div onClick={() => rows.length && onClick()}
+      onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
+      style={{ background:bg, border:`1.5px solid ${borderC}`, borderRadius:8, padding:"16px 18px",
+        cursor:rows.length?"pointer":"default",
+        boxShadow:hover&&rows.length?"0 4px 14px rgba(0,0,0,0.12)":"0 1px 3px rgba(0,0,0,0.06)",
+        transform:hover&&rows.length?"translateY(-1px)":"none", transition:"box-shadow .15s, transform .15s" }}>
+      <div style={{ fontSize:10, fontWeight:700, color:textCol, textTransform:"uppercase", letterSpacing:"0.07em", marginBottom:6 }}>{lbl}</div>
+      <div style={{ fontSize:30, fontWeight:800, color:textCol, lineHeight:1 }}>{rows.length}</div>
+      <div style={{ fontSize:11, color:textCol, opacity:0.85, marginTop:5, fontWeight:600 }}>
+        {hours > 0 ? `${hours.toLocaleString()} hrs` : "—"}
+        {showCompletion && builtCount != null && (
+          <span style={{ marginLeft:6, opacity:0.75 }}>| {builtCount} Build completed</span>
+        )}
+      </div>
+      {rows.length > 0 && <div style={{ fontSize:10, color:textCol, opacity:0.6, marginTop:4 }}>Click to drill down →</div>}
+    </div>
+  );
+}
+
+function ChangeRequestTab({ raid, cap }) {
+  const [drillModal,  setDrillModal]  = useState(null);
+  const [sprintSel,   setSprintSel]   = useState("7");
+  const [typeF,       setTypeF]       = useState("All");
+  const [priF,        setPriF]        = useState("All");
+  const [expF,        setExpF]        = useState("All");
+  const [compF,       setCompF]       = useState("All");
+  const [sortCol,     setSortCol]     = useState(null);
+  const [sortDir,     setSortDir]     = useState("asc");
+
+  if (!raid) return <Empty label="Upload RAID Log file above to view this tab." />;
+  if (!raid.cr || raid.cr.all.length === 0) return (
+    <Card>
+      <div style={{ textAlign:"center", padding:"32px 0", color:C.muted, fontSize:13 }}>
+        No Change Requests detected in RAID log.<br/>
+        <span style={{ fontSize:11 }}>Ensure "Change Request Analysis" column is populated with one of the trigger values.</span>
+      </div>
+    </Card>
+  );
+
+  const K  = raid.keys;
+  const cr = raid.cr;
+
+  const BUCKETS = [
+    { lbl:"Approved",          rows:cr.approved,        hours:cr.approvedHours,        textCol:"#166534", bg:"#dcfce7", borderC:"#86efac", showCompletion:true  },
+    { lbl:"Pending Review",    rows:cr.pending,         hours:cr.pendingHours,          textCol:"#92400e", bg:"#fef3c7", borderC:"#fcd34d", showCompletion:false },
+    { lbl:"To be Prioritized", rows:cr.toBePrioritized, hours:cr.toBePrioritizedHours,  textCol:"#1e40af", bg:"#dbeafe", borderC:"#93c5fd", showCompletion:false },
+    { lbl:"Rejected",          rows:cr.rejected,        hours:cr.rejectedHours,         textCol:"#b91c1c", bg:"#fee2e2", borderC:"#fca5a5", showCompletion:false },
+    { lbl:"Deferred",          rows:cr.deferred,        hours:cr.deferredHours,         textCol:"#6b7280", bg:"#f3f4f6", borderC:"#d1d5db", showCompletion:false },
+  ];
+
+  const parseHrs = (r, kk) => { const v=String(r[kk]||"").replace(/[^0-9.]/g,""); const n=parseFloat(v); return isNaN(n)?0:Math.round(n); };
+
+  // ── Prioritization table ──
+  const tbp = cr.toBePrioritized;
+  const uniq = arr => ["All", ...Array.from(new Set(arr.filter(Boolean))).sort()];
+  const allTypes = uniq(tbp.map(r=>String(r[K.type]||"").trim()));
+  const allPris  = uniq(tbp.map(r=>String(r[K.priority]||"").trim()));
+  const allExps  = uniq(tbp.map(r=>String(r[K.experience]||"").trim()));
+  const allComps = uniq(tbp.map(r=>String(r[K.component]||"").trim()));
+
+  const filtered = tbp.filter(r =>
+    (typeF==="All" || String(r[K.type]||"").trim()       === typeF) &&
+    (priF ==="All" || String(r[K.priority]||"").trim()   === priF)  &&
+    (expF ==="All" || String(r[K.experience]||"").trim() === expF)  &&
+    (compF==="All" || String(r[K.component]||"").trim()  === compF)
+  );
+
+  const sorted = sortCol ? [...filtered].sort((a,b) => {
+    const av=String(a[sortCol]||""), bv=String(b[sortCol]||"");
+    return sortDir==="asc" ? av.localeCompare(bv) : bv.localeCompare(av);
+  }) : filtered;
+
+  // ── Capacity ──
+  const sprintCap  = cap?.sprintCapacity?.[parseInt(sprintSel)] || null;
+  const funcDemand = tbp.reduce((s,r)=>s+parseHrs(r,K.crSapFunc),0);
+  const techDemand = tbp.reduce((s,r)=>s+parseHrs(r,K.crSapTech),0);
+
+  const CapBar = ({ label, available, demand, color }) => {
+    const over = available != null && demand > available;
+    const pct  = available != null && available !== 0 ? Math.min(Math.abs(demand / available) * 100, 100) : 0;
+    const net  = available != null ? demand - available : null;
+    return (
+      <div>
+        <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4, fontSize:11 }}>
+          <span style={{ fontWeight:700, color:C.text }}>{label}</span>
+          <span style={{ fontWeight:700, color:over?C.delayed:"#166534" }}>
+            {available != null
+              ? `Demand: ${demand} hrs | Available: ${available} hrs | ${over ? `⚠ Over by ${Math.abs(net)} hrs` : `✓ ${Math.abs(net)} hrs headroom`}`
+              : `Demand: ${demand} hrs | Capacity: no data`}
+          </span>
+        </div>
+        <div style={{ height:10, background:"#e5e7eb", borderRadius:5, overflow:"hidden" }}>
+          <div style={{ width:`${pct}%`, height:"100%", background:over?C.delayed:color, borderRadius:5, transition:"width .4s" }} />
+        </div>
+      </div>
+    );
+  };
+
+  const thClick = col => { if(sortCol===col) setSortDir(d=>d==="asc"?"desc":"asc"); else { setSortCol(col); setSortDir("asc"); } };
+  const sortIco = col => col!==sortCol?" ⇅":sortDir==="asc"?" ↑":" ↓";
+  const TH = ({ col, label, minW=80, align="left" }) => (
+    <th onClick={()=>thClick(col)} style={{ padding:"7px 8px", textAlign:align, color:"#fff", fontWeight:700, fontSize:10,
+      whiteSpace:"nowrap", cursor:"pointer", userSelect:"none", minWidth:minW,
+      borderRight:"1px solid rgba(255,255,255,0.1)" }}>
+      {label}{sortIco(col)}
+    </th>
+  );
+  const FilterRow = ({ label, vals, cur, setter }) => (
+    <div style={{ display:"flex", gap:4, alignItems:"center", flexWrap:"wrap" }}>
+      <span style={{ fontSize:10, fontWeight:700, color:C.muted }}>{label}:</span>
+      {vals.map(v => (
+        <button key={v} onClick={()=>setter(v)}
+          style={{ padding:"3px 9px", borderRadius:20, fontSize:10, fontWeight:700, cursor:"pointer",
+            border:`2px solid ${cur===v?C.navyLight:C.border}`,
+            background:cur===v?C.navyLight:C.white, color:cur===v?"#fff":C.text }}>
+          {v}
+        </button>
+      ))}
+    </div>
+  );
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+
+      {/* ── STEP 1: KPI Cards ── */}
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(5,minmax(0,1fr))", gap:12 }}>
+        {BUCKETS.map(b => (
+          <CRKpiCard key={b.lbl} {...b}
+            builtCount={b.showCompletion ? b.rows.filter(r=>String(r[K.crCompletion]||"").toLowerCase().includes("complet")).length : null}
+            onClick={() => setDrillModal({ title:b.lbl, rows:b.rows, showCompletion:b.showCompletion })}
+          />
+        ))}
+      </div>
+
+      {/* ── STEP 3 + 4: Prioritization Framework (To be Prioritized CRs) ── */}
+      {tbp.length > 0 && (
+        <Card style={{ padding:0 }}>
+
+          {/* Header + Sprint selector */}
+          <div style={{ padding:"12px 16px", background:"#d0d5de", borderRadius:"10px 10px 0 0", borderBottom:`1px solid ${C.border}`,
+            display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:8 }}>
+            <div>
+              <span style={{ fontSize:11, fontWeight:700, color:C.text, textTransform:"uppercase", letterSpacing:"0.06em" }}>
+                CR Prioritization Framework
+              </span>
+              <span style={{ fontSize:10, color:C.muted, fontWeight:400, marginLeft:8 }}>
+                · {tbp.length} CRs to prioritize · {tbp.reduce((s,r)=>s+parseHrs(r,K.crHours),0).toLocaleString()} total hrs
+              </span>
             </div>
-            <div style={{ overflowY:"auto", flex:1 }}>
-              <table style={{ width:"100%", borderCollapse:"collapse", fontSize:11 }}>
-                <thead style={{ position:"sticky", top:0, background:"#f0f4f8", zIndex:2 }}>
-                  <tr>
-                    {["RAID ID","Hours Est.","Component","Experience","Description","Owner","Primary Team"].map(h => (
-                      <th key={h} style={{ padding:"8px 10px", textAlign:"left", color:C.muted, fontWeight:700, whiteSpace:"nowrap", borderBottom:`2px solid ${C.border}` }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {modal.rows.map((r,i) => {
-                    const hours = (() => { const v=String(r[K.crHours]||"").replace(/[^0-9.]/g,""); const n=parseFloat(v); return isNaN(n)?null:Math.round(n); })();
-                    return (
-                      <tr key={i} style={{ background:i%2===0?C.white:"#f9fafb", borderBottom:`1px solid ${C.border}` }}>
-                        <td style={{ padding:"7px 10px", fontWeight:700, color:C.navyLight }}>{String(r[K.id]||"—")}</td>
-                        <td style={{ padding:"7px 10px", color:C.text, fontWeight:600, textAlign:"right" }}>{hours?`${hours}h`:"—"}</td>
-                        <td style={{ padding:"7px 10px", color:C.text, wordBreak:"break-word", maxWidth:130 }}>{String(r[K.component]||"—")}</td>
-                        <td style={{ padding:"7px 10px", color:C.muted }}>{String(r[K.experience]||"—")}</td>
-                        <td style={{ padding:"7px 10px", color:C.text, wordBreak:"break-word", maxWidth:300, lineHeight:1.5 }}>{String(r[K.desc]||"—")}</td>
-                        <td style={{ padding:"7px 10px", color:C.muted }}>{String(r[K.owner]||"—")}</td>
-                        <td style={{ padding:"7px 10px", color:C.muted }}>{String(r[teamKey]||"—")}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+            <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+              <span style={{ fontSize:10, fontWeight:700, color:C.muted }}>View capacity for:</span>
+              {["7","8","9"].map(sp => (
+                <button key={sp} onClick={()=>setSprintSel(sp)}
+                  style={{ padding:"5px 14px", borderRadius:20, fontWeight:700, fontSize:11, cursor:"pointer",
+                    border:`2px solid ${sprintSel===sp?C.navyLight:C.border}`,
+                    background:sprintSel===sp?C.navyLight:C.white,
+                    color:sprintSel===sp?"#fff":C.text }}>
+                  Sprint {sp}
+                </button>
+              ))}
             </div>
           </div>
-        </div>
+
+          {/* STEP 4: Capacity bars */}
+          <div style={{ padding:"14px 20px", background:"#f8fafc", borderBottom:`1px solid ${C.border}`, display:"flex", flexDirection:"column", gap:10 }}>
+            <CapBar label="SAP Functional Capacity" available={sprintCap?.func} demand={funcDemand} color={C.onTrack} />
+            <CapBar label="SAP Tech Capacity"       available={sprintCap?.tech} demand={techDemand} color={C.navyLight} />
+            {!sprintCap?.func && !sprintCap?.tech && (
+              <div style={{ fontSize:10, color:C.muted, fontStyle:"italic", marginTop:2 }}>
+                No capacity data found for Sprint {sprintSel}. Ensure the "07. SAP Tech Sprint Capacity Management" sheet is loaded.
+              </div>
+            )}
+          </div>
+
+          {/* Filter chips */}
+          <div style={{ padding:"10px 16px", borderBottom:`1px solid ${C.border}`, display:"flex", gap:12, flexWrap:"wrap" }}>
+            <FilterRow label="Type"       vals={allTypes} cur={typeF} setter={setTypeF} />
+            <FilterRow label="Priority"   vals={allPris}  cur={priF}  setter={setPriF}  />
+            <FilterRow label="Experience" vals={allExps}  cur={expF}  setter={setExpF}  />
+            <FilterRow label="Component"  vals={allComps} cur={compF} setter={setCompF} />
+          </div>
+
+          {/* Prioritization table */}
+          <div style={{ overflowX:"auto" }}>
+            <table style={{ width:"100%", borderCollapse:"collapse", fontSize:11 }}>
+              <thead>
+                <tr style={{ background:"#162f50" }}>
+                  <th style={{ padding:"7px 8px", color:"#fff", fontWeight:700, fontSize:10, minWidth:44, borderRight:"1px solid rgba(255,255,255,0.1)" }}>Link</th>
+                  <TH col={K.id}            label="RAID ID"       minW={90} />
+                  <TH col={K.priority}      label="Priority"      minW={75} />
+                  <TH col={K.experience}    label="Experience"    minW={100} />
+                  <TH col={K.component}     label="Component"     minW={110} />
+                  <TH col={K.topic}         label="Topic"         minW={110} />
+                  <TH col={K.crHours}       label="Total Hrs"     minW={70}  align="right" />
+                  <TH col={K.crSapFunc}     label="SAP Func Hrs"  minW={80}  align="right" />
+                  <TH col={K.crSapTech}     label="SAP Tech Hrs"  minW={80}  align="right" />
+                  <TH col={K.crSdOps}       label="SD/Ops Hrs"    minW={80}  align="right" />
+                  <TH col={K.crOcm}         label="OCM Hrs"       minW={70}  align="right" />
+                  <TH col={K.crUx}          label="UX Hrs"        minW={70}  align="right" />
+                  <TH col={K.crTargetSprint} label="Target Sprint" minW={95} />
+                </tr>
+              </thead>
+              <tbody>
+                {sorted.map((r,i) => {
+                  const url = String(r[K.crUrl]||"");
+                  const numTd = kk => {
+                    const v=String(r[kk]||"").replace(/[^0-9.]/g,""); const n=parseFloat(v);
+                    return <td key={kk} style={{ padding:"7px 8px", textAlign:"right", color:isNaN(n)?"#ccc":"#166534", fontWeight:600, whiteSpace:"nowrap" }}>{isNaN(n)?"—":Math.round(n)}</td>;
+                  };
+                  return (
+                    <tr key={i} style={{ background:i%2===0?C.white:"#f7f9fc", borderBottom:`1px solid ${C.border}`, verticalAlign:"top" }}>
+                      <td style={{ padding:"7px 8px", textAlign:"center" }}>
+                        {url ? <a href={url} target="_blank" rel="noreferrer" style={{ color:C.accent, fontWeight:700 }}>↗</a> : "—"}
+                      </td>
+                      <td style={{ padding:"7px 8px", fontWeight:700, color:C.navyLight, whiteSpace:"nowrap" }}>{String(r[K.id]||"—")}</td>
+                      <td style={{ padding:"7px 8px" }}>
+                        {r[K.priority] ? <span style={{ background:"#eff6ff", color:C.navyLight, border:`1px solid ${C.navyLight}30`, borderRadius:4, padding:"2px 7px", fontSize:10, fontWeight:700 }}>{String(r[K.priority])}</span> : "—"}
+                      </td>
+                      <td style={{ padding:"7px 8px", color:C.text, wordBreak:"break-word", maxWidth:110 }}>{String(r[K.experience]||"—")}</td>
+                      <td style={{ padding:"7px 8px", color:C.text, wordBreak:"break-word", maxWidth:120 }}>{String(r[K.component]||"—")}</td>
+                      <td style={{ padding:"7px 8px", color:C.muted, wordBreak:"break-word", maxWidth:130 }}>{String(r[K.topic]||"—")}</td>
+                      {[K.crHours, K.crSapFunc, K.crSapTech, K.crSdOps, K.crOcm, K.crUx].map(kk => numTd(kk))}
+                      <td style={{ padding:"7px 8px", color:C.muted, whiteSpace:"nowrap" }}>{String(r[K.crTargetSprint]||"—")}</td>
+                    </tr>
+                  );
+                })}
+                {/* Totals row */}
+                <tr style={{ background:"#162f50", color:"#fff", fontWeight:700, fontSize:11 }}>
+                  <td colSpan={6} style={{ padding:"7px 8px", textAlign:"right" }}>Totals ({sorted.length} CRs)</td>
+                  {[K.crHours, K.crSapFunc, K.crSapTech, K.crSdOps, K.crOcm, K.crUx].map(kk => (
+                    <td key={kk} style={{ padding:"7px 8px", textAlign:"right", fontWeight:800 }}>
+                      {sorted.reduce((s,r)=>s+parseHrs(r,kk),0) || "—"}
+                    </td>
+                  ))}
+                  <td />
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </Card>
       )}
+
+      {/* STEP 2: Drill-down modal */}
+      {drillModal && <CRDrillModal title={drillModal.title} rows={drillModal.rows} K={K} showCompletion={drillModal.showCompletion} onClose={()=>setDrillModal(null)} />}
     </div>
   );
 }
