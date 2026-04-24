@@ -160,7 +160,7 @@ function parseRaid(sheets) {
     crUx:           ks.find(k => k === "UX Effort (Hours)") || ks.find(k => /^ux.?effort/i.test(k)),
     crTargetSprint: ks.find(k => k === "Targeted Build Sprint") || ks.find(k => /targeted.?build.?sprint/i.test(k)),
     crCompletion:   ks.find(k => k === "Completion Status") || ks.find(k => /completion.?status/i.test(k)),
-    crUrl:          ks.find(k => k === "_permalink") || ks.find(k => /^url$|^link$/i.test(k)) || ks.find(k => /attached.?url|row.?url/i.test(k)),
+    crUrl:          ks.find(k => k === "_attachmentUrl") || ks.find(k => k === "_permalink") || ks.find(k => /^url$|^link$/i.test(k)) || ks.find(k => /attachment.?url|attached.?url|row.?url/i.test(k)),
     tag:            ks.find(k => k === "Tag") || ks.find(k => k === "Tags") || ks.find(k => /^tags?$/i.test(k)),
     workstream:     ks.find(k => k === "Workstream") || ks.find(k => /^workstream$/i.test(k)),
   };
@@ -1806,7 +1806,7 @@ function CRDrillModal({ title, rows, K, showCompletion, onClose }) {
             </thead>
             <tbody>
               {filtered.map((r,i) => {
-                const url = String(r[K.crUrl]||"");
+                const url = String(r["_attachmentUrl"]||"") || String(r[K.crUrl]||"") || String(r["_permalink"]||"");
                 const decStatus = String(r[K.crStatus]||"—").trim();
                 return (
                   <tr key={i} style={{ background:i%2===0?C.white:"#f7f9fc", borderBottom:`1px solid ${C.border}`, verticalAlign:"top" }}>
