@@ -488,10 +488,18 @@ function parseCapacity(sheets) {
   const ks = Array.from(ksSet);
 
   // Find sprint columns — match "Sprint 7", "Sprint7 (5.11–6.12)", etc.
+  // Prefer non-"Actual" columns (planned capacity) over "Sprint 7 Actual" columns.
   const sprintColMap = {};
   for (const k of ks) {
     const m = String(k).match(/sprint\s*(\d+)/i);
-    if (m) sprintColMap[parseInt(m[1], 10)] = k;
+    if (!m) continue;
+    const sp = parseInt(m[1], 10);
+    const isActual = /actual/i.test(k);
+    if (!isActual) {
+      sprintColMap[sp] = k; // always prefer the non-Actual column
+    } else if (!sprintColMap[sp]) {
+      sprintColMap[sp] = k; // only fall back to Actual if nothing else found
+    }
   }
   console.log("[parseCapacity] columns:", ks, "| sprintColMap:", sprintColMap);
 
