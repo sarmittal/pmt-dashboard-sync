@@ -568,18 +568,8 @@ function parseCapacity(sheets) {
     }
   }
 
-  console.log("[parseCapacity] result:", sprintCapacity);
   const K = { resource: wsKey, sprint: null, available: null, planned: null, workstream: wsKey };
-  const _debug = {
-    totalRows: rows.length,
-    allColumns: ks,
-    sprintColumns: sprintColMap,
-    funcAvailLabel: funcAvail?.[wsKey] || "(not found)",
-    techAvailLabel: techAvail?.[wsKey] || "(not found)",
-    availRowsFound: availRows.map(a => ({ label: a.labelText, section: a.section })),
-    parsed: Object.fromEntries(sprintNums.map(sp => [`Sprint ${sp}`, sprintCapacity[sp]])),
-  };
-  return { total: rows.length, bySprint: {}, sprintChart: [], items: rows, keys: K, sprintCapacity, sprintColMap, _debug };
+  return { total: rows.length, bySprint: {}, sprintChart: [], items: rows, keys: K, sprintCapacity, sprintColMap };
 }
 
 // ─── SHARED UI ───────────────────────────────────────────────────────────────
@@ -2149,45 +2139,8 @@ function ChangeRequestTab({ raid, cap }) {
             )}
             {!sprintCap?.func && !sprintCap?.tech && cap && (
               <div style={{ fontSize:10, color:C.delayed, fontStyle:"italic" }}>
-                No capacity data for Sprint {sprintSel} — expand debug info below to diagnose.
+                No capacity data for Sprint {sprintSel}.
               </div>
-            )}
-            {cap?._debug && (
-              <details style={{ fontSize:10, color:C.muted, marginTop:4 }}>
-                <summary style={{ cursor:"pointer", fontWeight:600, color:C.navyLight }}>
-                  ▸ Capacity Debug Info — click to expand
-                </summary>
-                <div style={{ marginTop:6, background:"#f0f4f8", border:`1px solid ${C.border}`, borderRadius:6, padding:10 }}>
-                  <div style={{ marginBottom:4 }}>
-                    <b>Sprint columns used:</b>{" "}
-                    {Object.keys(cap._debug.sprintColumns).length > 0
-                      ? Object.entries(cap._debug.sprintColumns).map(([sp,col])=>`Sprint ${sp} → "${col}"`).join(" | ")
-                      : <span style={{ color:C.delayed }}>⚠ None found — column names must contain "Sprint N"</span>}
-                  </div>
-                  <div style={{ marginBottom:4 }}>
-                    <b>Func Available row (Workstream):</b>{" "}
-                    <span style={{ color: cap._debug.funcAvailLabel?.includes("not found") ? C.delayed : C.green }}>
-                      {cap._debug.funcAvailLabel}
-                    </span>
-                  </div>
-                  <div style={{ marginBottom:4 }}>
-                    <b>Tech Available row (Workstream):</b>{" "}
-                    <span style={{ color: cap._debug.techAvailLabel?.includes("not found") ? C.delayed : C.green }}>
-                      {cap._debug.techAvailLabel}
-                    </span>
-                  </div>
-                  <div>
-                    <b>Parsed values:</b>{" "}
-                    {Object.keys(cap._debug.parsed).map(key => {
-                      const v = cap._debug.parsed[key];
-                      return `${key}: Func=${v?.func??'—'} Tech=${v?.tech??'—'}`;
-                    }).join(" | ")}
-                  </div>
-                  <div style={{ marginTop:4, color:C.muted }}>
-                    All columns in sheet: {cap._debug.allColumns.join(", ")}
-                  </div>
-                </div>
-              </details>
             )}
           </div>
 

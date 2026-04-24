@@ -47,31 +47,23 @@ const KEEP = {
 };
 
 async function fetchRowAttachments(sheetId, token) {
-  // Fetch all sheet attachments and return { map, raw } where:
-  //   map: rowId → first non-FILE attachment URL for that row
-  //   raw: the first 20 attachment objects (for diagnostics)
   try {
     const res = await fetch(`${BASE}/sheets/${sheetId}/attachments?pageSize=500`, {
       headers: { Authorization: `Bearer ${token}` },
     });
-    if (!res.ok) {
-      console.warn("[smartsheet] attachments HTTP", res.status, "for sheet", sheetId);
-      return { map: {}, raw: [] };
-    }
+    if (!res.ok) return {};
     const data = await res.json();
     const map = {};
     for (const att of data.data || []) {
       // Accept any non-FILE attachment that has a url (LINK, ONEDRIVE, GOOGLE_DRIVE, etc.)
-      // FILE attachments expose url only via GET /attachments/{id}, not in the list response.
       if (att.parentType === "ROW" && att.url && att.attachmentType !== "FILE" && !map[att.parentId]) {
         map[att.parentId] = att.url;
       }
     }
-    console.log(`[smartsheet] attachments for ${sheetId}: ${(data.data||[]).length} total, ${Object.keys(map).length} row URLs mapped`);
-    return { map, raw: (data.data || []).slice(0, 20) };
+    return map;
   } catch (e) {
     console.warn("[smartsheet] attachments fetch failed:", e.message);
-    return { map: {}, raw: [] };
+    return {};
   }
 }
 
@@ -88,10 +80,7 @@ async function fetchSheet(sheetId, token, fetchAttachments = false) {
   const columns = {};
   for (const col of data.columns || []) columns[col.id] = col.title;
 
-  // Fetch row URL attachments (e.g. SharePoint links attached to rows)
-  const { map: attachMap, raw: attachRaw } = fetchAttachments
-    ? await fetchRowAttachments(sheetId, token)
-    : { map: {}, raw: [] };
+  const attachMap = fetchAttachments ? await fetchRowAttachments(sheetId, token) : {};
 
   const rows = [];
   for (const row of data.rows || []) {

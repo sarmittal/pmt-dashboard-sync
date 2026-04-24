@@ -14,7 +14,6 @@ import express from "express";
 import cors from "cors";
 import path from "path";
 import { fileURLToPath } from "url";
-import fetch from "node-fetch";
 import { fetchAllSheets } from "./smartsheet.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -52,31 +51,6 @@ async function doRefresh() {
 
 // ── Routes ────────────────────────────────────────────────────────────────────
 
-// Returns first-row column names per sheet — helps diagnose title mismatches
-app.get("/api/debug/columns", (_req, res) => {
-  if (!cache) return res.status(503).json({ error: "No data cached — call /api/data first" });
-  const cols = {};
-  for (const [sheet, rows] of Object.entries(cache.data)) {
-    if (Array.isArray(rows) && rows.length > 0) cols[sheet] = Object.keys(rows[0]);
-  }
-  res.json(cols);
-});
-
-// Returns raw attachment objects from the RAID sheet so we can verify attachmentType / url fields
-app.get("/api/debug/attachments", async (_req, res) => {
-  if (!TOKEN) return res.status(503).json({ error: "SMARTSHEET_TOKEN not configured" });
-  try {
-    const RAID_ID = "491793142468484";
-    const r = await fetch(`https://api.smartsheet.com/2.0/sheets/${RAID_ID}/attachments?pageSize=50`, {
-      headers: { Authorization: `Bearer ${TOKEN}` },
-    });
-    const body = await r.json();
-    // Return the first 50 attachment objects verbatim so we can inspect attachmentType + url
-    res.json({ status: r.status, attachments: body.data || [] });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
 
 app.get("/api/health", (_req, res) => {
   res.json({
