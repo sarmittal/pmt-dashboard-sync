@@ -61,7 +61,7 @@ async function fetchSheet(sheetId, token) {
 
   const rows = [];
   for (const row of data.rows || []) {
-    const record = {};
+    const record = { _permalink: row.permalink || "" };
     for (const cell of row.cells || []) {
       const name = columns[cell.columnId] || String(cell.columnId);
       record[name] = cell.displayValue ?? cell.value ?? "";

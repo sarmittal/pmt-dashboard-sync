@@ -160,7 +160,7 @@ function parseRaid(sheets) {
     crUx:           ks.find(k => k === "UX Effort (Hours)") || ks.find(k => /^ux.?effort/i.test(k)),
     crTargetSprint: ks.find(k => k === "Targeted Build Sprint") || ks.find(k => /targeted.?build.?sprint/i.test(k)),
     crCompletion:   ks.find(k => k === "Completion Status") || ks.find(k => /completion.?status/i.test(k)),
-    crUrl:          ks.find(k => /^url$|^link$/i.test(k)) || ks.find(k => /attached.?url|row.?url/i.test(k)),
+    crUrl:          ks.find(k => k === "_permalink") || ks.find(k => /^url$|^link$/i.test(k)) || ks.find(k => /attached.?url|row.?url/i.test(k)),
     tag:            ks.find(k => k === "Tag") || ks.find(k => k === "Tags") || ks.find(k => /^tags?$/i.test(k)),
     workstream:     ks.find(k => k === "Workstream") || ks.find(k => /^workstream$/i.test(k)),
   };
@@ -488,28 +488,41 @@ function parseCapacity(sheets) {
   const ks = Array.from(ksSet);
 
   // Row-label column — "Workstream" in the SAP Tech Sprint Capacity sheet
-  const wsKey = ks.find(k => k === "Workstream") || ks.find(k => /workstream/i.test(k)) || ks[1] || ks[0];
+  const wsKey = ks.find(k => k === "Workstream") || ks.find(k => /^workstream$/i.test(k))
+             || ks.find(k => /workstream/i.test(k)) || ks[2] || ks[1] || ks[0];
 
-  // Find sprint columns — keys like "Sprint 7", "Sprint7 (5.11 - 6.12)", etc.
+  // Find sprint columns — match "Sprint 7", "Sprint7 (5.11 - 6.12)", "Sprint 7 (dates)", etc.
   const sprintColMap = {}; // sprint number → column key
   for (const k of ks) {
     const m = String(k).match(/sprint\s*(\d+)/i);
     if (m) sprintColMap[parseInt(m[1], 10)] = k;
   }
+  console.log("[parseCapacity] wsKey:", wsKey, "| sprintColMap:", sprintColMap);
 
-  // Extract available capacity per sprint for Functional and Tech teams
-  // Strategy: track which section we're in (Overall / Func / Tech) and grab "Available" rows
-  const sprintCapacity = {}; // { 7: { func, tech }, 8: {...}, 9: {...} }
+  const sprintCapacity = {};
   for (const sp of [7, 8, 9]) sprintCapacity[sp] = { func: null, tech: null };
 
   let section = null;
   for (const row of rows) {
+    // Scan ALL cell values in the row to reliably detect section headers
+    // (section headers may be in any column depending on sheet structure)
+    const allCellText = Object.values(row).map(v => String(v || "").toLowerCase()).join("|");
     const ws = String(row[wsKey] || "").trim().toLowerCase();
-    if (ws.includes("func") && ws.includes("team")) section = "func";
-    else if (ws.includes("tech") && ws.includes("team")) section = "tech";
-    else if (ws.includes("overall") && ws.includes("team")) section = "overall";
 
-    if (ws === "available") {
+    if ((allCellText.includes("func") && allCellText.includes("team") && allCellText.includes("capac"))
+      || ws.includes("func. team") || ws.includes("functional team")) {
+      section = "func";
+    } else if ((allCellText.includes("tech") && allCellText.includes("team") && allCellText.includes("capac"))
+      || ws.includes("tech team")) {
+      section = "tech";
+    } else if ((allCellText.includes("overall") && allCellText.includes("team") && allCellText.includes("capac"))
+      || ws.includes("overall team")) {
+      section = "overall";
+    }
+
+    // "Available" net capacity row — exact or trimmed match
+    const isAvailRow = ws === "available" || ws === "available:";
+    if (isAvailRow && section !== "overall" && section !== null) {
       for (const sp of [7, 8, 9]) {
         const col = sprintColMap[sp];
         if (!col) continue;
@@ -520,9 +533,11 @@ function parseCapacity(sheets) {
           else if (section === "tech") sprintCapacity[sp].tech = val;
         }
       }
+      console.log("[parseCapacity] Available row found — section:", section, "| values:", Object.fromEntries([7,8,9].map(sp=>[sp, row[sprintColMap[sp]]])));
     }
   }
 
+  console.log("[parseCapacity] sprintCapacity:", sprintCapacity);
   const K = { resource: wsKey, sprint: null, available: null, planned: null, workstream: wsKey };
   return { total: rows.length, bySprint: {}, sprintChart: [], items: rows, keys: K, sprintCapacity, sprintColMap };
 }
@@ -1687,13 +1702,15 @@ function RaidKpiModal({ title, rows, K, teamKey, allTeams, allTypes, allComps, s
 }
 
 // ─── CR DRILL-DOWN MODAL (Step 2) ────────────────────────────────────────────
+// compSF special values: "All" = no filter | "Not Completed" = exclude completed | else = exact match
 function CRDrillModal({ title, rows, K, showCompletion, onClose }) {
   const [typeF,    setTypeF]    = useState("All");
   const [priF,     setPriF]     = useState("All");
   const [expF,     setExpF]     = useState("All");
   const [compF,    setCompF]    = useState("All");
   const [sprintF,  setSprintF]  = useState("All");
-  const [compSF,   setCompSF]   = useState("All");
+  // Default "Not Completed" for Approved popup so you see outstanding work immediately
+  const [compSF,   setCompSF]   = useState(showCompletion ? "Not Completed" : "All");
 
   const uniq = (arr) => ["All", ...Array.from(new Set(arr.filter(Boolean))).sort()];
   const allTypes   = uniq(rows.map(r => String(r[K.type]||"").trim()));
@@ -1703,13 +1720,14 @@ function CRDrillModal({ title, rows, K, showCompletion, onClose }) {
   const allSprints = uniq(rows.map(r => String(r[K.crTargetSprint]||"").trim()));
   const allCompS   = uniq(rows.map(r => String(r[K.crCompletion]||"").trim()));
 
+  const isCompleted = r => String(r[K.crCompletion]||"").toLowerCase().includes("complet");
   const filtered = rows.filter(r =>
     (typeF   === "All" || String(r[K.type]||"").trim()           === typeF)   &&
     (priF    === "All" || String(r[K.priority]||"").trim()       === priF)    &&
     (expF    === "All" || String(r[K.experience]||"").trim()     === expF)    &&
     (compF   === "All" || String(r[K.component]||"").trim()      === compF)   &&
     (sprintF === "All" || String(r[K.crTargetSprint]||"").trim() === sprintF) &&
-    (compSF  === "All" || String(r[K.crCompletion]||"").trim()   === compSF)
+    (compSF  === "All" || (compSF === "Not Completed" ? !isCompleted(r) : String(r[K.crCompletion]||"").trim() === compSF))
   );
 
   const Pill = ({ val, cur, setter }) => (
@@ -1743,7 +1761,7 @@ function CRDrillModal({ title, rows, K, showCompletion, onClose }) {
           {[["Type",allTypes,typeF,setTypeF],["Priority",allPris,priF,setPriF],
             ["Experience",allExps,expF,setExpF],["Component",allComps,compF,setCompF],
             ["Sprint",allSprints,sprintF,setSprintF],
-            ...(showCompletion?[["Completion",allCompS,compSF,setCompSF]]:[])
+            ...(showCompletion?[["Completion",["All","Not Completed",...allCompS.filter(v=>v!=="All")],compSF,setCompSF]]:[])
           ].map(([lbl,vals,cur,setter]) => (
             <div key={lbl} style={{ display:"flex", gap:4, alignItems:"center", flexWrap:"wrap" }}>
               <span style={{ fontSize:10, fontWeight:700, color:C.muted, marginRight:2 }}>{lbl}:</span>
@@ -1849,6 +1867,7 @@ function ChangeRequestTab({ raid, cap }) {
   const [compF,       setCompF]       = useState("All");
   const [sortCol,     setSortCol]     = useState(null);
   const [sortDir,     setSortDir]     = useState("asc");
+  const [checkedIds,  setCheckedIds]  = useState(new Set()); // RAID IDs selected for capacity calc
 
   if (!raid) return <Empty label="Upload RAID Log file above to view this tab." />;
   if (!raid.cr || raid.cr.all.length === 0) return (
@@ -1893,10 +1912,23 @@ function ChangeRequestTab({ raid, cap }) {
     return sortDir==="asc" ? av.localeCompare(bv) : bv.localeCompare(av);
   }) : filtered;
 
-  // ── Capacity ──
-  const sprintCap  = cap?.sprintCapacity?.[parseInt(sprintSel)] || null;
-  const funcDemand = tbp.reduce((s,r)=>s+parseHrs(r,K.crSapFunc),0);
-  const techDemand = tbp.reduce((s,r)=>s+parseHrs(r,K.crSapTech),0);
+  // ── Capacity ── demand = checked rows if any selected, otherwise all TBP rows
+  const sprintCap   = cap?.sprintCapacity?.[parseInt(sprintSel)] || null;
+  const demandRows  = checkedIds.size > 0
+    ? sorted.filter(r => checkedIds.has(String(r[K.id]||"")))
+    : tbp;
+  const funcDemand  = demandRows.reduce((s,r)=>s+parseHrs(r,K.crSapFunc),0);
+  const techDemand  = demandRows.reduce((s,r)=>s+parseHrs(r,K.crSapTech),0);
+  const demandLabel = checkedIds.size > 0 ? `${checkedIds.size} selected CRs` : `all ${tbp.length} TBP CRs`;
+
+  const toggleCheck = id => setCheckedIds(prev => {
+    const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
+  const allSortedIds = sorted.map(r => String(r[K.id]||""));
+  const allChecked   = allSortedIds.length > 0 && allSortedIds.every(id => checkedIds.has(id));
+  const toggleAll    = () => setCheckedIds(prev => allChecked ? new Set() : new Set(allSortedIds));
 
   const CapBar = ({ label, available, demand, color }) => {
     const over = available != null && demand > available;
@@ -1908,8 +1940,8 @@ function ChangeRequestTab({ raid, cap }) {
           <span style={{ fontWeight:700, color:C.text }}>{label}</span>
           <span style={{ fontWeight:700, color:over?C.delayed:"#166534" }}>
             {available != null
-              ? `Demand: ${demand} hrs | Available: ${available} hrs | ${over ? `⚠ Over by ${Math.abs(net)} hrs` : `✓ ${Math.abs(net)} hrs headroom`}`
-              : `Demand: ${demand} hrs | Capacity: no data`}
+              ? `Demand (${demandLabel}): ${demand} hrs | Available: ${available} hrs | ${over ? `⚠ Over by ${Math.abs(net)} hrs` : `✓ ${Math.abs(net)} hrs headroom`}`
+              : `Demand (${demandLabel}): ${demand} hrs | Capacity: no data`}
           </span>
         </div>
         <div style={{ height:10, background:"#e5e7eb", borderRadius:5, overflow:"hidden" }}>
@@ -2004,10 +2036,23 @@ function ChangeRequestTab({ raid, cap }) {
           </div>
 
           {/* Prioritization table */}
+          {checkedIds.size > 0 && (
+            <div style={{ padding:"6px 16px", background:"#eff6ff", borderBottom:`1px solid ${C.border}`, fontSize:10, color:C.navyLight, fontWeight:700, display:"flex", alignItems:"center", gap:10 }}>
+              ☑ {checkedIds.size} CR{checkedIds.size!==1?"s":""} selected — capacity bars show selected demand
+              <button onClick={()=>setCheckedIds(new Set())}
+                style={{ padding:"2px 10px", borderRadius:12, border:`1px solid ${C.navyLight}`, background:C.white, color:C.navyLight, cursor:"pointer", fontSize:10, fontWeight:700 }}>
+                Clear selection
+              </button>
+            </div>
+          )}
           <div style={{ overflowX:"auto" }}>
             <table style={{ width:"100%", borderCollapse:"collapse", fontSize:11 }}>
               <thead>
                 <tr style={{ background:"#162f50" }}>
+                  <th style={{ padding:"7px 8px", textAlign:"center", color:"#fff", fontWeight:700, fontSize:10, minWidth:36, borderRight:"1px solid rgba(255,255,255,0.1)" }}>
+                    <input type="checkbox" checked={allChecked} onChange={toggleAll}
+                      style={{ cursor:"pointer", width:14, height:14, accentColor:C.navyLight }} />
+                  </th>
                   <th style={{ padding:"7px 8px", color:"#fff", fontWeight:700, fontSize:10, minWidth:44, borderRight:"1px solid rgba(255,255,255,0.1)" }}>Link</th>
                   <TH col={K.id}            label="RAID ID"       minW={90} />
                   <TH col={K.priority}      label="Priority"      minW={75} />
@@ -2025,17 +2070,23 @@ function ChangeRequestTab({ raid, cap }) {
               </thead>
               <tbody>
                 {sorted.map((r,i) => {
-                  const url = String(r[K.crUrl]||"");
-                  const numTd = kk => {
+                  const url     = String(r[K.crUrl]||"");
+                  const raidId  = String(r[K.id]||"");
+                  const checked = checkedIds.has(raidId);
+                  const numTd   = kk => {
                     const v=String(r[kk]||"").replace(/[^0-9.]/g,""); const n=parseFloat(v);
                     return <td key={kk} style={{ padding:"7px 8px", textAlign:"right", color:isNaN(n)?"#ccc":"#166534", fontWeight:600, whiteSpace:"nowrap" }}>{isNaN(n)?"—":Math.round(n)}</td>;
                   };
                   return (
-                    <tr key={i} style={{ background:i%2===0?C.white:"#f7f9fc", borderBottom:`1px solid ${C.border}`, verticalAlign:"top" }}>
+                    <tr key={i} style={{ background:checked?"#eff6ff":i%2===0?C.white:"#f7f9fc", borderBottom:`1px solid ${C.border}`, verticalAlign:"top" }}>
+                      <td style={{ padding:"7px 8px", textAlign:"center" }}>
+                        <input type="checkbox" checked={checked} onChange={()=>toggleCheck(raidId)}
+                          style={{ cursor:"pointer", width:14, height:14, accentColor:C.navyLight }} />
+                      </td>
                       <td style={{ padding:"7px 8px", textAlign:"center" }}>
                         {url ? <a href={url} target="_blank" rel="noreferrer" style={{ color:C.accent, fontWeight:700 }}>↗</a> : "—"}
                       </td>
-                      <td style={{ padding:"7px 8px", fontWeight:700, color:C.navyLight, whiteSpace:"nowrap" }}>{String(r[K.id]||"—")}</td>
+                      <td style={{ padding:"7px 8px", fontWeight:700, color:C.navyLight, whiteSpace:"nowrap" }}>{raidId || "—"}</td>
                       <td style={{ padding:"7px 8px" }}>
                         {r[K.priority] ? <span style={{ background:"#eff6ff", color:C.navyLight, border:`1px solid ${C.navyLight}30`, borderRadius:4, padding:"2px 7px", fontSize:10, fontWeight:700 }}>{String(r[K.priority])}</span> : "—"}
                       </td>
@@ -2049,7 +2100,7 @@ function ChangeRequestTab({ raid, cap }) {
                 })}
                 {/* Totals row */}
                 <tr style={{ background:"#162f50", color:"#fff", fontWeight:700, fontSize:11 }}>
-                  <td colSpan={6} style={{ padding:"7px 8px", textAlign:"right" }}>Totals ({sorted.length} CRs)</td>
+                  <td colSpan={7} style={{ padding:"7px 8px", textAlign:"right" }}>Totals ({sorted.length} shown{checkedIds.size>0?` · ${checkedIds.size} selected`:""})</td>
                   {[K.crHours, K.crSapFunc, K.crSapTech, K.crSdOps, K.crOcm, K.crUx].map(kk => (
                     <td key={kk} style={{ padding:"7px 8px", textAlign:"right", fontWeight:800 }}>
                       {sorted.reduce((s,r)=>s+parseHrs(r,kk),0) || "—"}
