@@ -487,73 +487,73 @@ function parseCapacity(sheets) {
   rows.slice(0, 100).forEach(r => Object.keys(r).forEach(k => ksSet.add(k)));
   const ks = Array.from(ksSet);
 
-  // Find sprint columns — first match per sprint number wins.
-  // Column order is: "Sprint 7" < "Sprint 7." < "Sprint 7 Actual", so the plain
-  // "Sprint N" column (which holds planned/available values) is preferred over
-  // "Sprint N Actual" (which is empty for future sprints).
+  // Find the Workstream column (label column).
+  const wsKey = ks.find(k => k === "Workstream") || ks.find(k => /workstream/i.test(k));
+
+  // Sprint column selection: explicitly skip columns containing "actual" or ending with "."
+  // The plain "Sprint N" column holds planned/available hours; "Sprint N Actual" is historical.
   const sprintColMap = {};
+  for (const k of ks) {
+    if (/actual/i.test(k) || k.trimEnd().endsWith(".")) continue;
+    const m = String(k).match(/sprint\s*(\d+)/i);
+    if (m) sprintColMap[parseInt(m[1], 10)] = k;
+  }
+  // Fallback: if exclusions left some sprints unmapped, accept any matching column
   for (const k of ks) {
     const m = String(k).match(/sprint\s*(\d+)/i);
     if (m) {
       const sp = parseInt(m[1], 10);
-      if (!sprintColMap[sp]) sprintColMap[sp] = k; // first match wins
+      if (!sprintColMap[sp]) sprintColMap[sp] = k;
     }
   }
-  console.log("[parseCapacity] columns:", ks, "| sprintColMap:", sprintColMap);
+  console.log("[parseCapacity] sprintColMap:", sprintColMap);
 
-  const sprintCapacity = {};
-  // Initialise all detected sprint numbers (not just 7-9) so sheets with different sprint ranges work
   const detectedSprints = Object.keys(sprintColMap).map(Number);
   const sprintNums = detectedSprints.length > 0 ? detectedSprints : [7, 8, 9];
+  const sprintCapacity = {};
   for (const sp of sprintNums) sprintCapacity[sp] = { func: null, tech: null };
 
-  // Scan every row:
-  // - Detect section by scanning ALL cell values (section header may be in any column)
-  // - Detect "Available" rows by checking if any cell = "available" (regardless of column)
-  let section = null;
-  const availRows = []; // ordered list of {row, section} for all "Available" rows
-
-  for (const row of rows) {
-    const allCellVals = Object.values(row).map(v => String(v || "").trim().toLowerCase());
-    const allText     = allCellVals.join("|");
-
-    // Section detection — look across all cells for "Func/Functional" or "Tech" capacity headers
-    if ((allText.includes("func") || allText.includes("functional")) && allText.includes("capac")) {
-      section = "func";
-    } else if ((allText.includes("tech") || allText.includes("technical")) && allText.includes("capac") && !allText.includes("func")) {
-      section = "tech";
-    } else if (allText.includes("overall") && allText.includes("capac")) {
-      section = "overall";
-    }
-
-    // "Available" row detection: cell starts with "available" or "avail", or contains "total available"
-    const availCell = allCellVals.find(v =>
-      v.startsWith("available") || v.startsWith("avail ") || v.startsWith("avail.") || v === "avail" ||
-      v === "total available" || v.startsWith("available capacity") || v.startsWith("avail capacity")
-    );
-    const isAvailRow = !!availCell;
-    if (isAvailRow) {
-      const labelText = availCell;
-      // Derive section from label first, then from context (section set by nearest header above)
-      const rowSection = (labelText.includes("func") || labelText.includes("functional")) ? "func"
-                       : (labelText.includes("tech") || labelText.includes("technical"))  ? "tech"
-                       : labelText.includes("overall") ? "overall"
-                       : section;
-      availRows.push({ row, section: rowSection, labelText });
-      console.log("[parseCapacity] Available row — rowSection:", rowSection, "label:", labelText, "| sprint vals:", Object.fromEntries(Object.entries(sprintColMap).map(([sp,col])=>[`Sprint${sp}`,row[col]])));
+  // Find Available rows by Workstream column value (most reliable signal).
+  // The user confirmed these exact labels: "Available - Func. Team Capacity" / "Available - Tech Team Capacity"
+  let funcAvail = null, techAvail = null;
+  if (wsKey) {
+    for (const row of rows) {
+      const label = String(row[wsKey] || "").trim().toLowerCase();
+      if (label.includes("available") && (label.includes("func") || label.includes("functional"))) {
+        if (!funcAvail) funcAvail = row;
+      }
+      if (label.includes("available") && (label.includes("tech") || label.includes("technical"))) {
+        if (!techAvail) techAvail = row;
+      }
     }
   }
 
-  // Primary: use section-tagged Available rows.
-  // Fallback: positional — if no section labels, treat first Available row as func, second as tech
-  // (sheets without an "overall" row place func at index 0 and tech at index 1)
-  const funcBySection = availRows.find(x => x.section === "func");
-  const techBySection = availRows.find(x => x.section === "tech");
-  const nonOverall    = availRows.filter(x => x.section !== "overall");
-  const funcAvail = funcBySection?.row
-                 || (nonOverall.length >= 1 ? nonOverall[0].row : availRows[0]?.row || null);
-  const techAvail = techBySection?.row
-                 || (nonOverall.length >= 2 ? nonOverall[1].row : availRows[1]?.row || null);
+  // Fallback: scan all cells if Workstream column didn't yield results
+  const availRows = [];
+  if (!funcAvail || !techAvail) {
+    let section = null;
+    for (const row of rows) {
+      const allCellVals = Object.values(row).map(v => String(v || "").trim().toLowerCase());
+      const allText = allCellVals.join("|");
+      if ((allText.includes("func") || allText.includes("functional")) && allText.includes("capac")) section = "func";
+      else if ((allText.includes("tech") || allText.includes("technical")) && allText.includes("capac") && !allText.includes("func")) section = "tech";
+      else if (allText.includes("overall") && allText.includes("capac")) section = "overall";
+      const availCell = allCellVals.find(v => v.startsWith("available") || v === "avail" || v.startsWith("avail ") || v.startsWith("avail."));
+      if (availCell) {
+        const lbl = availCell;
+        const sec = (lbl.includes("func") || lbl.includes("functional")) ? "func"
+                  : (lbl.includes("tech") || lbl.includes("technical"))  ? "tech"
+                  : lbl.includes("overall") ? "overall" : section;
+        availRows.push({ row, section: sec, labelText: lbl });
+      }
+    }
+    if (!funcAvail) funcAvail = availRows.find(x => x.section === "func")?.row
+                             || availRows.filter(x => x.section !== "overall")[0]?.row || null;
+    if (!techAvail) techAvail = availRows.find(x => x.section === "tech")?.row
+                             || availRows.filter(x => x.section !== "overall")[1]?.row || null;
+  }
+
+  console.log("[parseCapacity] funcAvail Workstream:", funcAvail?.[wsKey], "| techAvail Workstream:", techAvail?.[wsKey]);
 
   for (const sp of sprintNums) {
     const col = sprintColMap[sp];
@@ -569,12 +569,13 @@ function parseCapacity(sheets) {
   }
 
   console.log("[parseCapacity] result:", sprintCapacity);
-  const wsKey = ks.find(k => k === "Workstream") || ks.find(k => /workstream/i.test(k)) || ks[0];
   const K = { resource: wsKey, sprint: null, available: null, planned: null, workstream: wsKey };
   const _debug = {
     totalRows: rows.length,
     allColumns: ks,
     sprintColumns: sprintColMap,
+    funcAvailLabel: funcAvail?.[wsKey] || "(not found)",
+    techAvailLabel: techAvail?.[wsKey] || "(not found)",
     availRowsFound: availRows.map(a => ({ label: a.labelText, section: a.section })),
     parsed: Object.fromEntries(sprintNums.map(sp => [`Sprint ${sp}`, sprintCapacity[sp]])),
   };
@@ -2158,16 +2159,22 @@ function ChangeRequestTab({ raid, cap }) {
                 </summary>
                 <div style={{ marginTop:6, background:"#f0f4f8", border:`1px solid ${C.border}`, borderRadius:6, padding:10 }}>
                   <div style={{ marginBottom:4 }}>
-                    <b>Sprint columns found:</b>{" "}
+                    <b>Sprint columns used:</b>{" "}
                     {Object.keys(cap._debug.sprintColumns).length > 0
                       ? Object.entries(cap._debug.sprintColumns).map(([sp,col])=>`Sprint ${sp} → "${col}"`).join(" | ")
                       : <span style={{ color:C.delayed }}>⚠ None found — column names must contain "Sprint N"</span>}
                   </div>
                   <div style={{ marginBottom:4 }}>
-                    <b>Available rows found ({cap._debug.availRowsFound.length}):</b>{" "}
-                    {cap._debug.availRowsFound.length > 0
-                      ? cap._debug.availRowsFound.map(a=>`"${a.label}" [${a.section||"no section"}]`).join(" | ")
-                      : <span style={{ color:C.delayed }}>⚠ None — no cell value starts with "available" or "avail"</span>}
+                    <b>Func Available row (Workstream):</b>{" "}
+                    <span style={{ color: cap._debug.funcAvailLabel?.includes("not found") ? C.delayed : C.green }}>
+                      {cap._debug.funcAvailLabel}
+                    </span>
+                  </div>
+                  <div style={{ marginBottom:4 }}>
+                    <b>Tech Available row (Workstream):</b>{" "}
+                    <span style={{ color: cap._debug.techAvailLabel?.includes("not found") ? C.delayed : C.green }}>
+                      {cap._debug.techAvailLabel}
+                    </span>
                   </div>
                   <div>
                     <b>Parsed values:</b>{" "}
