@@ -508,7 +508,7 @@ function parseCapacity(sheets) {
     const allCellVals = Object.values(row).map(v => String(v || "").trim().toLowerCase());
     const allText     = allCellVals.join("|");
 
-    // Section detection — look across all cells
+    // Section detection — look across all cells (handles "Func. Team Capacity", "Tech Team Capacity")
     if (allText.includes("func") && allText.includes("team") && allText.includes("capac")) {
       section = "func";
     } else if (allText.includes("tech") && allText.includes("team") && allText.includes("capac")) {
@@ -517,11 +517,18 @@ function parseCapacity(sheets) {
       section = "overall";
     }
 
-    // "Available" row — any cell equals exactly "available"
-    const isAvailRow = allCellVals.some(v => v === "available");
+    // "Available" row detection:
+    // Matches "Available", "Available - Func. Team Capacity", "Available - Tech Team Capacity", etc.
+    const isAvailRow = allCellVals.some(v => v.startsWith("available"));
     if (isAvailRow) {
-      availRows.push({ row, section });
-      console.log("[parseCapacity] Available row — section:", section, "| cells:", Object.fromEntries(ks.map(k=>[k,row[k]])));
+      // Prefer section encoded in the label itself (e.g. "Available - Func. Team Capacity")
+      const labelText = allCellVals.find(v => v.startsWith("available")) || "";
+      const rowSection = labelText.includes("func") ? "func"
+                       : labelText.includes("tech") ? "tech"
+                       : labelText.includes("overall") ? "overall"
+                       : section;
+      availRows.push({ row, section: rowSection });
+      console.log("[parseCapacity] Available row — rowSection:", rowSection, "label:", labelText, "| sprint vals:", Object.fromEntries(Object.entries(sprintColMap).map(([sp,col])=>[`Sprint${sp}`,row[col]])));
     }
   }
 
@@ -1867,6 +1874,16 @@ function CRKpiCard({ lbl, rows, hours, builtCount, textCol, bg, borderC, showCom
   );
 }
 
+// Priority → color mapping
+const PRI_COLOR = p => {
+  const v = String(p||"").toLowerCase();
+  if (v.includes("critical") || v.startsWith("1")) return { bg:"#fee2e2", text:"#b91c1c", border:"#fca5a5" };
+  if (v.includes("high")     || v.startsWith("2")) return { bg:"#ffedd5", text:"#c2410c", border:"#fdba74" };
+  if (v.includes("medium")   || v.startsWith("3")) return { bg:"#dbeafe", text:"#1d4ed8", border:"#93c5fd" };
+  if (v.includes("low")      || v.startsWith("4")) return { bg:"#dcfce7", text:"#166534", border:"#86efac" };
+  return { bg:"#f3f4f6", text:"#6b7280", border:"#d1d5db" };
+};
+
 function ChangeRequestTab({ raid, cap }) {
   const [drillModal,  setDrillModal]  = useState(null);
   const [sprintSel,   setSprintSel]   = useState("7");
@@ -1874,9 +1891,11 @@ function ChangeRequestTab({ raid, cap }) {
   const [priF,        setPriF]        = useState("All");
   const [expF,        setExpF]        = useState("All");
   const [compF,       setCompF]       = useState("All");
+  const [sprintF,     setSprintF]     = useState("All");
   const [sortCol,     setSortCol]     = useState(null);
   const [sortDir,     setSortDir]     = useState("asc");
-  const [checkedIds,  setCheckedIds]  = useState(new Set()); // RAID IDs selected for capacity calc
+  const [checkedIds,  setCheckedIds]  = useState(new Set());
+  const [expandedIds, setExpandedIds] = useState(new Set());
 
   if (!raid) return <Empty label="Upload RAID Log file above to view this tab." />;
   if (!raid.cr || raid.cr.all.length === 0) return (
@@ -1900,20 +1919,24 @@ function ChangeRequestTab({ raid, cap }) {
   ];
 
   const parseHrs = (r, kk) => { const v=String(r[kk]||"").replace(/[^0-9.]/g,""); const n=parseFloat(v); return isNaN(n)?0:Math.round(n); };
+  const rowUrl   = r => String(r["_attachmentUrl"]||"") || String(r["_permalink"]||"");
+  const toggleExpand = id => setExpandedIds(prev => { const n=new Set(prev); n.has(id)?n.delete(id):n.add(id); return n; });
 
   // ── Prioritization table ──
   const tbp = cr.toBePrioritized;
   const uniq = arr => ["All", ...Array.from(new Set(arr.filter(Boolean))).sort()];
-  const allTypes = uniq(tbp.map(r=>String(r[K.type]||"").trim()));
-  const allPris  = uniq(tbp.map(r=>String(r[K.priority]||"").trim()));
-  const allExps  = uniq(tbp.map(r=>String(r[K.experience]||"").trim()));
-  const allComps = uniq(tbp.map(r=>String(r[K.component]||"").trim()));
+  const allTypes   = uniq(tbp.map(r=>String(r[K.type]||"").trim()));
+  const allPris    = uniq(tbp.map(r=>String(r[K.priority]||"").trim()));
+  const allExps    = uniq(tbp.map(r=>String(r[K.experience]||"").trim()));
+  const allComps   = uniq(tbp.map(r=>String(r[K.component]||"").trim()));
+  const allSprints = uniq(tbp.map(r=>String(r[K.crTargetSprint]||"").trim()));
 
   const filtered = tbp.filter(r =>
-    (typeF==="All" || String(r[K.type]||"").trim()       === typeF) &&
-    (priF ==="All" || String(r[K.priority]||"").trim()   === priF)  &&
-    (expF ==="All" || String(r[K.experience]||"").trim() === expF)  &&
-    (compF==="All" || String(r[K.component]||"").trim()  === compF)
+    (typeF   ==="All" || String(r[K.type]||"").trim()            === typeF)   &&
+    (priF    ==="All" || String(r[K.priority]||"").trim()        === priF)    &&
+    (expF    ==="All" || String(r[K.experience]||"").trim()      === expF)    &&
+    (compF   ==="All" || String(r[K.component]||"").trim()       === compF)   &&
+    (sprintF ==="All" || String(r[K.crTargetSprint]||"").trim()  === sprintF)
   );
 
   const sorted = sortCol ? [...filtered].sort((a,b) => {
@@ -2053,10 +2076,11 @@ function ChangeRequestTab({ raid, cap }) {
 
           {/* Filter chips */}
           <div style={{ padding:"10px 16px", borderBottom:`1px solid ${C.border}`, display:"flex", gap:12, flexWrap:"wrap" }}>
-            <FilterRow label="Type"       vals={allTypes} cur={typeF} setter={setTypeF} />
-            <FilterRow label="Priority"   vals={allPris}  cur={priF}  setter={setPriF}  />
-            <FilterRow label="Experience" vals={allExps}  cur={expF}  setter={setExpF}  />
-            <FilterRow label="Component"  vals={allComps} cur={compF} setter={setCompF} />
+            <FilterRow label="Type"          vals={allTypes}   cur={typeF}   setter={setTypeF}   />
+            <FilterRow label="Priority"      vals={allPris}    cur={priF}    setter={setPriF}    />
+            <FilterRow label="Experience"    vals={allExps}    cur={expF}    setter={setExpF}    />
+            <FilterRow label="Component"     vals={allComps}   cur={compF}   setter={setCompF}   />
+            <FilterRow label="Target Sprint" vals={allSprints} cur={sprintF} setter={setSprintF} />
           </div>
 
           {/* Prioritization table */}
@@ -2106,32 +2130,67 @@ function ChangeRequestTab({ raid, cap }) {
                   <td />
                 </tr>
                 {sorted.map((r,i) => {
-                  const url     = String(r[K.crUrl]||"");
-                  const raidId  = String(r[K.id]||"");
-                  const checked = checkedIds.has(raidId);
-                  const numTd   = kk => {
+                  const url      = rowUrl(r);
+                  const raidId   = String(r[K.id]||"");
+                  const checked  = checkedIds.has(raidId);
+                  const expanded = expandedIds.has(raidId);
+                  const priC     = PRI_COLOR(r[K.priority]);
+                  const rowBg    = checked ? "#eff6ff" : i%2===0 ? C.white : "#f7f9fc";
+                  const numTd    = kk => {
                     const v=String(r[kk]||"").replace(/[^0-9.]/g,""); const n=parseFloat(v);
                     return <td key={kk} style={{ padding:"7px 8px", textAlign:"right", color:isNaN(n)?"#ccc":"#166534", fontWeight:600, whiteSpace:"nowrap" }}>{isNaN(n)?"—":Math.round(n)}</td>;
                   };
                   return (
-                    <tr key={i} style={{ background:checked?"#eff6ff":i%2===0?C.white:"#f7f9fc", borderBottom:`1px solid ${C.border}`, verticalAlign:"top" }}>
-                      <td style={{ padding:"7px 8px", textAlign:"center" }}>
-                        <input type="checkbox" checked={checked} onChange={()=>toggleCheck(raidId)}
-                          style={{ cursor:"pointer", width:14, height:14, accentColor:C.navyLight }} />
-                      </td>
-                      <td style={{ padding:"7px 8px", textAlign:"center" }}>
-                        {url ? <a href={url} target="_blank" rel="noreferrer" style={{ color:C.accent, fontWeight:700 }}>↗</a> : "—"}
-                      </td>
-                      <td style={{ padding:"7px 8px", fontWeight:700, color:C.navyLight, whiteSpace:"nowrap" }}>{raidId || "—"}</td>
-                      <td style={{ padding:"7px 8px" }}>
-                        {r[K.priority] ? <span style={{ background:"#eff6ff", color:C.navyLight, border:`1px solid ${C.navyLight}30`, borderRadius:4, padding:"2px 7px", fontSize:10, fontWeight:700 }}>{String(r[K.priority])}</span> : "—"}
-                      </td>
-                      <td style={{ padding:"7px 8px", color:C.text, wordBreak:"break-word", maxWidth:110 }}>{String(r[K.experience]||"—")}</td>
-                      <td style={{ padding:"7px 8px", color:C.text, wordBreak:"break-word", maxWidth:120 }}>{String(r[K.component]||"—")}</td>
-                      <td style={{ padding:"7px 8px", color:C.muted, wordBreak:"break-word", maxWidth:130 }}>{String(r[K.topic]||"—")}</td>
-                      {[K.crHours, K.crSapFunc, K.crSapTech, K.crSdOps, K.crOcm, K.crUx].map(kk => numTd(kk))}
-                      <td style={{ padding:"7px 8px", color:C.muted, whiteSpace:"nowrap" }}>{String(r[K.crTargetSprint]||"—")}</td>
-                    </tr>
+                    <React.Fragment key={i}>
+                      <tr style={{ background:rowBg, borderBottom:expanded?`1px solid #c7d7f5`:`1px solid ${C.border}`, verticalAlign:"top", cursor:"pointer" }}
+                        onClick={e => { if(e.target.type==="checkbox"||e.target.tagName==="A") return; toggleExpand(raidId); }}>
+                        <td style={{ padding:"7px 8px", textAlign:"center" }} onClick={e=>e.stopPropagation()}>
+                          <input type="checkbox" checked={checked} onChange={()=>toggleCheck(raidId)}
+                            style={{ cursor:"pointer", width:14, height:14, accentColor:C.navyLight }} />
+                        </td>
+                        <td style={{ padding:"7px 8px", textAlign:"center" }}>
+                          {url
+                            ? <a href={url} target="_blank" rel="noreferrer" onClick={e=>e.stopPropagation()} style={{ color:C.accent, fontWeight:700, fontSize:13 }}>↗</a>
+                            : <span style={{ color:C.muted }}>—</span>}
+                        </td>
+                        <td style={{ padding:"7px 8px", fontWeight:700, color:C.navyLight, whiteSpace:"nowrap" }}>
+                          <span style={{ marginRight:4, fontSize:10, color:expanded?C.navyLight:C.muted }}>{expanded?"▾":"▸"}</span>
+                          {raidId || "—"}
+                        </td>
+                        <td style={{ padding:"7px 8px" }}>
+                          {r[K.priority]
+                            ? <span style={{ background:priC.bg, color:priC.text, border:`1px solid ${priC.border}`, borderRadius:4, padding:"2px 7px", fontSize:10, fontWeight:700, whiteSpace:"nowrap" }}>{String(r[K.priority])}</span>
+                            : "—"}
+                        </td>
+                        <td style={{ padding:"7px 8px", color:C.text, wordBreak:"break-word", maxWidth:110 }}>{String(r[K.experience]||"—")}</td>
+                        <td style={{ padding:"7px 8px", color:C.text, wordBreak:"break-word", maxWidth:120 }}>{String(r[K.component]||"—")}</td>
+                        <td style={{ padding:"7px 8px", color:C.muted, wordBreak:"break-word", maxWidth:130 }}>{String(r[K.topic]||"—")}</td>
+                        {[K.crHours, K.crSapFunc, K.crSapTech, K.crSdOps, K.crOcm, K.crUx].map(kk => numTd(kk))}
+                        <td style={{ padding:"7px 8px", color:C.muted, whiteSpace:"nowrap" }}>{String(r[K.crTargetSprint]||"—")}</td>
+                      </tr>
+                      {expanded && (
+                        <tr style={{ background:"#f0f6ff", borderBottom:`2px solid #93c5fd` }}>
+                          <td colSpan={14} style={{ padding:"10px 16px 12px 48px" }}>
+                            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 200px", gap:16 }}>
+                              <div>
+                                <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:4 }}>Description</div>
+                                <div style={{ fontSize:11, color:C.text, lineHeight:1.6 }}>{String(r[K.desc]||"—")}</div>
+                              </div>
+                              <div>
+                                <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:4 }}>Comments / Resolution History</div>
+                                <div style={{ fontSize:11, color:C.muted, lineHeight:1.6 }}>{String(r[K.comment]||"—")}</div>
+                              </div>
+                              <div>
+                                <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:4 }}>Primary Owner</div>
+                                <div style={{ fontSize:11, color:C.text, fontWeight:600 }}>{String(r[K.owner]||"—")}</div>
+                                {r[K.date] && <><div style={{ fontSize:10, fontWeight:700, color:C.muted, marginTop:8, marginBottom:2, textTransform:"uppercase", letterSpacing:"0.06em" }}>Due Date</div>
+                                <div style={{ fontSize:11, color:C.text }}>{String(r[K.date])}</div></>}
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
                   );
                 })}
               </tbody>

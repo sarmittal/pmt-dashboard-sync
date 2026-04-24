@@ -46,8 +46,29 @@ const KEEP = {
   cap: null, // keep all
 };
 
-async function fetchSheet(sheetId, token) {
-  const url = `${BASE}/sheets/${sheetId}?pageSize=10000`;
+async function fetchRowAttachments(sheetId, token) {
+  // Fetch all sheet attachments and return a map of rowId → first URL attachment URL
+  try {
+    const res = await fetch(`${BASE}/sheets/${sheetId}/attachments?pageSize=500`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return {};
+    const data = await res.json();
+    const map = {};
+    for (const att of data.data || []) {
+      if (att.parentType === "ROW" && att.attachmentType === "URL" && att.url && !map[att.parentId]) {
+        map[att.parentId] = att.url;
+      }
+    }
+    return map;
+  } catch (e) {
+    console.warn("[smartsheet] attachments fetch failed:", e.message);
+    return {};
+  }
+}
+
+async function fetchSheet(sheetId, token, fetchAttachments = false) {
+  const url = `${BASE}/sheets/${sheetId}?pageSize=10000&include=rowPermalink`;
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${token}` },
   });
@@ -59,9 +80,15 @@ async function fetchSheet(sheetId, token) {
   const columns = {};
   for (const col of data.columns || []) columns[col.id] = col.title;
 
+  // Fetch row URL attachments (e.g. SharePoint links attached to rows)
+  const attachMap = fetchAttachments ? await fetchRowAttachments(sheetId, token) : {};
+
   const rows = [];
   for (const row of data.rows || []) {
-    const record = { _permalink: row.permalink || "" };
+    const record = {
+      _permalink:     row.permalink || "",
+      _attachmentUrl: attachMap[row.id] || "",
+    };
     for (const cell of row.cells || []) {
       const name = columns[cell.columnId] || String(cell.columnId);
       record[name] = cell.displayValue ?? cell.value ?? "";
@@ -89,7 +116,8 @@ export async function fetchAllSheets(token) {
   await Promise.allSettled(
     Object.entries(SHEETS).map(async ([key, id]) => {
       try {
-        const rows = await fetchSheet(id, token);
+        // Fetch row attachments for RAID sheet only (SharePoint links)
+        const rows = await fetchSheet(id, token, key === "raid");
         results[key] = slim(rows, KEEP[key]);
         console.log(`[smartsheet] ${key}: ${rows.length} rows`);
       } catch (err) {
