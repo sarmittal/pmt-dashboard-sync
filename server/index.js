@@ -14,6 +14,7 @@ import express from "express";
 import cors from "cors";
 import path from "path";
 import { fileURLToPath } from "url";
+import Anthropic from "@anthropic-ai/sdk";
 import { fetchAllSheets } from "./smartsheet.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -21,6 +22,9 @@ const app  = express();
 const PORT = process.env.PORT || 3001;
 
 const TOKEN = process.env.SMARTSHEET_TOKEN;
+const anthropic = process.env.ANTHROPIC_API_KEY
+  ? new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+  : null;
 
 // In-memory cache
 let cache = null;       // { data, fetchedAt }
@@ -65,6 +69,7 @@ app.get("/api/health", (_req, res) => {
   res.json({
     status: "ok",
     tokenConfigured: !!TOKEN,
+    aiConfigured: !!anthropic,
     cacheAge: cache ? Math.round((Date.now() - new Date(cache.fetchedAt)) / 1000) + "s" : null,
   });
 });
@@ -93,6 +98,65 @@ app.post("/api/refresh", async (req, res) => {
   }
 });
 
+app.post("/api/chat", async (req, res) => {
+  if (!anthropic) {
+    return res.status(503).json({ error: "AI not configured — set ANTHROPIC_API_KEY" });
+  }
+
+  const { messages } = req.body;
+  if (!Array.isArray(messages) || messages.length === 0) {
+    return res.status(400).json({ error: "messages required" });
+  }
+
+  // Sanitize: remove empty content blocks — empty text blocks cause API 400 errors
+  const clean = messages
+    .map(m => ({ role: String(m.role), content: typeof m.content === "string" ? m.content.trim() : "" }))
+    .filter(m => (m.role === "user" || m.role === "assistant") && m.content.length > 0);
+
+  // Enforce alternating roles starting with "user"
+  const valid = [];
+  for (const m of clean) {
+    if (valid.length === 0 && m.role !== "user") continue;
+    if (valid.length > 0 && m.role === valid[valid.length - 1].role) continue;
+    valid.push(m);
+  }
+  if (valid.length === 0) {
+    return res.status(400).json({ error: "No valid messages — must start with a non-empty user message" });
+  }
+
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+
+  try {
+    const stream = await anthropic.messages.create({
+      model: "claude-opus-4-7",
+      max_tokens: 1024,
+      stream: true,
+      system: "You are a helpful assistant embedded in a PMT (Project Management Tool) dashboard. " +
+        "You help project teams understand their data including workplans, RAID logs (Risks/Actions/Issues/Decisions), " +
+        "change requests, backlog items, and program health metrics sourced from Smartsheet. " +
+        "Be concise, practical, and reference specific data when relevant.",
+      messages: valid,
+    });
+
+    for await (const event of stream) {
+      if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
+        res.write(`data: ${JSON.stringify({ text: event.delta.text })}\n\n`);
+      }
+    }
+    res.write("data: [DONE]\n\n");
+  } catch (err) {
+    console.error("[server] /api/chat error:", err.message);
+    if (!res.headersSent) {
+      res.status(502).json({ error: err.message });
+    } else {
+      res.write(`data: ${JSON.stringify({ error: err.message })}\n\n`);
+    }
+  }
+  res.end();
+});
+
 // ── Serve React build in production ──────────────────────────────────────────
 if (process.env.NODE_ENV === "production") {
   const dist = path.join(__dirname, "../client/dist");
@@ -107,6 +171,7 @@ if (process.env.NODE_ENV === "production") {
 app.listen(PORT, () => {
   console.log(`[server] PMT Dashboard backend running on port ${PORT}`);
   console.log(`[server] Smartsheet token: ${TOKEN ? "configured ✓" : "NOT SET ⚠"}`);
+  console.log(`[server] Anthropic API key: ${anthropic ? "configured ✓" : "NOT SET — chat disabled ⚠"}`);
   if (process.env.NODE_ENV !== "production") {
     console.log(`[server] API: http://localhost:${PORT}/api/data`);
   }

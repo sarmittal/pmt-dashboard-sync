@@ -876,6 +876,74 @@ export default function App() {
 
   const [storageStatus, setStorageStatus] = useState({});
 
+  // ── Chat state ───────────────────────────────────────────────────────────
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatMessages, setChatMessages] = useState([]);
+  const [chatInput, setChatInput] = useState("");
+  const [chatLoading, setChatLoading] = useState(false);
+
+  // ── Chat send ──────────────────────────────────────────────────────────────
+  const sendChat = useCallback(async (text) => {
+    const userMsg = { role: "user", content: text.trim() };
+    if (!userMsg.content) return;
+
+    const nextMessages = [...chatMessages, userMsg];
+    setChatMessages(nextMessages);
+    setChatInput("");
+    setChatLoading(true);
+
+    const assistantPlaceholder = { role: "assistant", content: "" };
+    setChatMessages(m => [...m, assistantPlaceholder]);
+
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: nextMessages }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: res.statusText }));
+        setChatMessages(m => m.slice(0, -1).concat({ role: "assistant", content: `Error: ${err.error}` }));
+        return;
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop();
+
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          const data = line.slice(6).trim();
+          if (data === "[DONE]") break;
+          try {
+            const parsed = JSON.parse(data);
+            if (parsed.text) {
+              setChatMessages(m => {
+                const last = m[m.length - 1];
+                return m.slice(0, -1).concat({ ...last, content: last.content + parsed.text });
+              });
+            }
+            if (parsed.error) {
+              setChatMessages(m => m.slice(0, -1).concat({ role: "assistant", content: `Error: ${parsed.error}` }));
+            }
+          } catch (_) {}
+        }
+      }
+    } catch (err) {
+      setChatMessages(m => m.slice(0, -1).concat({ role: "assistant", content: `Error: ${err.message}` }));
+    } finally {
+      setChatLoading(false);
+    }
+  }, [chatMessages]);
+
   // ── applyApiData: populate state from /api/data response ────────────────
   const applyApiData = useCallback((apiJson) => {
     if (apiJson.wp?.length)   { const s={"03. PMT  Workplan":apiJson.wp};            setWp(parseWorkplan(s));           setRawSheets(p=>({...p,wp:s})); }
@@ -1097,6 +1165,79 @@ export default function App() {
                 style={{ flex:1, minHeight:300, fontFamily:"monospace", fontSize:10, padding:10, border:`1px solid ${C.border}`, borderRadius:6, resize:"none", background:"#fff" }}
                 onClick={e => e.target.select()} />
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Floating chat button */}
+      <button
+        onClick={() => setChatOpen(o => !o)}
+        title="Ask the PMT assistant"
+        style={{
+          position: "fixed", bottom: 24, right: 24, zIndex: 3000,
+          width: 52, height: 52, borderRadius: "50%",
+          background: C.navyLight, color: "#fff", border: "none",
+          fontSize: 22, cursor: "pointer", boxShadow: "0 4px 16px rgba(0,0,0,0.3)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          transition: "transform .15s",
+        }}
+      >
+        {chatOpen ? "✕" : "💬"}
+      </button>
+
+      {/* Chat panel */}
+      {chatOpen && (
+        <div style={{
+          position: "fixed", bottom: 88, right: 24, zIndex: 3000,
+          width: 360, maxHeight: 520,
+          background: "#fff", borderRadius: 12,
+          boxShadow: "0 8px 40px rgba(0,0,0,0.22)",
+          display: "flex", flexDirection: "column", overflow: "hidden",
+        }}>
+          {/* Header */}
+          <div style={{ background: C.navyLight, padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ color: "#fff", fontWeight: 700, fontSize: 14 }}>PMT Assistant</span>
+            <button onClick={() => { setChatMessages([]); }} style={{ background: "rgba(255,255,255,0.15)", border: "none", color: "#fff", borderRadius: 5, padding: "2px 10px", cursor: "pointer", fontSize: 11 }}>Clear</button>
+          </div>
+
+          {/* Messages */}
+          <div style={{ flex: 1, overflowY: "auto", padding: "12px 14px", display: "flex", flexDirection: "column", gap: 10, minHeight: 200, maxHeight: 360 }}>
+            {chatMessages.length === 0 && (
+              <div style={{ color: C.muted, fontSize: 12, textAlign: "center", marginTop: 24 }}>
+                Ask about your project data — workplan, RAID log, change requests, backlog, or program health.
+              </div>
+            )}
+            {chatMessages.map((m, i) => (
+              <div key={i} style={{ display: "flex", justifyContent: m.role === "user" ? "flex-end" : "flex-start" }}>
+                <div style={{
+                  maxWidth: "85%", padding: "8px 12px", borderRadius: m.role === "user" ? "12px 12px 2px 12px" : "12px 12px 12px 2px",
+                  background: m.role === "user" ? C.navyLight : "#f0f4f8",
+                  color: m.role === "user" ? "#fff" : C.text,
+                  fontSize: 13, lineHeight: 1.5, whiteSpace: "pre-wrap", wordBreak: "break-word",
+                }}>
+                  {m.content || (chatLoading && i === chatMessages.length - 1 ? "▌" : "")}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Input */}
+          <div style={{ padding: "10px 12px", borderTop: `1px solid ${C.border}`, display: "flex", gap: 8 }}>
+            <input
+              value={chatInput}
+              onChange={e => setChatInput(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey && !chatLoading) { e.preventDefault(); sendChat(chatInput); } }}
+              placeholder="Ask about your project…"
+              disabled={chatLoading}
+              style={{ flex: 1, padding: "8px 10px", borderRadius: 8, border: `1px solid ${C.border}`, fontSize: 13, outline: "none" }}
+            />
+            <button
+              onClick={() => sendChat(chatInput)}
+              disabled={chatLoading || !chatInput.trim()}
+              style={{ padding: "8px 14px", background: C.navyLight, color: "#fff", border: "none", borderRadius: 8, cursor: chatLoading || !chatInput.trim() ? "not-allowed" : "pointer", fontSize: 13, fontWeight: 600, opacity: chatLoading || !chatInput.trim() ? 0.5 : 1 }}
+            >
+              {chatLoading ? "…" : "Send"}
+            </button>
           </div>
         </div>
       )}
