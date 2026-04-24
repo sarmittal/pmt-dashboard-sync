@@ -487,11 +487,17 @@ function parseCapacity(sheets) {
   rows.slice(0, 100).forEach(r => Object.keys(r).forEach(k => ksSet.add(k)));
   const ks = Array.from(ksSet);
 
-  // Find sprint columns — match "Sprint 7", "Sprint7 (5.11–6.12)", etc.
+  // Find sprint columns — first match per sprint number wins.
+  // Column order is: "Sprint 7" < "Sprint 7." < "Sprint 7 Actual", so the plain
+  // "Sprint N" column (which holds planned/available values) is preferred over
+  // "Sprint N Actual" (which is empty for future sprints).
   const sprintColMap = {};
   for (const k of ks) {
     const m = String(k).match(/sprint\s*(\d+)/i);
-    if (m) sprintColMap[parseInt(m[1], 10)] = k;
+    if (m) {
+      const sp = parseInt(m[1], 10);
+      if (!sprintColMap[sp]) sprintColMap[sp] = k; // first match wins
+    }
   }
   console.log("[parseCapacity] columns:", ks, "| sprintColMap:", sprintColMap);
 
