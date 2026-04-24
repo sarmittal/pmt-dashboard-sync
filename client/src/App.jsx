@@ -1316,12 +1316,12 @@ function ExecutiveSummaryTab({ wp, raid, req, cap, openModal }) {
 
   // ── Section 4: Impact Build RAIDs metric card ────────────────────────────
   const tagKey = K?.tag;
-  const impactRaids = raid && tagKey ? raid.items.filter(r => {
+  // Filter from raid.open (already excludes Complete/Deferred) to avoid strict-equality mismatches
+  const impactOpen = raid && tagKey ? raid.open.filter(r => {
     const tag = String(r[tagKey]||"").toLowerCase();
     return tag.includes("impact") && tag.includes("tech build");
   }) : [];
-  const impactOpen    = impactRaids.filter(r => { const s=String(r[K?.status]||"").toLowerCase(); return s!=="complete"&&s!=="deferred"; });
-  const impactDelayed = impactRaids.filter(r => String(r[K?.status]||"").toLowerCase().includes("delay"));
+  const impactDelayed = impactOpen.filter(r => String(r[K?.status]||"").toLowerCase().includes("delay"));
   const blockedStories = req?.blocked || [];
 
   // ── Sub-component for workstream status pill ──────────────────────────────
