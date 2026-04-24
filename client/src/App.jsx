@@ -496,7 +496,10 @@ function parseCapacity(sheets) {
   console.log("[parseCapacity] columns:", ks, "| sprintColMap:", sprintColMap);
 
   const sprintCapacity = {};
-  for (const sp of [7, 8, 9]) sprintCapacity[sp] = { func: null, tech: null };
+  // Initialise all detected sprint numbers (not just 7-9) so sheets with different sprint ranges work
+  const detectedSprints = Object.keys(sprintColMap).map(Number);
+  const sprintNums = detectedSprints.length > 0 ? detectedSprints : [7, 8, 9];
+  for (const sp of sprintNums) sprintCapacity[sp] = { func: null, tech: null };
 
   // Scan every row:
   // - Detect section by scanning ALL cell values (section header may be in any column)
@@ -508,23 +511,26 @@ function parseCapacity(sheets) {
     const allCellVals = Object.values(row).map(v => String(v || "").trim().toLowerCase());
     const allText     = allCellVals.join("|");
 
-    // Section detection — look across all cells (handles "Func. Team Capacity", "Tech Team Capacity")
-    if (allText.includes("func") && allText.includes("team") && allText.includes("capac")) {
+    // Section detection — look across all cells for "Func/Functional" or "Tech" capacity headers
+    if ((allText.includes("func") || allText.includes("functional")) && allText.includes("capac")) {
       section = "func";
-    } else if (allText.includes("tech") && allText.includes("team") && allText.includes("capac")) {
+    } else if ((allText.includes("tech") || allText.includes("technical")) && allText.includes("capac") && !allText.includes("func")) {
       section = "tech";
-    } else if (allText.includes("overall") && allText.includes("team") && allText.includes("capac")) {
+    } else if (allText.includes("overall") && allText.includes("capac")) {
       section = "overall";
     }
 
-    // "Available" row detection:
-    // Matches "Available", "Available - Func. Team Capacity", "Available - Tech Team Capacity", etc.
-    const isAvailRow = allCellVals.some(v => v.startsWith("available"));
+    // "Available" row detection: cell starts with "available" or "avail", or contains "total available"
+    const availCell = allCellVals.find(v =>
+      v.startsWith("available") || v.startsWith("avail ") || v.startsWith("avail.") || v === "avail" ||
+      v === "total available" || v.startsWith("available capacity") || v.startsWith("avail capacity")
+    );
+    const isAvailRow = !!availCell;
     if (isAvailRow) {
-      // Prefer section encoded in the label itself (e.g. "Available - Func. Team Capacity")
-      const labelText = allCellVals.find(v => v.startsWith("available")) || "";
-      const rowSection = labelText.includes("func") ? "func"
-                       : labelText.includes("tech") ? "tech"
+      const labelText = availCell;
+      // Derive section from label first, then from context (section set by nearest header above)
+      const rowSection = (labelText.includes("func") || labelText.includes("functional")) ? "func"
+                       : (labelText.includes("tech") || labelText.includes("technical"))  ? "tech"
                        : labelText.includes("overall") ? "overall"
                        : section;
       availRows.push({ row, section: rowSection, labelText });
@@ -532,14 +538,18 @@ function parseCapacity(sheets) {
     }
   }
 
-  // Primary: use section-tagged Available rows
-  // Fallback: positional order (1st=overall, 2nd=func, 3rd=tech)
-  const funcAvail = availRows.find(x => x.section === "func")?.row
-                 || (availRows.length >= 2 ? availRows[1].row : null);
-  const techAvail = availRows.find(x => x.section === "tech")?.row
-                 || (availRows.length >= 3 ? availRows[2].row : null);
+  // Primary: use section-tagged Available rows.
+  // Fallback: positional — if no section labels, treat first Available row as func, second as tech
+  // (sheets without an "overall" row place func at index 0 and tech at index 1)
+  const funcBySection = availRows.find(x => x.section === "func");
+  const techBySection = availRows.find(x => x.section === "tech");
+  const nonOverall    = availRows.filter(x => x.section !== "overall");
+  const funcAvail = funcBySection?.row
+                 || (nonOverall.length >= 1 ? nonOverall[0].row : availRows[0]?.row || null);
+  const techAvail = techBySection?.row
+                 || (nonOverall.length >= 2 ? nonOverall[1].row : availRows[1]?.row || null);
 
-  for (const sp of [7, 8, 9]) {
+  for (const sp of sprintNums) {
     const col = sprintColMap[sp];
     if (!col) continue;
     if (funcAvail) {
@@ -560,7 +570,7 @@ function parseCapacity(sheets) {
     allColumns: ks,
     sprintColumns: sprintColMap,
     availRowsFound: availRows.map(a => ({ label: a.labelText, section: a.section })),
-    parsed: Object.fromEntries([7,8,9].map(sp => [`Sprint ${sp}`, sprintCapacity[sp]])),
+    parsed: Object.fromEntries(sprintNums.map(sp => [`Sprint ${sp}`, sprintCapacity[sp]])),
   };
   return { total: rows.length, bySprint: {}, sprintChart: [], items: rows, keys: K, sprintCapacity, sprintColMap, _debug };
 }
@@ -2132,7 +2142,7 @@ function ChangeRequestTab({ raid, cap }) {
             )}
             {!sprintCap?.func && !sprintCap?.tech && cap && (
               <div style={{ fontSize:10, color:C.delayed, fontStyle:"italic" }}>
-                Sprint {sprintSel} not found in capacity sheet.
+                No capacity data for Sprint {sprintSel} — expand debug info below to diagnose.
               </div>
             )}
             {cap?._debug && (
@@ -2151,13 +2161,13 @@ function ChangeRequestTab({ raid, cap }) {
                     <b>Available rows found ({cap._debug.availRowsFound.length}):</b>{" "}
                     {cap._debug.availRowsFound.length > 0
                       ? cap._debug.availRowsFound.map(a=>`"${a.label}" [${a.section||"no section"}]`).join(" | ")
-                      : <span style={{ color:C.delayed }}>⚠ None — no cell starts with "available"</span>}
+                      : <span style={{ color:C.delayed }}>⚠ None — no cell value starts with "available" or "avail"</span>}
                   </div>
                   <div>
                     <b>Parsed values:</b>{" "}
-                    {[7,8,9].map(sp => {
-                      const v = cap._debug.parsed[`Sprint ${sp}`];
-                      return `Sprint ${sp}: Func=${v?.func??'—'} Tech=${v?.tech??'—'}`;
+                    {Object.keys(cap._debug.parsed).map(key => {
+                      const v = cap._debug.parsed[key];
+                      return `${key}: Func=${v?.func??'—'} Tech=${v?.tech??'—'}`;
                     }).join(" | ")}
                   </div>
                   <div style={{ marginTop:4, color:C.muted }}>

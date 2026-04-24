@@ -56,7 +56,7 @@ async function fetchRowAttachments(sheetId, token) {
     const data = await res.json();
     const map = {};
     for (const att of data.data || []) {
-      if (att.parentType === "ROW" && att.attachmentType === "URL" && att.url && !map[att.parentId]) {
+      if (att.parentType === "ROW" && att.attachmentType === "LINK" && att.url && !map[att.parentId]) {
         map[att.parentId] = att.url;
       }
     }
