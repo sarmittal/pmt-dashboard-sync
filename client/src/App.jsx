@@ -527,7 +527,7 @@ function parseCapacity(sheets) {
                        : labelText.includes("tech") ? "tech"
                        : labelText.includes("overall") ? "overall"
                        : section;
-      availRows.push({ row, section: rowSection });
+      availRows.push({ row, section: rowSection, labelText });
       console.log("[parseCapacity] Available row — rowSection:", rowSection, "label:", labelText, "| sprint vals:", Object.fromEntries(Object.entries(sprintColMap).map(([sp,col])=>[`Sprint${sp}`,row[col]])));
     }
   }
@@ -555,7 +555,14 @@ function parseCapacity(sheets) {
   console.log("[parseCapacity] result:", sprintCapacity);
   const wsKey = ks.find(k => k === "Workstream") || ks.find(k => /workstream/i.test(k)) || ks[0];
   const K = { resource: wsKey, sprint: null, available: null, planned: null, workstream: wsKey };
-  return { total: rows.length, bySprint: {}, sprintChart: [], items: rows, keys: K, sprintCapacity, sprintColMap };
+  const _debug = {
+    totalRows: rows.length,
+    allColumns: ks,
+    sprintColumns: sprintColMap,
+    availRowsFound: availRows.map(a => ({ label: a.labelText, section: a.section })),
+    parsed: Object.fromEntries([7,8,9].map(sp => [`Sprint ${sp}`, sprintCapacity[sp]])),
+  };
+  return { total: rows.length, bySprint: {}, sprintChart: [], items: rows, keys: K, sprintCapacity, sprintColMap, _debug };
 }
 
 // ─── SHARED UI ───────────────────────────────────────────────────────────────
@@ -1725,10 +1732,32 @@ function CRDrillModal({ title, rows, K, showCompletion, onClose }) {
   const [expF,     setExpF]     = useState("All");
   const [compF,    setCompF]    = useState("All");
   const [sprintF,  setSprintF]  = useState("All");
-  // Default "Not Completed" for Approved popup so you see outstanding work immediately
   const [compSF,   setCompSF]   = useState(showCompletion ? "Not Completed" : "All");
+  const [showColPanel, setShowColPanel] = useState(false);
+  const [colCfg, setColCfg] = useState({
+    link:    { label:"Link",          visible:true,  width:50  },
+    raidId:  { label:"RAID ID",       visible:true,  width:90  },
+    status:  { label:"Status",        visible:true,  width:100 },
+    priority:{ label:"Priority",      visible:true,  width:70  },
+    type:    { label:"Type",          visible:true,  width:70  },
+    exp:     { label:"Experience",    visible:true,  width:100 },
+    comp:    { label:"Component",     visible:true,  width:110 },
+    topic:   { label:"Topic",         visible:true,  width:110 },
+    desc:    { label:"Description",   visible:true,  width:220 },
+    comment: { label:"Comments",      visible:true,  width:180 },
+    owner:   { label:"Owner",         visible:true,  width:100 },
+    dueDate: { label:"Due Date",      visible:true,  width:80  },
+    totHrs:  { label:"Total Hrs",     visible:true,  width:70  },
+    sapFunc: { label:"SAP Func Hrs",  visible:true,  width:80  },
+    sapTech: { label:"SAP Tech Hrs",  visible:true,  width:80  },
+    sdOps:   { label:"SD/Ops Hrs",    visible:true,  width:80  },
+    ocm:     { label:"OCM Hrs",       visible:true,  width:70  },
+    ux:      { label:"UX Hrs",        visible:true,  width:70  },
+    sprint:  { label:"Target Sprint", visible:true,  width:90  },
+    compl:   { label:"Completion",    visible:showCompletion, width:90 },
+  });
 
-  const uniq = (arr) => ["All", ...Array.from(new Set(arr.filter(Boolean))).sort()];
+  const uniq = arr => ["All", ...Array.from(new Set(arr.filter(Boolean))).sort()];
   const allTypes   = uniq(rows.map(r => String(r[K.type]||"").trim()));
   const allPris    = uniq(rows.map(r => String(r[K.priority]||"").trim()));
   const allExps    = uniq(rows.map(r => String(r[K.experience]||"").trim()));
@@ -1757,23 +1786,84 @@ function CRDrillModal({ title, rows, K, showCompletion, onClose }) {
 
   const numCell = (r, kk) => {
     const v = String(r[kk]||"").replace(/[^0-9.]/g,""); const n=parseFloat(v);
-    return <td style={{ padding:"6px 8px", textAlign:"right", color:isNaN(n)?"#ccc":"#166534", fontWeight:600, whiteSpace:"nowrap" }}>{isNaN(n)?"—":Math.round(n)}</td>;
+    return <td style={{ padding:"6px 8px", textAlign:"right", color:isNaN(n)?"#ccc":"#166534", fontWeight:600, whiteSpace:"nowrap", overflow:"hidden" }}>{isNaN(n)?"—":Math.round(n)}</td>;
+  };
+
+  // Column definitions: key → renderer (receives row + url)
+  const COL_DEFS = [
+    { key:"link",    td:(r,url)=><td style={{padding:"6px 8px",textAlign:"center",width:colCfg.link.width,overflow:"hidden"}}>{url?<a href={url} target="_blank" rel="noreferrer" style={{color:C.accent,fontWeight:700}}>↗</a>:"—"}</td> },
+    { key:"raidId",  td:(r)=><td style={{padding:"6px 8px",fontWeight:700,color:C.navyLight,whiteSpace:"nowrap",width:colCfg.raidId.width,overflow:"hidden"}}>{String(r[K.id]||"—")}</td> },
+    { key:"status",  td:(r)=><td style={{padding:"6px 8px",width:colCfg.status.width,overflow:"hidden"}}><span style={{background:"#f0f4f8",color:C.text,border:`1px solid ${C.border}`,borderRadius:4,padding:"2px 7px",fontSize:10,fontWeight:600,whiteSpace:"nowrap"}}>{String(r[K.crStatus]||"—").trim()}</span></td> },
+    { key:"priority",td:(r)=><td style={{padding:"6px 8px",color:C.text,whiteSpace:"nowrap",width:colCfg.priority.width,overflow:"hidden"}}>{String(r[K.priority]||"—")}</td> },
+    { key:"type",    td:(r)=><td style={{padding:"6px 8px",color:C.muted,whiteSpace:"nowrap",width:colCfg.type.width,overflow:"hidden"}}>{String(r[K.type]||"—")}</td> },
+    { key:"exp",     td:(r)=><td style={{padding:"6px 8px",color:C.text,wordBreak:"break-word",width:colCfg.exp.width,overflow:"hidden"}}>{String(r[K.experience]||"—")}</td> },
+    { key:"comp",    td:(r)=><td style={{padding:"6px 8px",color:C.text,wordBreak:"break-word",width:colCfg.comp.width,overflow:"hidden"}}>{String(r[K.component]||"—")}</td> },
+    { key:"topic",   td:(r)=><td style={{padding:"6px 8px",color:C.muted,wordBreak:"break-word",width:colCfg.topic.width,overflow:"hidden"}}>{String(r[K.topic]||"—")}</td> },
+    { key:"desc",    td:(r)=><td style={{padding:"6px 8px",color:C.text,wordBreak:"break-word",width:colCfg.desc.width,overflow:"hidden",lineHeight:1.5}}>{String(r[K.desc]||"—")}</td> },
+    { key:"comment", td:(r)=><td style={{padding:"6px 8px",color:C.muted,wordBreak:"break-word",width:colCfg.comment.width,overflow:"hidden",lineHeight:1.5}}>{String(r[K.comment]||"—")}</td> },
+    { key:"owner",   td:(r)=><td style={{padding:"6px 8px",color:C.muted,whiteSpace:"nowrap",width:colCfg.owner.width,overflow:"hidden"}}>{String(r[K.owner]||"—")}</td> },
+    { key:"dueDate", td:(r)=><td style={{padding:"6px 8px",color:C.muted,whiteSpace:"nowrap",width:colCfg.dueDate.width,overflow:"hidden"}}>{String(r[K.date]||"—")}</td> },
+    { key:"totHrs",  td:(r)=>numCell(r,K.crHours) },
+    { key:"sapFunc", td:(r)=>numCell(r,K.crSapFunc) },
+    { key:"sapTech", td:(r)=>numCell(r,K.crSapTech) },
+    { key:"sdOps",   td:(r)=>numCell(r,K.crSdOps) },
+    { key:"ocm",     td:(r)=>numCell(r,K.crOcm) },
+    { key:"ux",      td:(r)=>numCell(r,K.crUx) },
+    { key:"sprint",  td:(r)=><td style={{padding:"6px 8px",color:C.muted,whiteSpace:"nowrap",width:colCfg.sprint.width,overflow:"hidden"}}>{String(r[K.crTargetSprint]||"—")}</td> },
+    { key:"compl",   td:(r)=>showCompletion?<td style={{padding:"6px 8px",width:colCfg.compl.width,overflow:"hidden"}}><span style={{background:isCompleted(r)?"#dcfce7":"#f3f4f6",color:isCompleted(r)?"#166534":"#6b7280",borderRadius:4,padding:"2px 7px",fontSize:10,fontWeight:700}}>{String(r[K.crCompletion]||"—")}</span></td>:null },
+  ];
+
+  const visibleDefs  = COL_DEFS.filter(d => colCfg[d.key]?.visible);
+  const tableWidth   = visibleDefs.reduce((s,d) => s + (colCfg[d.key]?.width||80), 0);
+
+  const resizeStart = (key, e) => {
+    e.preventDefault();
+    const sx = e.clientX, sw = colCfg[key].width;
+    const mv = m => setColCfg(p => ({...p,[key]:{...p[key],width:Math.max(40,sw+m.clientX-sx)}}));
+    const up = () => { window.removeEventListener("mousemove",mv); window.removeEventListener("mouseup",up); };
+    window.addEventListener("mousemove",mv); window.addEventListener("mouseup",up);
   };
 
   return (
     <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.55)", zIndex:1200, display:"flex", alignItems:"center", justifyContent:"center" }}
       onClick={onClose}>
-      <div style={{ background:C.white, borderRadius:10, width:"97%", maxWidth:1400, maxHeight:"90vh", display:"flex", flexDirection:"column", boxShadow:"0 24px 60px rgba(0,0,0,0.35)" }}
+      <div style={{ background:C.white, borderRadius:10, width:"97%", maxWidth:1500, maxHeight:"90vh", display:"flex", flexDirection:"column", boxShadow:"0 24px 60px rgba(0,0,0,0.35)" }}
         onClick={e => e.stopPropagation()}>
 
         {/* Header */}
         <div style={{ background:C.headerBg, padding:"12px 20px", borderRadius:"10px 10px 0 0", display:"flex", justifyContent:"space-between", alignItems:"center", flexShrink:0 }}>
           <div style={{ color:"#fff", fontWeight:700, fontSize:14 }}>{title} <span style={{ opacity:.6, fontWeight:400, fontSize:12 }}>· {filtered.length} of {rows.length}</span></div>
-          <button onClick={onClose} style={{ background:"rgba(255,255,255,0.15)", border:"none", color:"#fff", borderRadius:5, padding:"5px 14px", cursor:"pointer", fontSize:13, fontWeight:600 }}>✕</button>
+          <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+            <button onClick={() => setShowColPanel(p=>!p)}
+              style={{ background:showColPanel?"rgba(255,255,255,0.3)":"rgba(255,255,255,0.15)", border:"none", color:"#fff", borderRadius:5, padding:"5px 14px", cursor:"pointer", fontSize:12, fontWeight:600 }}>
+              ⚙ Columns
+            </button>
+            <button onClick={onClose} style={{ background:"rgba(255,255,255,0.15)", border:"none", color:"#fff", borderRadius:5, padding:"5px 14px", cursor:"pointer", fontSize:13, fontWeight:600 }}>✕</button>
+          </div>
         </div>
 
+        {/* Column panel */}
+        {showColPanel && (
+          <div style={{ padding:"10px 16px", background:"#f8fafc", borderBottom:`1px solid ${C.border}`, flexShrink:0 }}>
+            <div style={{ fontSize:11, fontWeight:700, color:C.text, marginBottom:8 }}>
+              Show / Hide Columns <span style={{ fontSize:10, color:C.muted, fontWeight:400 }}>— drag column edges in the table to resize</span>
+            </div>
+            <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+              {Object.entries(colCfg).filter(([k]) => k !== "compl" || showCompletion).map(([key,col]) => (
+                <label key={key} style={{ display:"flex", alignItems:"center", gap:4, background:C.white,
+                  border:`1px solid ${col.visible?C.navyLight:C.border}`, borderRadius:5, padding:"4px 9px", cursor:"pointer" }}>
+                  <input type="checkbox" checked={col.visible}
+                    onChange={e => setColCfg(p=>({...p,[key]:{...p[key],visible:e.target.checked}}))}
+                    style={{ cursor:"pointer", width:12, height:12 }} />
+                  <span style={{ fontSize:10, color:col.visible?C.navyLight:C.muted, fontWeight:col.visible?700:400 }}>{col.label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Filter chips */}
-        <div style={{ padding:"10px 16px", borderBottom:`1px solid ${C.border}`, display:"flex", flexWrap:"wrap", gap:10 }}>
+        <div style={{ padding:"10px 16px", borderBottom:`1px solid ${C.border}`, display:"flex", flexWrap:"wrap", gap:10, flexShrink:0 }}>
           {[["Type",allTypes,typeF,setTypeF],["Priority",allPris,priF,setPriF],
             ["Experience",allExps,expF,setExpF],["Component",allComps,compF,setCompF],
             ["Sprint",allSprints,sprintF,setSprintF],
@@ -1788,58 +1878,31 @@ function CRDrillModal({ title, rows, K, showCompletion, onClose }) {
 
         {/* Table */}
         <div style={{ overflowY:"auto", overflowX:"auto", flex:1 }}>
-          <table style={{ width:"100%", borderCollapse:"collapse", fontSize:11 }}>
+          <table style={{ borderCollapse:"collapse", fontSize:11, tableLayout:"fixed", width:tableWidth+"px", minWidth:"100%" }}>
             <thead style={{ position:"sticky", top:0, zIndex:2 }}>
               <tr style={{ background:"#162f50" }}>
-                {[["Link",50],["RAID ID",90],["Status",100],["Priority",70],["Type",70],
-                  ["Experience",100],["Component",110],["Topic",110],["Description",220],
-                  ["Comments",180],["Owner",100],["Due Date",80],
-                  ["Total Hrs",70],["SAP Func Hrs",80],["SAP Tech Hrs",80],
-                  ["SD/Ops Hrs",80],["OCM Hrs",70],["UX Hrs",70],
-                  ["Target Sprint",90],
-                  ...(showCompletion?[["Completion",90]]:[])
-                ].map(([h,w],i,arr) => (
-                  <th key={h} style={{ padding:"7px 8px", textAlign:"left", color:"#fff", fontWeight:700, fontSize:10,
-                    whiteSpace:"nowrap", minWidth:w, borderRight:i<arr.length-1?"1px solid rgba(255,255,255,0.1)":"none" }}>{h}</th>
+                {visibleDefs.map((d,i,arr) => (
+                  <th key={d.key} style={{ padding:"7px 8px", textAlign:"left", color:"#fff", fontWeight:700, fontSize:10,
+                    whiteSpace:"nowrap", width:colCfg[d.key].width, position:"relative",
+                    borderRight:i<arr.length-1?"1px solid rgba(255,255,255,0.1)":"none", overflow:"hidden" }}>
+                    {colCfg[d.key].label}
+                    <div onMouseDown={e => resizeStart(d.key, e)}
+                      style={{ position:"absolute", right:0, top:0, bottom:0, width:6, cursor:"col-resize", zIndex:10 }}
+                      onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,0.3)"}
+                      onMouseLeave={e=>e.currentTarget.style.background="transparent"} />
+                  </th>
                 ))}
               </tr>
             </thead>
             <tbody>
+              {filtered.length === 0 && (
+                <tr><td colSpan={visibleDefs.length} style={{ padding:"24px", textAlign:"center", color:C.muted }}>No items match current filters</td></tr>
+              )}
               {filtered.map((r,i) => {
                 const url = String(r["_attachmentUrl"]||"") || String(r[K.crUrl]||"") || String(r["_permalink"]||"");
-                const decStatus = String(r[K.crStatus]||"—").trim();
                 return (
                   <tr key={i} style={{ background:i%2===0?C.white:"#f7f9fc", borderBottom:`1px solid ${C.border}`, verticalAlign:"top" }}>
-                    <td style={{ padding:"6px 8px", textAlign:"center" }}>
-                      {url ? <a href={url} target="_blank" rel="noreferrer" style={{ color:C.accent, fontWeight:700 }}>↗</a> : "—"}
-                    </td>
-                    <td style={{ padding:"6px 8px", fontWeight:700, color:C.navyLight, whiteSpace:"nowrap" }}>{String(r[K.id]||"—")}</td>
-                    <td style={{ padding:"6px 8px" }}>
-                      <span style={{ background:"#f0f4f8", color:C.text, border:`1px solid ${C.border}`, borderRadius:4, padding:"2px 7px", fontSize:10, fontWeight:600, whiteSpace:"nowrap" }}>{decStatus}</span>
-                    </td>
-                    <td style={{ padding:"6px 8px", color:C.text, whiteSpace:"nowrap" }}>{String(r[K.priority]||"—")}</td>
-                    <td style={{ padding:"6px 8px", color:C.muted, whiteSpace:"nowrap" }}>{String(r[K.type]||"—")}</td>
-                    <td style={{ padding:"6px 8px", color:C.text, wordBreak:"break-word", maxWidth:110 }}>{String(r[K.experience]||"—")}</td>
-                    <td style={{ padding:"6px 8px", color:C.text, wordBreak:"break-word", maxWidth:120 }}>{String(r[K.component]||"—")}</td>
-                    <td style={{ padding:"6px 8px", color:C.muted, wordBreak:"break-word", maxWidth:120 }}>{String(r[K.topic]||"—")}</td>
-                    <td style={{ padding:"6px 8px", color:C.text, wordBreak:"break-word", maxWidth:240, lineHeight:1.5 }}>{String(r[K.desc]||"—")}</td>
-                    <td style={{ padding:"6px 8px", color:C.muted, wordBreak:"break-word", maxWidth:190, lineHeight:1.5 }}>{String(r[K.comment]||"—")}</td>
-                    <td style={{ padding:"6px 8px", color:C.muted, whiteSpace:"nowrap" }}>{String(r[K.owner]||"—")}</td>
-                    <td style={{ padding:"6px 8px", color:C.muted, whiteSpace:"nowrap" }}>{String(r[K.date]||"—")}</td>
-                    {numCell(r, K.crHours)}
-                    {numCell(r, K.crSapFunc)}
-                    {numCell(r, K.crSapTech)}
-                    {numCell(r, K.crSdOps)}
-                    {numCell(r, K.crOcm)}
-                    {numCell(r, K.crUx)}
-                    <td style={{ padding:"6px 8px", color:C.muted, whiteSpace:"nowrap" }}>{String(r[K.crTargetSprint]||"—")}</td>
-                    {showCompletion && <td style={{ padding:"6px 8px" }}>
-                      <span style={{ background:String(r[K.crCompletion]||"").toLowerCase().includes("complet")?"#dcfce7":"#f3f4f6",
-                        color:String(r[K.crCompletion]||"").toLowerCase().includes("complet")?"#166534":"#6b7280",
-                        borderRadius:4, padding:"2px 7px", fontSize:10, fontWeight:700 }}>
-                        {String(r[K.crCompletion]||"—")}
-                      </span>
-                    </td>}
+                    {visibleDefs.map(d => { const cell = d.td(r,url); return cell ? React.cloneElement(cell,{key:d.key}) : null; })}
                   </tr>
                 );
               })}
@@ -2068,9 +2131,40 @@ function ChangeRequestTab({ raid, cap }) {
               </div>
             )}
             {!sprintCap?.func && !sprintCap?.tech && cap && (
-              <div style={{ fontSize:10, color:C.muted, fontStyle:"italic" }}>
-                Sprint {sprintSel} not found in capacity sheet. Check browser console for parseCapacity debug output.
+              <div style={{ fontSize:10, color:C.delayed, fontStyle:"italic" }}>
+                Sprint {sprintSel} not found in capacity sheet.
               </div>
+            )}
+            {cap?._debug && (
+              <details style={{ fontSize:10, color:C.muted, marginTop:4 }}>
+                <summary style={{ cursor:"pointer", fontWeight:600, color:C.navyLight }}>
+                  ▸ Capacity Debug Info — click to expand
+                </summary>
+                <div style={{ marginTop:6, background:"#f0f4f8", border:`1px solid ${C.border}`, borderRadius:6, padding:10 }}>
+                  <div style={{ marginBottom:4 }}>
+                    <b>Sprint columns found:</b>{" "}
+                    {Object.keys(cap._debug.sprintColumns).length > 0
+                      ? Object.entries(cap._debug.sprintColumns).map(([sp,col])=>`Sprint ${sp} → "${col}"`).join(" | ")
+                      : <span style={{ color:C.delayed }}>⚠ None found — column names must contain "Sprint N"</span>}
+                  </div>
+                  <div style={{ marginBottom:4 }}>
+                    <b>Available rows found ({cap._debug.availRowsFound.length}):</b>{" "}
+                    {cap._debug.availRowsFound.length > 0
+                      ? cap._debug.availRowsFound.map(a=>`"${a.label}" [${a.section||"no section"}]`).join(" | ")
+                      : <span style={{ color:C.delayed }}>⚠ None — no cell starts with "available"</span>}
+                  </div>
+                  <div>
+                    <b>Parsed values:</b>{" "}
+                    {[7,8,9].map(sp => {
+                      const v = cap._debug.parsed[`Sprint ${sp}`];
+                      return `Sprint ${sp}: Func=${v?.func??'—'} Tech=${v?.tech??'—'}`;
+                    }).join(" | ")}
+                  </div>
+                  <div style={{ marginTop:4, color:C.muted }}>
+                    All columns in sheet: {cap._debug.allColumns.join(", ")}
+                  </div>
+                </div>
+              </details>
             )}
           </div>
 
