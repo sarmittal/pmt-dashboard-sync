@@ -707,6 +707,77 @@ function Modal({ title, rows, columns, onClose }) {
   );
 }
 
+// ── Editable cell — click to edit, saves to Smartsheet on blur/Enter ─────────
+// To add more editable columns: update EDITABLE in server/smartsheet.js only.
+function EditableCell({ sheet, rowId, colName, value, multiline = false, onSaved }) {
+  const [editing, setEditing]   = useState(false);
+  const [draft,   setDraft]     = useState(value ?? "");
+  const [saving,  setSaving]    = useState(false);
+  const [error,   setError]     = useState(null);
+
+  const startEdit = () => { setDraft(value ?? ""); setError(null); setEditing(true); };
+
+  const save = async () => {
+    const trimmed = draft.trim();
+    if (trimmed === String(value ?? "").trim()) { setEditing(false); return; }
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/update", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sheet, rowId, updates: { [colName]: trimmed } }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j.error || res.statusText);
+      }
+      onSaved?.(trimmed);
+      setEditing(false);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const onKey = e => {
+    if (!multiline && e.key === "Enter") { e.preventDefault(); save(); }
+    if (e.key === "Escape") { setEditing(false); }
+  };
+
+  if (saving) return <span style={{ color: C.muted, fontSize: 11, fontStyle: "italic" }}>Saving…</span>;
+
+  if (editing) {
+    const sharedStyle = {
+      width: "100%", padding: "4px 6px", fontSize: 12, border: `1.5px solid ${C.navyLight}`,
+      borderRadius: 4, outline: "none", fontFamily: "inherit", boxSizing: "border-box",
+    };
+    return (
+      <div>
+        {multiline
+          ? <textarea rows={3} value={draft} onChange={e => setDraft(e.target.value)}
+              onBlur={save} onKeyDown={onKey} autoFocus style={{ ...sharedStyle, resize: "vertical" }} />
+          : <input value={draft} onChange={e => setDraft(e.target.value)}
+              onBlur={save} onKeyDown={onKey} autoFocus style={sharedStyle} />
+        }
+        {error && <div style={{ color: C.delayed, fontSize: 10, marginTop: 2 }}>{error}</div>}
+      </div>
+    );
+  }
+
+  return (
+    <span onClick={startEdit} title="Click to edit"
+      style={{ cursor: "text", display: "block", minHeight: 20, padding: "2px 4px",
+        borderRadius: 3, border: `1px dashed transparent`,
+        whiteSpace: multiline ? "pre-wrap" : "normal" }}
+      onMouseEnter={e => { e.currentTarget.style.border = `1px dashed ${C.navyLight}`; e.currentTarget.style.background = "#f0f5ff"; }}
+      onMouseLeave={e => { e.currentTarget.style.border = "1px dashed transparent"; e.currentTarget.style.background = ""; }}>
+      {value || <span style={{ color: C.muted, fontStyle: "italic" }}>—</span>}
+    </span>
+  );
+}
+
 function Empty({ label }) {
   return (
     <div style={{ textAlign: "center", padding: "60px", color: C.muted }}>
@@ -3295,6 +3366,10 @@ function RaidDrillModal({ title, rows, raidKeys, onClose, initialStatusFilter, i
   Object.values(groups).forEach(arr => arr.sort((a, b) => parseDue(a) - parseDue(b)));
   const sortedGroups = Object.entries(groups).sort((a, b) => a[0].localeCompare(b[0]));
 
+  const [localVals, setLocalVals] = useState({});
+  const localUpdate = (rowId, col, val) =>
+    setLocalVals(prev => ({ ...prev, [rowId]: { ...(prev[rowId] || {}), [col]: val } }));
+
   const isOpen     = key => expanded[key] === true;
   const toggleGroup = c => setExpanded(prev => ({ ...prev, [c]: !isOpen(c) }));
   const expandAll   = () => { const e = {}; sortedGroups.forEach(([c]) => e[c] = true);  setExpanded(e); };
@@ -3302,6 +3377,9 @@ function RaidDrillModal({ title, rows, raidKeys, onClose, initialStatusFilter, i
 
   const cols = [idCol, priorityCol, statusCol, expCol, compCol, topicCol, descCol, commentCol, ownerCol, critCol, dateCol];
   const wideCols = new Set([descCol, commentCol]);
+  // Columns editable via write-back; multiline for Description and Comments
+  const editableCols = new Set([descCol, commentCol, critCol, dateCol, K.tag, K.crTargetSprint].filter(Boolean));
+  const multilineCols = new Set([descCol, commentCol]);
 
   const FilterPills = ({ filters, counts, active, onSelect, delayedHighlight }) => (
     <div style={{ display:"flex", gap:5, flexWrap:"wrap" }}>
@@ -3417,11 +3495,13 @@ function RaidDrillModal({ title, rows, raidKeys, onClose, initialStatusFilter, i
                         style={{ background: i % 2 === 0 ? "#f9fbff" : C.white, borderBottom:`1px solid ${C.border}`, verticalAlign:"top" }}>
                         <td style={{ padding:"7px 10px 7px 30px", color:C.muted, fontSize:10, whiteSpace:"nowrap" }}>↳</td>
                         {cols.map(c => {
-                          const v = String(r[c] || "—");
-                          const isPri  = c === priorityCol;
-                          const isStat = c === statusCol;
-                          const isWide = wideCols.has(c);
-                          const isDate = c === dateCol;
+                          const rawVal = localVals[r._rowId]?.[c] ?? r[c] ?? "";
+                          const v = String(rawVal || "—");
+                          const isPri   = c === priorityCol;
+                          const isStat  = c === statusCol;
+                          const isWide  = wideCols.has(c);
+                          const isDate  = c === dateCol;
+                          const isEdit  = editableCols.has(c) && r._rowId;
                           const priColor = isPri ? getPriorityColor(v) : null;
                           return (
                             <td key={c} style={{
@@ -3434,14 +3514,19 @@ function RaidDrillModal({ title, rows, raidKeys, onClose, initialStatusFilter, i
                               textOverflow: isWide ? "unset" : "ellipsis",
                               fontSize:11, lineHeight: isWide ? 1.5 : "normal",
                               fontWeight: isDate && daysLeft != null && daysLeft < 0 ? 700 : "normal"
-                            }} title={isWide ? undefined : v}>
-                              {isPri && priColor
-                                ? <span style={{ background:priColor+"20", color:priColor, border:`1px solid ${priColor}40`, borderRadius:3, padding:"2px 7px", fontSize:10, fontWeight:700 }}>{v}</span>
-                                : isStat
-                                  ? <span style={{ background:statusColor+"20", color:statusColor, border:`1px solid ${statusColor}40`, borderRadius:3, padding:"2px 7px", fontSize:10, fontWeight:700 }}>{v}</span>
-                                  : isDate && daysLeft != null
-                                    ? <>{fmtDate(r[c])}<div style={{ fontSize:9, color:dueColor, marginTop:1 }}>{daysLeft < 0 ? `${Math.abs(daysLeft)}d overdue` : daysLeft === 0 ? "today" : `${daysLeft}d left`}</div></>
-                                    : isWide ? v : v.slice(0, 60)}
+                            }} title={isWide || isEdit ? undefined : v}>
+                              {isEdit
+                                ? <EditableCell sheet="raid" rowId={r._rowId} colName={c}
+                                    value={String(rawVal || "")}
+                                    multiline={multilineCols.has(c)}
+                                    onSaved={val => localUpdate(r._rowId, c, val)} />
+                                : isPri && priColor
+                                  ? <span style={{ background:priColor+"20", color:priColor, border:`1px solid ${priColor}40`, borderRadius:3, padding:"2px 7px", fontSize:10, fontWeight:700 }}>{v}</span>
+                                  : isStat
+                                    ? <span style={{ background:statusColor+"20", color:statusColor, border:`1px solid ${statusColor}40`, borderRadius:3, padding:"2px 7px", fontSize:10, fontWeight:700 }}>{v}</span>
+                                    : isDate && daysLeft != null
+                                      ? <>{fmtDate(r[c])}<div style={{ fontSize:9, color:dueColor, marginTop:1 }}>{daysLeft < 0 ? `${Math.abs(daysLeft)}d overdue` : daysLeft === 0 ? "today" : `${daysLeft}d left`}</div></>
+                                      : isWide ? v : v.slice(0, 60)}
                             </td>
                           );
                         })}
@@ -3492,7 +3577,11 @@ function WorkplanDrillModal({ title, rows, onClose, initialFilter }) {
 
   const [expanded, setExpanded] = useState(() => initExpanded());
   const [statusFilter, setStatusFilter] = useState(initialFilter || "All");
+  const [localVals, setLocalVals] = useState({});
   if (!rows?.length) return null;
+
+  const localUpdate = (rowId, col, val) =>
+    setLocalVals(prev => ({ ...prev, [rowId]: { ...(prev[rowId] || {}), [col]: val } }));
 
   // When "All" → show everything. When "Complete" → show only complete. Otherwise exclude Complete.
   const nonComplete = rows.filter(r => getS(r).toLowerCase() !== "complete");
@@ -3702,7 +3791,8 @@ function WorkplanDrillModal({ title, rows, onClose, initialFilter }) {
                 const r = node.r;
                 const s = getS(r);
                 const sc = SC[s] || C.muted;
-                const p2 = pct(r["% Complete"] ?? r["% complete"]);
+                const pctRaw = localVals[r._rowId]?.["% Complete"] ?? r["% Complete"] ?? r["% complete"];
+                const p2 = pct(pctRaw);
                 const daysLeft = daysUntil(r["Finish"] || r["End Date"]);
                 const isComplete = s.toLowerCase() === "complete";
                 const dueColor = isComplete ? C.muted : daysLeft != null && daysLeft < 0 ? C.delayed : daysLeft != null && daysLeft <= 7 ? C.yellow : C.muted;
@@ -3768,7 +3858,12 @@ function WorkplanDrillModal({ title, rows, onClose, initialFilter }) {
                         <div style={{ width:36, background:"#e2e8f0", borderRadius:3, height:5, overflow:"hidden" }}>
                           <div style={{ width:`${p2||0}%`, height:"100%", background:p2>=75?C.green:p2>=40?C.gold:C.delayed }} />
                         </div>
-                        <span style={{ fontSize:10, fontWeight:600 }}>{p2 != null ? `${p2}%` : "—"}</span>
+                        {r._rowId
+                          ? <EditableCell sheet="wp" rowId={r._rowId} colName="% Complete"
+                              value={p2 != null ? `${p2}%` : ""}
+                              onSaved={val => localUpdate(r._rowId, "% Complete", val)} />
+                          : <span style={{ fontSize:10, fontWeight:600 }}>{p2 != null ? `${p2}%` : "—"}</span>
+                        }
                       </div>
                     </td>
                     <td style={{ padding:"6px 8px", textAlign:"center", whiteSpace:"nowrap", color:C.muted, fontSize:11 }}>
@@ -3787,8 +3882,14 @@ function WorkplanDrillModal({ title, rows, onClose, initialFilter }) {
                     <td style={{ padding:"6px 8px", color:C.muted, fontSize:10, whiteSpace:"nowrap" }}>{String(r["Support"]||"—").slice(0,18)}</td>
                     <td style={{ padding:"6px 8px", color:C.text,  fontSize:10, whiteSpace:"nowrap" }}>{String(r["Primary Owner"]||"—").slice(0,18)}</td>
                     <td style={{ padding:"6px 8px", color:C.muted, fontSize:10, whiteSpace:"nowrap" }}>{String(r["Secondary Owner"]||"—").slice(0,18)}</td>
-                    <td style={{ padding:"6px 8px", color:C.muted, fontSize:10, maxWidth:260, lineHeight:1.5, verticalAlign:"top" }}>
-                      <CommentCell value={r["Comments"] || r["Comment"] || r["comments"] || ""} />
+                    <td style={{ padding:"6px 8px", fontSize:10, maxWidth:260, lineHeight:1.5, verticalAlign:"top" }}>
+                      {r._rowId
+                        ? <EditableCell sheet="wp" rowId={r._rowId} colName="Comments"
+                            value={localVals[r._rowId]?.["Comments"] ?? r["Comments"] ?? r["Comment"] ?? r["comments"] ?? ""}
+                            multiline={true}
+                            onSaved={val => localUpdate(r._rowId, "Comments", val)} />
+                        : <CommentCell value={r["Comments"] || r["Comment"] || r["comments"] || ""} />
+                      }
                     </td>                  </tr>
                 );
               })}

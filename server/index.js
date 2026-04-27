@@ -4,6 +4,7 @@
  * Endpoints:
  *   GET  /api/data     → returns cached Smartsheet data (auto-refreshes on first call)
  *   POST /api/refresh  → forces a fresh fetch from Smartsheet, updates cache
+ *   POST /api/update   → writes a single row back to Smartsheet
  *   GET  /api/health   → liveness check
  *
  * In production (NODE_ENV=production) the server also serves the Vite build
@@ -14,7 +15,7 @@ import express from "express";
 import cors from "cors";
 import path from "path";
 import { fileURLToPath } from "url";
-import { fetchAllSheets } from "./smartsheet.js";
+import { fetchAllSheets, updateRow, EDITABLE } from "./smartsheet.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app  = express();
@@ -23,7 +24,7 @@ const PORT = process.env.PORT || 3001;
 const TOKEN = process.env.SMARTSHEET_TOKEN;
 
 // In-memory cache
-let cache = null;       // { data, fetchedAt }
+let cache = null;       // { data, columnMaps, fetchedAt }
 let refreshing = false; // prevent concurrent fetches
 
 app.use(cors());
@@ -41,8 +42,8 @@ async function doRefresh() {
   refreshing = true;
   try {
     console.log("[server] Fetching from Smartsheet...");
-    const data = await fetchAllSheets(TOKEN);
-    cache = { data, fetchedAt: new Date().toISOString() };
+    const { data, columnMaps } = await fetchAllSheets(TOKEN);
+    cache = { data, columnMaps, fetchedAt: new Date().toISOString() };
     console.log("[server] Cache updated:", cache.fetchedAt);
   } finally {
     refreshing = false;
@@ -80,6 +81,38 @@ app.post("/api/refresh", async (req, res) => {
     });
   } catch (err) {
     console.error("[server] /api/refresh error:", err.message);
+    res.status(502).json({ error: err.message });
+  }
+});
+
+// POST /api/update
+// Body: { sheet: "wp"|"raid", rowId: <number>, updates: { "Column Name": value, ... } }
+app.post("/api/update", async (req, res) => {
+  try {
+    const { sheet, rowId, updates } = req.body;
+
+    if (!sheet || !rowId || !updates || typeof updates !== "object") {
+      return res.status(400).json({ error: "Request must include sheet, rowId, and updates object" });
+    }
+    if (!EDITABLE[sheet]) {
+      return res.status(400).json({ error: `Sheet "${sheet}" does not support write-back` });
+    }
+    if (!cache?.columnMaps?.[sheet]) {
+      return res.status(503).json({ error: "Cache not loaded — call /api/refresh first" });
+    }
+
+    await updateRow(sheet, rowId, updates, cache.columnMaps, TOKEN);
+    console.log(`[server] Updated ${sheet} row ${rowId}:`, Object.keys(updates));
+
+    // Patch in-memory cache so the UI reflects the change immediately
+    if (cache.data[sheet]) {
+      const row = cache.data[sheet].find(r => String(r._rowId) === String(rowId));
+      if (row) Object.assign(row, updates);
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("[server] /api/update error:", err.message);
     res.status(502).json({ error: err.message });
   }
 });
