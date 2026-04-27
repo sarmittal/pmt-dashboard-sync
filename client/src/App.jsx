@@ -716,9 +716,9 @@ const RAID_EDITABLE_HEADER_KEYS = new Set(["desc", "comment", "critPath", "raidD
 
 // Pencil badge rendered next to editable column headers
 const EditHeaderBadge = () => (
-  <span title="Editable" style={{ marginLeft:4, fontSize:9, opacity:0.55,
-    background:"rgba(255,255,255,0.18)", borderRadius:3, padding:"1px 3px",
-    verticalAlign:"middle", userSelect:"none" }}>✎</span>
+  <span title="Editable" style={{ marginLeft:5, fontSize:8, fontWeight:700, letterSpacing:"0.04em",
+    background:"#ffffff", color:"#1a1a2e", borderRadius:3, padding:"1px 5px",
+    verticalAlign:"middle", userSelect:"none", lineHeight:1.6 }}>EDIT</span>
 );
 
 // ── Editable cell — click to edit, saves to Smartsheet on blur/Enter ─────────
