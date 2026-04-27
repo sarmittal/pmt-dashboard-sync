@@ -3917,17 +3917,12 @@ function WorkplanDrillModal({ title, rows, onClose, initialFilter }) {
                       <span style={{ background:sc+"20", color:sc, border:`1px solid ${sc}40`, borderRadius:3, padding:"1px 6px", fontSize:10, fontWeight:700 }}>{s || "—"}</span>
                     </td>
                     <td style={{ padding:"6px 8px", textAlign:"center", whiteSpace:"nowrap" }}>
-                      <div style={{ display:"flex", alignItems:"center", gap:4, justifyContent:"center" }}>
-                        <div style={{ width:36, background:"#e2e8f0", borderRadius:3, height:5, overflow:"hidden" }}>
-                          <div style={{ width:`${p2||0}%`, height:"100%", background:p2>=75?C.green:p2>=40?C.gold:C.delayed }} />
-                        </div>
-                        {r._rowId
-                          ? <EditableCell sheet="wp" rowId={r._rowId} colName="% Complete"
-                              value={p2 != null ? `${p2}%` : ""}
-                              onSaved={val => localUpdate(r._rowId, "% Complete", val)} />
-                          : <span style={{ fontSize:10, fontWeight:600 }}>{p2 != null ? `${p2}%` : "—"}</span>
-                        }
-                      </div>
+                      {r._rowId
+                        ? <EditableCell sheet="wp" rowId={r._rowId} colName="% Complete"
+                            value={p2 != null ? `${p2}%` : ""}
+                            onSaved={val => localUpdate(r._rowId, "% Complete", val)} />
+                        : <span style={{ fontSize:10, fontWeight:600 }}>{p2 != null ? `${p2}%` : "—"}</span>
+                      }
                     </td>
                     <td style={{ padding:"6px 8px", textAlign:"center", whiteSpace:"nowrap", color:C.muted, fontSize:11 }}>
                       {fmtDate(r["Start"])}
