@@ -1605,6 +1605,9 @@ function RaidKpiModal({ title, rows, K, teamKey, allTeams, allTypes, allComps, s
   const [statusFilter, setStatusFilter] = useState("All");
   const [typeFilter,   setTypeFilter]   = useState("All");
   const [compFilter,   setCompFilter]   = useState("All");
+  const [localVals,    setLocalVals]    = useState({});
+  const localUpdate = (rowId, col, val) =>
+    setLocalVals(prev => ({ ...prev, [rowId]: { ...(prev[rowId] || {}), [col]: val } }));
   const [showCols,     setShowCols]     = useState(false);
 
   // Independent cross-filtering — each filter's counts reflect all OTHER active filters
@@ -1782,13 +1785,13 @@ function RaidKpiModal({ title, rows, K, teamKey, allTeams, allTypes, allComps, s
                     {colConfig.component.visible && <td style={{ padding:"8px 10px", color:C.text, wordBreak:"break-word", width:colConfig.component.width }}>{String(r[K.component]||"—")}</td>}
                     {colConfig.experience.visible&& <td style={{ padding:"8px 10px", color:C.muted, wordBreak:"break-word", width:colConfig.experience.width }}>{String(r[K.experience]||"—")}</td>}
                     {colConfig.topic.visible     && <td style={{ padding:"8px 10px", color:C.muted, wordBreak:"break-word", width:colConfig.topic.width }}>{String(r[K.topic]||"—")}</td>}
-                    {colConfig.tag?.visible      && <td style={{ padding:"8px 10px", width:colConfig.tag?.width||140 }}>{(() => { const v=String(r[K.tag]||"").trim(); if(!v||v==="—") return <span style={{color:C.muted}}>—</span>; return <span style={{background:"#fef3c7",color:"#92400e",border:"1px solid #fcd34d",borderRadius:3,padding:"2px 6px",fontSize:10,whiteSpace:"nowrap"}}>{v}</span>; })()}</td>}
-                    {colConfig.desc.visible      && <td style={{ padding:"8px 10px", color:C.text, wordBreak:"break-word", lineHeight:1.5, width:colConfig.desc.width }}>{String(r[K.desc]||"—")}</td>}
-                    {colConfig.comment.visible   && <td style={{ padding:"8px 10px", color:C.muted, wordBreak:"break-word", lineHeight:1.5, width:colConfig.comment.width }}>{String(r[K.comment]||"—")}</td>}
+                    {colConfig.tag?.visible      && <td style={{ padding:"8px 10px", width:colConfig.tag?.width||140 }}>{r._rowId && K.tag ? <EditableCell sheet="raid" rowId={r._rowId} colName={K.tag} value={localVals[r._rowId]?.[K.tag] ?? String(r[K.tag]||"")} onSaved={v=>localUpdate(r._rowId,K.tag,v)} /> : (() => { const v=String(r[K.tag]||"").trim(); if(!v||v==="—") return <span style={{color:C.muted}}>—</span>; return <span style={{background:"#fef3c7",color:"#92400e",border:"1px solid #fcd34d",borderRadius:3,padding:"2px 6px",fontSize:10,whiteSpace:"nowrap"}}>{v}</span>; })()}</td>}
+                    {colConfig.desc.visible      && <td style={{ padding:"8px 10px", wordBreak:"break-word", lineHeight:1.5, width:colConfig.desc.width }}>{r._rowId && K.desc ? <EditableCell sheet="raid" rowId={r._rowId} colName={K.desc} value={localVals[r._rowId]?.[K.desc] ?? String(r[K.desc]||"")} multiline onSaved={v=>localUpdate(r._rowId,K.desc,v)} /> : String(r[K.desc]||"—")}</td>}
+                    {colConfig.comment.visible   && <td style={{ padding:"8px 10px", wordBreak:"break-word", lineHeight:1.5, width:colConfig.comment.width }}>{r._rowId && K.comment ? <EditableCell sheet="raid" rowId={r._rowId} colName={K.comment} value={localVals[r._rowId]?.[K.comment] ?? String(r[K.comment]||"")} multiline onSaved={v=>localUpdate(r._rowId,K.comment,v)} /> : String(r[K.comment]||"—")}</td>}
                     {colConfig.owner?.visible     && <td style={{ padding:"8px 10px", color:C.text, wordBreak:"break-word", width:colConfig.owner.width }}>{String(r[K.owner]||"—")}</td>}
                     {colConfig.team?.visible      && <td style={{ padding:"8px 10px", color:C.text, wordBreak:"break-word", width:colConfig.team?.width||140 }}>{String(r[teamKey]||"—")}</td>}
-                    {colConfig.critPath?.visible  && <td style={{ padding:"8px 10px", width:colConfig.critPath.width }}>{(() => { const v=String(r[K.critPath]||"").trim(); if(!v||v==="—") return <span style={{color:C.muted}}>—</span>; const hi=v.toLowerCase()!=="no"&&v.toLowerCase()!=="n/a"; return <span style={{background:hi?"#fee2e2":"#f1f5f9",color:hi?C.delayed:C.muted,borderRadius:3,padding:"2px 6px",fontSize:10,fontWeight:600}}>{v}</span>; })()}</td>}
-                    {colConfig.dueDate?.visible   && <td style={{ padding:"8px 10px", color:dueCol, fontWeight:600, whiteSpace:"nowrap", width:colConfig.dueDate.width }}>{dueStr}</td>}
+                    {colConfig.critPath?.visible  && <td style={{ padding:"8px 10px", width:colConfig.critPath.width }}>{r._rowId && K.critPath ? <EditableCell sheet="raid" rowId={r._rowId} colName={K.critPath} value={localVals[r._rowId]?.[K.critPath] ?? String(r[K.critPath]||"")} onSaved={v=>localUpdate(r._rowId,K.critPath,v)} /> : (() => { const v=String(r[K.critPath]||"").trim(); if(!v||v==="—") return <span style={{color:C.muted}}>—</span>; const hi=v.toLowerCase()!=="no"&&v.toLowerCase()!=="n/a"; return <span style={{background:hi?"#fee2e2":"#f1f5f9",color:hi?C.delayed:C.muted,borderRadius:3,padding:"2px 6px",fontSize:10,fontWeight:600}}>{v}</span>; })()}</td>}
+                    {colConfig.dueDate?.visible   && <td style={{ padding:"8px 10px", width:colConfig.dueDate.width }}>{r._rowId && K.date ? <EditableCell sheet="raid" rowId={r._rowId} colName={K.date} value={localVals[r._rowId]?.[K.date] ?? String(r[K.date]||"")} onSaved={v=>localUpdate(r._rowId,K.date,v)} /> : <span style={{color:dueCol,fontWeight:600,whiteSpace:"nowrap"}}>{dueStr}</span>}</td>}
                   </tr>
                 );
               })}
@@ -2350,6 +2353,9 @@ function BacklogChartDrillModal({ title, rows, K, teamKey, colConfig, COL_KEYS, 
   const [compF, setCompF] = useState("All");
   const [typeF, setTypeF] = useState("All");
   const [teamF, setTeamF] = useState("All");
+  const [localVals, setLocalVals] = useState({});
+  const localUpdate = (rowId, col, val) =>
+    setLocalVals(prev => ({ ...prev, [rowId]: { ...(prev[rowId] || {}), [col]: val } }));
 
   const allExps  = Array.from(new Set(rows.map(r => String(r[K.experience]||"").trim()).filter(Boolean))).sort();
   const allComps = Array.from(new Set(rows.map(r => String(r[K.component]||"").trim()).filter(Boolean))).sort();
@@ -2467,12 +2473,12 @@ function BacklogChartDrillModal({ title, rows, K, teamKey, colConfig, COL_KEYS, 
                     {colConfig.component?.visible &&<td style={{padding:"8px 10px",color:C.text,wordBreak:"break-word",width:colConfig.component.width}}>{String(r[K.component]||"—")}</td>}
                     {colConfig.experience?.visible&&<td style={{padding:"8px 10px",color:C.muted,wordBreak:"break-word",width:colConfig.experience.width}}>{String(r[K.experience]||"—")}</td>}
                     {colConfig.topic?.visible     &&<td style={{padding:"8px 10px",color:C.muted,wordBreak:"break-word",width:colConfig.topic.width}}>{String(r[K.topic]||"—")}</td>}
-                    {colConfig.desc?.visible      &&<td style={{padding:"8px 10px",color:C.text,wordBreak:"break-word",lineHeight:1.5,width:colConfig.desc.width}}>{String(r[K.desc]||"—")}</td>}
-                    {colConfig.comment?.visible   &&<td style={{padding:"8px 10px",color:C.muted,wordBreak:"break-word",lineHeight:1.5,width:colConfig.comment.width}}>{String(r[K.comment]||"—")}</td>}
+                    {colConfig.desc?.visible      &&<td style={{padding:"8px 10px",wordBreak:"break-word",lineHeight:1.5,width:colConfig.desc.width}}>{r._rowId&&K.desc?<EditableCell sheet="raid" rowId={r._rowId} colName={K.desc} value={localVals[r._rowId]?.[K.desc]??String(r[K.desc]||"")} multiline onSaved={v=>localUpdate(r._rowId,K.desc,v)}/>:String(r[K.desc]||"—")}</td>}
+                    {colConfig.comment?.visible   &&<td style={{padding:"8px 10px",wordBreak:"break-word",lineHeight:1.5,width:colConfig.comment.width}}>{r._rowId&&K.comment?<EditableCell sheet="raid" rowId={r._rowId} colName={K.comment} value={localVals[r._rowId]?.[K.comment]??String(r[K.comment]||"")} multiline onSaved={v=>localUpdate(r._rowId,K.comment,v)}/>:String(r[K.comment]||"—")}</td>}
                     {colConfig.owner?.visible     &&<td style={{padding:"8px 10px",color:C.text,wordBreak:"break-word",width:colConfig.owner.width}}>{String(r[K.owner]||"—")}</td>}
                     {colConfig.team?.visible      &&<td style={{padding:"8px 10px",color:C.text,wordBreak:"break-word",width:colConfig.team.width}}>{String(r[teamKey]||"—")}</td>}
-                    {colConfig.critPath?.visible  &&<td style={{padding:"8px 10px",width:colConfig.critPath.width}}>{renderCritPath(r)}</td>}
-                    {colConfig.dueDate?.visible   &&<td style={{padding:"8px 10px",color:dueCol,fontWeight:600,whiteSpace:"nowrap",width:colConfig.dueDate.width}}>{dueStr}</td>}
+                    {colConfig.critPath?.visible  &&<td style={{padding:"8px 10px",width:colConfig.critPath.width}}>{r._rowId&&K.critPath?<EditableCell sheet="raid" rowId={r._rowId} colName={K.critPath} value={localVals[r._rowId]?.[K.critPath]??String(r[K.critPath]||"")} onSaved={v=>localUpdate(r._rowId,K.critPath,v)}/>:renderCritPath(r)}</td>}
+                    {colConfig.dueDate?.visible   &&<td style={{padding:"8px 10px",width:colConfig.dueDate.width}}>{r._rowId&&K.date?<EditableCell sheet="raid" rowId={r._rowId} colName={K.date} value={localVals[r._rowId]?.[K.date]??String(r[K.date]||"")} onSaved={v=>localUpdate(r._rowId,K.date,v)}/>:<span style={{color:dueCol,fontWeight:600,whiteSpace:"nowrap"}}>{dueStr}</span>}</td>}
                   </tr>
                 );
               })}
@@ -2493,6 +2499,9 @@ function BacklogTab({ raid }) {
   const [teamFilter,     setTeamFilter]     = useState("All");
   const [expFilter,      setExpFilter]      = useState("All");
   const [showColPanel,   setShowColPanel]   = useState(false);
+  const [localVals,      setLocalVals]      = useState({});
+  const localUpdate = (rowId, col, val) =>
+    setLocalVals(prev => ({ ...prev, [rowId]: { ...(prev[rowId] || {}), [col]: val } }));
   const [drillModal,     setDrillModal]     = useState(null); // table filter drill-down
   const [chartDrill,     setChartDrill]     = useState(null); // { title, rows } chart drill-down
   const [colConfig, setColConfig] = useState({
@@ -2785,12 +2794,12 @@ function BacklogTab({ raid }) {
                     {colConfig.component?.visible &&<td style={{padding:"8px 10px",color:C.text,wordBreak:"break-word",width:colConfig.component.width}}>{String(r[K.component]||"—")}</td>}
                     {colConfig.experience?.visible&&<td style={{padding:"8px 10px",color:C.muted,wordBreak:"break-word",width:colConfig.experience.width}}>{String(r[K.experience]||"—")}</td>}
                     {colConfig.topic?.visible     &&<td style={{padding:"8px 10px",color:C.muted,wordBreak:"break-word",width:colConfig.topic.width}}>{String(r[K.topic]||"—")}</td>}
-                    {colConfig.desc?.visible      &&<td style={{padding:"8px 10px",color:C.text,wordBreak:"break-word",lineHeight:1.5,width:colConfig.desc.width}}>{String(r[K.desc]||"—")}</td>}
-                    {colConfig.comment?.visible   &&<td style={{padding:"8px 10px",color:C.muted,wordBreak:"break-word",lineHeight:1.5,width:colConfig.comment.width}}>{String(r[K.comment]||"—")}</td>}
+                    {colConfig.desc?.visible      &&<td style={{padding:"8px 10px",wordBreak:"break-word",lineHeight:1.5,width:colConfig.desc.width}}>{r._rowId&&K.desc?<EditableCell sheet="raid" rowId={r._rowId} colName={K.desc} value={localVals[r._rowId]?.[K.desc]??String(r[K.desc]||"")} multiline onSaved={v=>localUpdate(r._rowId,K.desc,v)}/>:String(r[K.desc]||"—")}</td>}
+                    {colConfig.comment?.visible   &&<td style={{padding:"8px 10px",wordBreak:"break-word",lineHeight:1.5,width:colConfig.comment.width}}>{r._rowId&&K.comment?<EditableCell sheet="raid" rowId={r._rowId} colName={K.comment} value={localVals[r._rowId]?.[K.comment]??String(r[K.comment]||"")} multiline onSaved={v=>localUpdate(r._rowId,K.comment,v)}/>:String(r[K.comment]||"—")}</td>}
                     {colConfig.owner?.visible     &&<td style={{padding:"8px 10px",color:C.text,wordBreak:"break-word",width:colConfig.owner.width}}>{String(r[K.owner]||"—")}</td>}
                     {colConfig.team?.visible      &&<td style={{padding:"8px 10px",color:C.text,wordBreak:"break-word",width:colConfig.team.width}}>{String(r[teamKey]||"—")}</td>}
-                    {colConfig.critPath?.visible  &&<td style={{padding:"8px 10px",width:colConfig.critPath.width}}>{renderCritPath(r)}</td>}
-                    {colConfig.dueDate?.visible   &&<td style={{padding:"8px 10px",color:dueCol,fontWeight:600,whiteSpace:"nowrap",width:colConfig.dueDate.width}}>{dueStr}</td>}
+                    {colConfig.critPath?.visible  &&<td style={{padding:"8px 10px",width:colConfig.critPath.width}}>{r._rowId&&K.critPath?<EditableCell sheet="raid" rowId={r._rowId} colName={K.critPath} value={localVals[r._rowId]?.[K.critPath]??String(r[K.critPath]||"")} onSaved={v=>localUpdate(r._rowId,K.critPath,v)}/>:renderCritPath(r)}</td>}
+                    {colConfig.dueDate?.visible   &&<td style={{padding:"8px 10px",width:colConfig.dueDate.width}}>{r._rowId&&K.date?<EditableCell sheet="raid" rowId={r._rowId} colName={K.date} value={localVals[r._rowId]?.[K.date]??String(r[K.date]||"")} onSaved={v=>localUpdate(r._rowId,K.date,v)}/>:<span style={{color:dueCol,fontWeight:600,whiteSpace:"nowrap"}}>{dueStr}</span>}</td>}
                   </tr>
                 );
               })}
@@ -2878,6 +2887,9 @@ function RaidAnalysisTab({ raid }) {
   const [statusFilter, setStatusFilter] = useState("All");
   const [typeFilter, setTypeFilter] = useState("All");
   const [compFilter, setCompFilter] = useState("All");
+  const [localVals, setLocalVals] = useState({});
+  const localUpdate = (rowId, col, val) =>
+    setLocalVals(prev => ({ ...prev, [rowId]: { ...(prev[rowId] || {}), [col]: val } }));
   // Persistent column config — survives modal close/reopen
   const [modalColConfig, setModalColConfig] = useState({
     raidId:    { label:"RAID ID",                  visible:true,  width:90  },
@@ -3236,18 +3248,11 @@ function RaidAnalysisTab({ raid }) {
                         {colConfig.component.visible && <td style={{ padding:"8px 10px", color:C.text, wordBreak:"break-word", width:colConfig.component.width }}>{String(r[K.component]||"—")}</td>}
                         {colConfig.experience.visible&& <td style={{ padding:"8px 10px", color:C.muted, wordBreak:"break-word", width:colConfig.experience.width }}>{String(r[K.experience]||"—")}</td>}
                         {colConfig.topic.visible     && <td style={{ padding:"8px 10px", color:C.muted, wordBreak:"break-word", width:colConfig.topic.width }}>{String(r[K.topic]||"—")}</td>}
-                        {colConfig.desc.visible      && <td style={{ padding:"8px 10px", color:C.text, wordBreak:"break-word", lineHeight:1.5, width:colConfig.desc.width }}>{String(r[K.desc]||"—")}</td>}
-                        {colConfig.comment.visible   && <td style={{ padding:"8px 10px", color:C.muted, wordBreak:"break-word", lineHeight:1.5, width:colConfig.comment.width }}>{String(r[K.comment]||"—")}</td>}
+                        {colConfig.desc.visible      && <td style={{ padding:"8px 10px", wordBreak:"break-word", lineHeight:1.5, width:colConfig.desc.width }}>{r._rowId&&K.desc?<EditableCell sheet="raid" rowId={r._rowId} colName={K.desc} value={localVals[r._rowId]?.[K.desc]??String(r[K.desc]||"")} multiline onSaved={v=>localUpdate(r._rowId,K.desc,v)}/>:String(r[K.desc]||"—")}</td>}
+                        {colConfig.comment.visible   && <td style={{ padding:"8px 10px", wordBreak:"break-word", lineHeight:1.5, width:colConfig.comment.width }}>{r._rowId&&K.comment?<EditableCell sheet="raid" rowId={r._rowId} colName={K.comment} value={localVals[r._rowId]?.[K.comment]??String(r[K.comment]||"")} multiline onSaved={v=>localUpdate(r._rowId,K.comment,v)}/>:String(r[K.comment]||"—")}</td>}
                         {colConfig.owner.visible     && <td style={{ padding:"8px 10px", color:C.text, wordBreak:"break-word", width:colConfig.owner.width }}>{String(r[K.owner]||"—")}</td>}
-                        {colConfig.critPath.visible  && <td style={{ padding:"8px 10px", width:colConfig.critPath.width }}>
-                          {(() => {
-                            const v = String(r[K.critPath]||"").trim();
-                            if (!v || v === "—") return <span style={{ color:C.muted }}>—</span>;
-                            const isHighlight = v.toLowerCase() !== "no" && v.toLowerCase() !== "n/a";
-                            return <span style={{ background: isHighlight ? "#fee2e2" : "#f1f5f9", color: isHighlight ? C.delayed : C.muted, borderRadius:3, padding:"2px 6px", fontSize:10, fontWeight:600 }}>{v}</span>;
-                          })()}
-                        </td>}
-                        {colConfig.dueDate.visible   && <td style={{ padding:"8px 10px", color:dueCol, fontWeight:600, whiteSpace:"nowrap", width:colConfig.dueDate.width }}>{dueStr}</td>}
+                        {colConfig.critPath.visible  && <td style={{ padding:"8px 10px", width:colConfig.critPath.width }}>{r._rowId&&K.critPath?<EditableCell sheet="raid" rowId={r._rowId} colName={K.critPath} value={localVals[r._rowId]?.[K.critPath]??String(r[K.critPath]||"")} onSaved={v=>localUpdate(r._rowId,K.critPath,v)}/>:(() => { const v=String(r[K.critPath]||"").trim(); if(!v||v==="—") return <span style={{color:C.muted}}>—</span>; const hi=v.toLowerCase()!=="no"&&v.toLowerCase()!=="n/a"; return <span style={{background:hi?"#fee2e2":"#f1f5f9",color:hi?C.delayed:C.muted,borderRadius:3,padding:"2px 6px",fontSize:10,fontWeight:600}}>{v}</span>; })()}</td>}
+                        {colConfig.dueDate.visible   && <td style={{ padding:"8px 10px", width:colConfig.dueDate.width }}>{r._rowId&&K.date?<EditableCell sheet="raid" rowId={r._rowId} colName={K.date} value={localVals[r._rowId]?.[K.date]??String(r[K.date]||"")} onSaved={v=>localUpdate(r._rowId,K.date,v)}/>:<span style={{color:dueCol,fontWeight:600,whiteSpace:"nowrap"}}>{dueStr}</span>}</td>}
                       </tr>
                     );
                   })}
