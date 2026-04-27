@@ -707,6 +707,16 @@ function Modal({ title, rows, columns, onClose }) {
   );
 }
 
+// Keys in colConfig-based RAID tables that are editable — used to show ✎ in headers
+const RAID_EDITABLE_HEADER_KEYS = new Set(["desc", "comment", "critPath", "dueDate", "tag"]);
+
+// Pencil badge rendered next to editable column headers
+const EditHeaderBadge = () => (
+  <span title="Editable" style={{ marginLeft:4, fontSize:9, opacity:0.55,
+    background:"rgba(255,255,255,0.18)", borderRadius:3, padding:"1px 3px",
+    verticalAlign:"middle", userSelect:"none" }}>✎</span>
+);
+
 // ── Editable cell — click to edit, saves to Smartsheet on blur/Enter ─────────
 // To add more editable columns: update EDITABLE in server/smartsheet.js only.
 function EditableCell({ sheet, rowId, colName, value, multiline = false, onSaved }) {
@@ -1753,7 +1763,7 @@ function RaidKpiModal({ title, rows, K, teamKey, allTeams, allTypes, allComps, s
                   <th key={key} style={{ padding:"8px 10px", textAlign:"left", color:"#fff", fontWeight:700, fontSize:10,
                     width:colConfig[key].width, position:"relative",
                     borderRight: idx<arr.length-1?"1px solid rgba(255,255,255,0.1)":"none" }}>
-                    {label}
+                    {label}{RAID_EDITABLE_HEADER_KEYS.has(key) && <EditHeaderBadge />}
                     <div onMouseDown={e => {
                       e.preventDefault();
                       const startX=e.clientX, startW=colConfig[key].width;
@@ -2754,7 +2764,7 @@ function BacklogTab({ raid }) {
                   <th key={key} style={{padding:"8px 10px",textAlign:"left",color:"#fff",fontWeight:700,fontSize:10,
                     width:colConfig[key].width,position:"relative",
                     borderRight:idx<arr.length-1?"1px solid rgba(255,255,255,0.1)":"none"}}>
-                    {label}
+                    {label}{RAID_EDITABLE_HEADER_KEYS.has(key) && <EditHeaderBadge />}
                     <div onMouseDown={e=>{
                       e.preventDefault();
                       const sx=e.clientX,sw=colConfig[key].width;
@@ -3206,7 +3216,7 @@ function RaidAnalysisTab({ raid }) {
                       <th key={key} style={{ padding:"8px 10px", textAlign:"left", color:"#fff", fontWeight:700, fontSize:10,
                         width:colConfig[key].width, position:"relative",
                         borderRight: idx < arr.length-1 ? "1px solid rgba(255,255,255,0.1)" : "none" }}>
-                        {label}
+                        {label}{RAID_EDITABLE_HEADER_KEYS.has(key) && <EditHeaderBadge />}
                         <div
                           onMouseDown={e => {
                             e.preventDefault();
@@ -3461,7 +3471,9 @@ function RaidDrillModal({ title, rows, raidKeys, onClose, initialStatusFilter, i
                 {cols.map(c => (
                   <th key={c} style={{ textAlign:"left", padding:"8px 10px", color:C.muted, fontWeight:700,
                     borderBottom:`2px solid ${C.border}`, whiteSpace:"nowrap",
-                    minWidth: wideCols.has(c) ? 260 : c === dateCol ? 95 : 100 }}>{c}</th>
+                    minWidth: wideCols.has(c) ? 260 : c === dateCol ? 95 : 100 }}>
+                    {c}{editableCols.has(c) && <span title="Editable" style={{ fontSize:9, opacity:0.5, background:"#e2e8f0", borderRadius:3, padding:"1px 3px", marginLeft:4 }}>✎</span>}
+                  </th>
                 ))}
               </tr>
             </thead>
@@ -3781,14 +3793,14 @@ function WorkplanDrillModal({ title, rows, onClose, initialFilter }) {
               <tr style={{ borderBottom:`2px solid ${C.border}` }}>
                 <th style={{ textAlign:"left", padding:"8px 10px", color:C.muted, fontWeight:700, minWidth:320 }}>Task / Group</th>
                 <th style={{ textAlign:"center", padding:"8px 10px", color:C.muted, fontWeight:700, whiteSpace:"nowrap" }}>Status</th>
-                <th style={{ textAlign:"center", padding:"8px 10px", color:C.muted, fontWeight:700, whiteSpace:"nowrap" }}>% Done</th>
+                <th style={{ textAlign:"center", padding:"8px 10px", color:C.muted, fontWeight:700, whiteSpace:"nowrap" }}>% Done <span title="Editable" style={{ fontSize:9, opacity:0.5, background:"#e2e8f0", borderRadius:3, padding:"1px 3px" }}>✎</span></th>
                 <th style={{ textAlign:"center", padding:"8px 10px", color:C.muted, fontWeight:700, whiteSpace:"nowrap" }}>Start</th>
                 <th style={{ textAlign:"center", padding:"8px 10px", color:C.muted, fontWeight:700, whiteSpace:"nowrap" }}>Finish</th>
                 <th style={{ textAlign:"left",   padding:"8px 10px", color:C.muted, fontWeight:700, whiteSpace:"nowrap" }}>Workstream</th>
                 <th style={{ textAlign:"left",   padding:"8px 10px", color:C.muted, fontWeight:700, whiteSpace:"nowrap" }}>Support</th>
                 <th style={{ textAlign:"left",   padding:"8px 10px", color:C.muted, fontWeight:700, whiteSpace:"nowrap" }}>Primary Owner</th>
                 <th style={{ textAlign:"left",   padding:"8px 10px", color:C.muted, fontWeight:700, whiteSpace:"nowrap" }}>Secondary Owner</th>
-                <th style={{ textAlign:"left",   padding:"8px 10px", color:C.muted, fontWeight:700, minWidth:200 }}>Comments</th>
+                <th style={{ textAlign:"left",   padding:"8px 10px", color:C.muted, fontWeight:700, minWidth:200 }}>Comments <span title="Editable" style={{ fontSize:9, opacity:0.5, background:"#e2e8f0", borderRadius:3, padding:"1px 3px" }}>✎</span></th>
               </tr>
             </thead>
             <tbody>
