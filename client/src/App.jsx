@@ -4635,146 +4635,97 @@ function ComponentCardsTab({ wp, raid, req, openModal }) {
 }
 
 // ─── TEST SCENARIOS TAB ──────────────────────────────────────────────────────
-function TestScenariosTab({ data, wp }) {
-  const [modal, setModal] = useState(null);
-  const [expandedSits, setExpandedSits] = useState({});
+function TestScenariosTab({ data, wp, req }) {
+  const [selSit,  setSelSit]  = useState(null);
+  const [spModal, setSpModal] = useState(null);
 
   if (!data) return <Empty label="Upload Test Scenarios file above to view this tab." />;
 
   const K = data.keys;
 
-  const isReviewed = s => {
-    const v = (String(s || "").replace(/^\d+\.\s*/, "").toLowerCase());
-    return v.includes("reviewed") && !v.includes("ready") && !v.includes("updated") && !v.includes("not applicable");
-  };
-
-  // ── Parse SIT workplan data ───────────────────────────────────────────────
-  const getSitWorkplanData = () => {
-    if (!wp) return {};
-    const result = {};
-    const normLvl3 = s => String(s || "").replace(/\s+/g, " ").trim().toLowerCase();
-    const extractSitNum = s => { const m = normLvl3(s).match(/test scenarios for sit\s*(\d+)/); return m ? m[1] : null; };
-    const matchTask = (taskName, patterns) => patterns.some(p => taskName.toLowerCase().includes(p.toLowerCase()));
-    const sitRows = {};
-    wp.allRows.forEach(r => {
-      const sitNum = extractSitNum(String(r["Activity Grp - Lvl 3"] || "").trim());
-      if (!sitNum || Number(r["Lvl"] || 0) !== 4) return;
-      const ch = r["Children"]; if (ch && Number(ch) !== 0) return;
-      if (!sitRows[sitNum]) sitRows[sitNum] = [];
-      sitRows[sitNum].push(r);
-    });
-    Object.entries(sitRows).forEach(([sitNum, rows]) => {
-      const getTask = (...p) => rows.find(r => matchTask(String(r["Task Name"] || ""), p));
-      const ti = r => r ? { finish: r["Finish"] || r["End Date"], start: r["Start"], status: String(r["Default Status"] || r["Status"] || "") } : null;
-      const sdRow = getTask("SD Consulting Internal Review", "sd consulting");
-      result[`SIT ${sitNum}`] = {
-        sdConsulting: ti(sdRow),
-        pmSd:    ti(getTask("PM SD Review")),
-        dt:      ti(getTask("DT Review")),
-        da:      ti(getTask("D&A Review")),
-        pmTalent:ti(getTask("PM Talent Review")),
-        signOff: ti(getTask("Sign Off", "Finalize and sign off")),
-        funcTechDue: (sdRow && sdRow["Start"]) ? sdRow["Start"] : null,
-      };
-    });
-    return result;
-  };
-  const sitWpData = getSitWorkplanData();
+  const cleanSt         = s => String(s || "").replace(/^\d+\.\s*/, "").trim();
+  const isReviewedFinal = s => cleanSt(s).toLowerCase() === "reviewed";
+  const isPendingReview = s => { const v = cleanSt(s).toLowerCase(); return v === "ready for review" || v === "updated, ready for review"; };
+  const isOpenFeedback  = s => cleanSt(s).toLowerCase().includes("reviewed, request for updates");
+  const isDraftExcluded = r => { const v = cleanSt(r[K.funcStatus] || "").toLowerCase(); return ["duplicate","not applicable","data mining","deprecated","deferred"].some(e => v.includes(e)); };
+  const draftedRows = data.activeRows.filter(r => !isDraftExcluded(r));
 
   const TEAMS = [
-    { key: K.funcStatus,  label: "Func",    wpKey: "funcTech",    isFunc: true  },
-    { key: K.techStatus,  label: "Tech",    wpKey: "funcTech",    isFunc: true  },
-    { key: K.sdStatus,    label: "SD",      wpKey: "sdConsulting",isFunc: false },
-    { key: K.dtStatus,    label: "DT",      wpKey: "dt",          isFunc: false },
-    { key: K.daStatus,    label: "D&A",     wpKey: "da",          isFunc: false },
-    { key: K.pmtStatus,   label: "PMT SD",  wpKey: "pmSd",        isFunc: false },
-    { key: K.pmStatus,    label: "PM",      wpKey: "pmTalent",    isFunc: false },
-  ].filter(t => t.key);
+    { id:"sd",   label:"SD Consulting", color:"#1d4ed8", statusKey:K.sdStatus,  reviewerKey:K.sdReviewer  },
+    { id:"pmsd", label:"PM SD Review",  color:"#7c3aed", statusKey:K.pmtStatus, reviewerKey:K.pmtReviewer },
+    { id:"dt",   label:"DT Review",     color:"#0891b2", statusKey:K.dtStatus,  reviewerKey:K.dtReviewer  },
+    { id:"da",   label:"D&A Review",    color:"#059669", statusKey:K.daStatus,  reviewerKey:K.daReviewer  },
+    { id:"pmt",  label:"PMT Talent",    color:"#d97706", statusKey:K.pmStatus,  reviewerKey:K.pmReviewer  },
+    { id:"func", label:"Functional",    color:"#dc2626", statusKey:K.funcStatus, reviewerKey:K.funcReviewer},
+    { id:"tech", label:"Technical",     color:"#16a34a", statusKey:K.techStatus, reviewerKey:K.techReviewer},
+  ].filter(t => t.statusKey);
 
-  // ── Build sub-process rows ────────────────────────────────────────────────
+  const allSits = Array.from(new Set(
+    draftedRows.flatMap(r => {
+      const v = String(r[K.sitPlan] || "").trim();
+      if (!v || v === "None" || v === "nan") return [];
+      return v.split(/\n|,/).map(s => s.trim()).filter(Boolean);
+    })
+  )).sort((a,b) => (parseInt(a.replace(/\D/g,""))||99) - (parseInt(b.replace(/\D/g,""))||99));
+
+  const activeSit = selSit && allSits.includes(selSit) ? selSit : (allSits[0] || "");
+
+  const reqBySubprocess = {};
+  const reqK = req?.keys;
+  if (req?.items && reqK) {
+    req.items.forEach(r => {
+      const sp = String(r[reqK.component] || r["Sub Process"] || "").trim();
+      if (sp) { if (!reqBySubprocess[sp]) reqBySubprocess[sp] = []; reqBySubprocess[sp].push(r); }
+    });
+  }
+  const isReqExcluded     = r => { const v = String(r[reqK?.derivedStatus]||"").toLowerCase(); return v.includes("deprecated")||v.includes("deferred"); };
+  const isTestScenarioReq = r => reqK?.testScriptType ? String(r[reqK.testScriptType]||"").toLowerCase().includes("test scenario") : false;
+
+  const sitRows = draftedRows.filter(r => {
+    const v = String(r[K.sitPlan] || "").trim();
+    return v.split(/\n|,/).map(s => s.trim()).some(s => s === activeSit);
+  });
   const subprocessMap = {};
-  data.activeRows.forEach(r => {
+  sitRows.forEach(r => {
     const sp = String(r[K.subprocess] || "Unknown").trim();
     if (!subprocessMap[sp]) subprocessMap[sp] = [];
     subprocessMap[sp].push(r);
   });
 
-  const getRowSits = rows => {
-    const sits = new Set();
-    rows.forEach(r => {
-      const v = String(r[K.sitPlan] || "").trim();
-      if (v && v !== "None" && v !== "nan")
-        v.split(/\n|,/).map(s => s.trim()).filter(Boolean).forEach(s => sits.add(s));
-    });
-    return Array.from(sits).sort((a,b) => (parseInt(a.replace(/\D/g,""))||99)-(parseInt(b.replace(/\D/g,""))||99));
-  };
-
-  const spList = Object.entries(subprocessMap).map(([sp, spRows]) => {
-    const sits = getRowSits(spRows);
-    const sortedSits = [...sits].sort((a,b)=>(parseInt(a.replace(/\D/g,""))||99)-(parseInt(b.replace(/\D/g,""))||99));
-    const primarySit = sortedSits[0] || "Unknown";
-    const getWpTask = wpKey => { for(const s of sortedSits){ const v=sitWpData[s]?.[wpKey]; if(v!=null)return v; } return null; };
-
-    const teamData = Object.fromEntries(TEAMS.map(t => {
-      const rc = spRows.filter(r => isReviewed(r[t.key])).length;
-      const pct = spRows.length > 0 ? rc/spRows.length : 0;
-      const dueDate = t.isFunc ? getWpTask("funcTechDue") : getWpTask(t.wpKey)?.finish;
-      const dLeft = dueDate != null ? daysUntil(dueDate) : null;
-      // RAG logic
-      const rag = rc === spRows.length && spRows.length > 0 ? "complete"
-                : (rc === 0 && (dLeft == null || dLeft > 7)) ? "notStarted"
-                : (pct >= 0.5 && (dLeft == null || dLeft > 7)) ? "onTrack"
-                : (pct < 0.5 && dLeft != null && dLeft <= 7) ? "atRisk"
-                : "onTrack";
-      return [t.key, { rc, pct, dueDate, dLeft, rag }];
+  const tableRows = Object.entries(subprocessMap).map(([sp, spRows]) => {
+    const reqRows = reqBySubprocess[sp] || [];
+    const userStories         = reqRows.filter(r => !isReqExcluded(r)).length;
+    const userStoriesRelevant = reqRows.filter(r => !isReqExcluded(r) && isTestScenarioReq(r)).length;
+    const drafted = spRows.length;
+    const openFeedbackCount = spRows.filter(r => TEAMS.some(t => isOpenFeedback(r[t.statusKey]))).length;
+    const teamStats = Object.fromEntries(TEAMS.map(t => {
+      const reviewed = spRows.filter(r => isReviewedFinal(r[t.statusKey])).length;
+      const pending  = spRows.filter(r => isPendingReview(r[t.statusKey])).length;
+      const reviewerName = spRows.map(r => String(r[t.reviewerKey]||"").trim()).find(Boolean) || "";
+      return [t.id, { reviewed, pending, reviewerName }];
     }));
-
-    const rags = TEAMS.map(t => teamData[t.key].rag);
-    const overallRag = rags.includes("atRisk") ? "atRisk"
-                     : rags.every(r => r === "complete") ? "complete"
-                     : rags.some(r => r === "onTrack") ? "onTrack"
-                     : "notStarted";
-
-    return { sp, spRows, sits, primarySit, total: spRows.length, estCases: Math.round(spRows.reduce((s,r)=>s+(Number(r[K.estCases])||0),0)), teamData, overallRag };
+    return { sp, drafted, userStories, userStoriesRelevant, openFeedbackCount, teamStats };
   });
 
-  // Group by primary SIT
-  const bySit = {};
-  spList.forEach(row => {
-    if (!bySit[row.primarySit]) bySit[row.primarySit] = [];
-    bySit[row.primarySit].push(row);
-  });
-  const sitGroups = Object.entries(bySit).sort((a,b)=>(parseInt(a[0].replace(/\D/g,""))||99)-(parseInt(b[0].replace(/\D/g,""))||99));
+  const totDrafted      = tableRows.reduce((s,r) => s+r.drafted, 0);
+  const totUserStories  = tableRows.reduce((s,r) => s+r.userStories, 0);
+  const totRelevant     = tableRows.reduce((s,r) => s+r.userStoriesRelevant, 0);
+  const totOpenFeedback = tableRows.reduce((s,r) => s+r.openFeedbackCount, 0);
+  const pctStr = (n,d) => d > 0 ? `${Math.round(n/d*100)}%` : "—";
 
-  const RAG_COLORS = {
-    complete:   { bg:"#dcfce7", col:"#166534", label:"Complete" },
-    onTrack:    { bg:"#fef9e7", col:"#b45309", label:"On Track" },
-    atRisk:     { bg:"#fee2e2", col:"#991b1b", label:"At Risk"  },
-    notStarted: { bg:"#f1f5f9", col:"#64748b", label:"Not Started" },
-  };
-
-  const isExpanded = sit => expandedSits[sit] !== false;
-  const toggleSit = sit => setExpandedSits(p => ({...p, [sit]: !isExpanded(sit)}));
-
-  // KPIs
-  const kpiFuncRev = data.activeRows.filter(r => isReviewed(r[K.funcStatus])).length;
-  const kpiReady   = data.activeRows.filter(r => { const s=(String(r[K.funcStatus]||"").replace(/^\d+\.\s*/,"")).toLowerCase(); return s.includes("ready")||s.includes("updated"); }).length;
-  const kpiNotAppl = data.activeRows.filter(r => String(r[K.funcStatus]||"").replace(/^\d+\.\s*/,"").toLowerCase().includes("not applicable")).length;
-  const totCases   = Math.round(spList.reduce((s,r)=>s+r.estCases,0));
-
-  const ScenarioModal = ({ title, rows: mRows, onClose }) => (
+  const ScenarioModal = ({ title, rows:mRows, onClose }) => (
     <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center" }} onClick={onClose}>
-      <div style={{ background:C.white, borderRadius:10, width:"98%", maxWidth:1200, maxHeight:"90vh", display:"flex", flexDirection:"column", boxShadow:"0 24px 60px rgba(0,0,0,0.35)" }} onClick={e=>e.stopPropagation()}>
+      <div style={{ background:C.white, borderRadius:10, width:"98%", maxWidth:1400, maxHeight:"90vh", display:"flex", flexDirection:"column", boxShadow:"0 24px 60px rgba(0,0,0,0.35)" }} onClick={e=>e.stopPropagation()}>
         <div style={{ background:C.headerBg, padding:"12px 20px", borderRadius:"10px 10px 0 0", display:"flex", justifyContent:"space-between", alignItems:"center", flexShrink:0 }}>
-          <div style={{ color:"#fff", fontWeight:700, fontSize:13 }}>{title} <span style={{ opacity:.6, fontWeight:400, marginLeft:8 }}>({mRows.length})</span></div>
+          <span style={{ color:"#fff", fontWeight:700, fontSize:13 }}>{title} <span style={{ opacity:.6, fontWeight:400 }}>({mRows.length} scenarios)</span></span>
           <button onClick={onClose} style={{ background:"rgba(255,255,255,0.15)", border:"none", color:"#fff", borderRadius:5, padding:"5px 14px", cursor:"pointer", fontSize:13, fontWeight:600 }}>✕</button>
         </div>
         <div style={{ overflowY:"auto", flex:1 }}>
           <table style={{ width:"100%", borderCollapse:"collapse", fontSize:11 }}>
             <thead style={{ position:"sticky", top:0, background:"#f0f4f8", zIndex:2 }}>
               <tr style={{ borderBottom:`2px solid ${C.border}` }}>
-                {["ID","Scenario","Est. Cases","Sprint","SIT Plan","Func","Tech","SD","DT","D&A","PMT SD","PM"].map(h => (
-                  <th key={h} style={{ padding:"8px 10px", textAlign:h==="ID"||h==="Scenario"?"left":"center", color:C.muted, fontWeight:700, whiteSpace:"nowrap" }}>{h}</th>
+                {["ID","Scenario","Est. Cases","Sprint","SIT Plan",...TEAMS.map(t=>t.label)].map(h => (
+                  <th key={h} style={{ padding:"8px 10px", textAlign:h==="Est. Cases"?"center":"left", color:C.muted, fontWeight:700, whiteSpace:"nowrap" }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -4784,18 +4735,18 @@ function TestScenariosTab({ data, wp }) {
                   <td style={{ padding:"7px 10px", color:C.muted, fontWeight:600, whiteSpace:"nowrap" }}>{String(r[K.id]||"—")}</td>
                   <td style={{ padding:"7px 10px", color:C.text, maxWidth:260, wordBreak:"break-word" }}>{String(r[K.name]||"—")}</td>
                   <td style={{ padding:"7px 10px", textAlign:"center", fontWeight:700, color:C.navyLight }}>{r[K.estCases]||"—"}</td>
-                  <td style={{ padding:"7px 10px", textAlign:"center", color:C.muted, whiteSpace:"nowrap" }}>
+                  <td style={{ padding:"7px 10px", color:C.muted, whiteSpace:"nowrap" }}>
                     {String(r[K.sprintPlan]||"—").split("\n").map(s=>s.replace(/^\d+\.\s*/,"").match(/s\d+/i)?.[0]||"").filter(Boolean).join(", ")||"—"}
                   </td>
-                  <td style={{ padding:"7px 10px", textAlign:"center", color:C.muted }}>{String(r[K.sitPlan]||"—").replace(/^\d+\.\s*/,"")}</td>
+                  <td style={{ padding:"7px 10px", color:C.muted }}>{String(r[K.sitPlan]||"—")}</td>
                   {TEAMS.map(t => {
-                    const s = String(r[t.key]||"").replace(/^\d+\.\s*/,"").trim() || null;
-                    const rv = isReviewed(r[t.key]);
-                    const col = rv ? "#166534" : "#64748b";
-                    const bg  = rv ? "#dcfce7"  : "#f1f5f9";
-                    return <td key={t.key} style={{ padding:"7px 8px", textAlign:"center" }}>
-                      {s ? <span style={{ background:bg, color:col, borderRadius:4, padding:"2px 6px", fontSize:10, fontWeight:600, whiteSpace:"nowrap" }}>{s}</span>
-                         : <span style={{ color:C.muted }}>—</span>}
+                    const sv = cleanSt(r[t.statusKey]);
+                    const isRev = isReviewedFinal(r[t.statusKey]), isPend = isPendingReview(r[t.statusKey]), isOpen = isOpenFeedback(r[t.statusKey]);
+                    const bg = isRev?"#dcfce7":isPend?"#fef9e7":isOpen?"#fee2e2":"#f1f5f9";
+                    const col= isRev?"#166534":isPend?"#b45309":isOpen?"#991b1b":"#64748b";
+                    return <td key={t.id} style={{ padding:"7px 8px" }}>
+                      {sv ? <span style={{ background:bg, color:col, borderRadius:4, padding:"2px 6px", fontSize:10, fontWeight:600, whiteSpace:"nowrap" }}>{sv}</span>
+                           : <span style={{ color:C.muted }}>—</span>}
                     </td>;
                   })}
                 </tr>
@@ -4810,162 +4761,135 @@ function TestScenariosTab({ data, wp }) {
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
 
-      {/* KPI tiles */}
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(130px,1fr))", gap:10 }}>
-        {[
-          ["Total Scenarios", data.total,    C.navyLight, () => setModal({ title:"All Scenarios", rows:data.activeRows })],
-          ["Est. Test Cases", totCases,       C.navyLight, null],
-          ["Func Reviewed",   kpiFuncRev,    "#166534",   () => setModal({ title:"Functionally Reviewed", rows:data.activeRows.filter(r=>isReviewed(r[K.funcStatus])) })],
-          ["Ready for Review",kpiReady,      C.gold,      () => setModal({ title:"Ready for Review", rows:data.activeRows.filter(r=>{ const s=String(r[K.funcStatus]||"").replace(/^\d+\.\s*/,"").toLowerCase(); return s.includes("ready")||s.includes("updated"); }) })],
-          ["Not Applicable",  kpiNotAppl,    "#6b21a8",   () => setModal({ title:"Not Applicable", rows:data.activeRows.filter(r=>String(r[K.funcStatus]||"").replace(/^\d+\.\s*/,"").toLowerCase().includes("not applicable")) })],
-          ["Sub Processes",   spList.length, C.navyLight, null],
-        ].map(([lbl, val, col, onClick]) => (
-          <div key={lbl} onClick={onClick}
-            onMouseEnter={e=>{ if(onClick) e.currentTarget.style.boxShadow="0 3px 10px rgba(0,0,0,0.10)"; }}
-            onMouseLeave={e=>{ e.currentTarget.style.boxShadow="none"; }}
-            style={{ background:C.white, border:`1px solid ${C.border}`, borderTop:`3px solid ${col}`, borderRadius:7, padding:"10px 12px", cursor:onClick?"pointer":"default" }}>
-            <div style={{ fontSize:9, color:C.muted, textTransform:"uppercase", letterSpacing:"0.07em", marginBottom:3 }}>{lbl}</div>
-            <div style={{ fontSize:22, fontWeight:800, color:col, lineHeight:1 }}>{val}</div>
-            {onClick && <div style={{ fontSize:9, color:C.accent, marginTop:3 }}>Details →</div>}
-          </div>
-        ))}
+      {allSits.length > 0 && (
+        <div style={{ display:"flex", gap:6, flexWrap:"wrap", borderBottom:`2px solid ${C.border}`, paddingBottom:10 }}>
+          {allSits.map(sit => (
+            <button key={sit} onClick={() => setSelSit(sit)}
+              style={{ padding:"6px 18px", border:`2px solid ${sit===activeSit?C.navyLight:C.border}`,
+                background:sit===activeSit?C.navyLight:"#fff", color:sit===activeSit?"#fff":C.text,
+                borderRadius:6, fontWeight:700, fontSize:12, cursor:"pointer", transition:"all .12s" }}>
+              {sit}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div style={{ textAlign:"center" }}>
+        <div style={{ display:"inline-block", background:C.navy, color:"#fff", fontWeight:800, fontSize:15, borderRadius:8, padding:"8px 28px" }}>
+          Test Scenario Review — {activeSit}
+        </div>
       </div>
 
-      {/* Legend */}
-      <div style={{ display:"flex", gap:14, flexWrap:"wrap", alignItems:"center", padding:"8px 14px", background:C.white, border:`1px solid ${C.border}`, borderRadius:7, fontSize:10 }}>
-        <span style={{ color:C.muted, fontWeight:600 }}>Review status:</span>
-        {Object.entries(RAG_COLORS).map(([k,{bg,col,label}]) => (
-          <span key={k} style={{ display:"flex", alignItems:"center", gap:5 }}>
-            <span style={{ width:18, height:18, borderRadius:4, background:bg, border:`1px solid ${col}30`, display:"inline-flex", alignItems:"center", justifyContent:"center" }}>
-              <span style={{ width:8, height:8, borderRadius:2, background:col, display:"inline-block" }} />
-            </span>
-            <span style={{ color:C.text }}>{label}</span>
-          </span>
-        ))}
-        {wp && <span style={{ color:C.muted, marginLeft:8 }}>Date shown = target from Workplan · Func &amp; Tech due = SD Consulting start</span>}
-      </div>
-
-      {/* Grouped by SIT */}
-      {sitGroups.map(([sit, rows]) => {
-        const sitData = sitWpData[sit];
-        const signOffDate = sitData?.signOff?.finish;
-        const signOffDl = signOffDate ? daysUntil(signOffDate) : null;
-        const signOffCol = signOffDl == null ? C.muted : signOffDl < 0 ? C.delayed : signOffDl <= 14 ? C.gold : "#166534";
-        const sitRags = rows.map(r => r.overallRag);
-        const sitOverall = sitRags.includes("atRisk") ? "atRisk"
-                         : sitRags.every(r => r === "complete") ? "complete"
-                         : sitRags.some(r => r === "onTrack") ? "onTrack"
-                         : "notStarted";
-        const sitRagC = RAG_COLORS[sitOverall];
-        const open = isExpanded(sit);
-        const sitTotScenarios = rows.reduce((s,r)=>s+r.total,0);
-        const sitTotCases = rows.reduce((s,r)=>s+r.estCases,0);
-
-        return (
-          <Card key={sit} style={{ padding:0 }}>
-            {/* SIT header — clickable to expand/collapse */}
-            <div onClick={()=>toggleSit(sit)}
-              style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"11px 16px", cursor:"pointer", background:"#f8fafc", borderRadius:open?"10px 10px 0 0":10, borderBottom: open?`1px solid ${C.border}`:"none" }}
-              onMouseEnter={e=>e.currentTarget.style.background="#eef4ff"}
-              onMouseLeave={e=>e.currentTarget.style.background="#f8fafc"}>
-              <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-                <span style={{ fontSize:14, userSelect:"none", color:C.muted }}>{open?"▼":"▶"}</span>
-                <span style={{ fontWeight:700, color:C.navy, fontSize:13 }}>{sit}</span>
-                <span style={{ background:C.navyLight+"20", color:C.navyLight, borderRadius:10, padding:"2px 9px", fontSize:10, fontWeight:700 }}>{rows.length} sub processes · {sitTotScenarios} scenarios · {sitTotCases} est. cases</span>
-                {signOffDate && (
-                  <span style={{ fontSize:11, color:signOffCol, fontWeight:600 }}>
-                    Sign-off: {fmtDate(signOffDate)}{signOffDl!=null ? ` (${signOffDl<0?Math.abs(signOffDl)+"d over":signOffDl+"d"})` : ""}
-                  </span>
-                )}
+      <div style={{ display:"grid", gridTemplateColumns:`repeat(${Math.min(TEAMS.length,7)},1fr)`, gap:8 }}>
+        {TEAMS.map(t => {
+          const rev  = tableRows.reduce((s,r) => s+(r.teamStats[t.id]?.reviewed||0), 0);
+          const pend = tableRows.reduce((s,r) => s+(r.teamStats[t.id]?.pending||0), 0);
+          const pct  = totDrafted > 0 ? Math.round(rev/totDrafted*100) : 0;
+          return (
+            <div key={t.id} style={{ background:C.white, border:`1px solid ${C.border}`, borderTop:`3px solid ${t.color}`, borderRadius:8, padding:"10px 12px" }}>
+              <div style={{ fontSize:9, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.07em", marginBottom:6 }}>{t.label}</div>
+              <div style={{ display:"flex", flexDirection:"column", gap:3 }}>
+                <span style={{ background:"#dcfce7", color:"#166534", borderRadius:4, padding:"2px 8px", fontSize:11, fontWeight:700, width:"fit-content" }}>✓ {rev} ({pct}%)</span>
+                {pend > 0 && <span style={{ background:"#fef9e7", color:"#b45309", borderRadius:4, padding:"2px 8px", fontSize:10, fontWeight:600, width:"fit-content" }}>⏳ {pend} pending</span>}
               </div>
-              <span style={{ background:sitRagC.bg, color:sitRagC.col, border:`1px solid ${sitRagC.col}40`, borderRadius:4, padding:"3px 10px", fontSize:10, fontWeight:700 }}>{sitRagC.label}</span>
             </div>
+          );
+        })}
+      </div>
 
-            {open && (
-              <div style={{ overflowX:"auto" }}>
-                <table style={{ width:"100%", borderCollapse:"collapse", fontSize:11 }}>
-                  <thead>
-                    <tr style={{ background:"#162f50" }}>
-                      <th style={{ padding:"8px 12px", textAlign:"left", color:"#fff", fontWeight:700, fontSize:11, minWidth:170, borderRight:`1px solid rgba(255,255,255,0.1)` }}>Sub Process</th>
-                      <th style={{ padding:"8px 10px", textAlign:"center", color:"#a8d8ff", fontWeight:700, fontSize:10, borderRight:`1px solid rgba(255,255,255,0.1)` }}>Scenarios</th>
-                      {TEAMS.map(t => (
-                        <th key={t.key} style={{ padding:"8px 8px", textAlign:"center", color:"#c4f1c4", fontWeight:700, fontSize:10, borderRight:`1px solid rgba(255,255,255,0.1)`, minWidth:80 }}>{t.label}</th>
-                      ))}
-                      <th style={{ padding:"8px 10px", textAlign:"center", color:"#fff", fontWeight:700, fontSize:10 }}>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {/* SIT total row */}
-                    <tr style={{ background:"#1a3a5c", borderBottom:`1px solid rgba(255,255,255,0.1)` }}>
-                      <td style={{ padding:"7px 12px", color:"#fff", fontWeight:800, fontSize:11 }}>TOTAL</td>
-                      <td style={{ padding:"7px 10px", textAlign:"center", color:"#a8d8ff", fontWeight:800 }}>{sitTotScenarios}</td>
-                      {TEAMS.map(t => {
-                        const tot = rows.reduce((s,r)=>s+(r.teamData[t.key]?.rc||0),0);
-                        const allTot = rows.reduce((s,r)=>s+r.total,0);
-                        const allRev = allTot > 0 && tot === allTot;
-                        return <td key={t.key} style={{ padding:"7px 8px", textAlign:"center", color: allRev ? "#86efac" : "#c4f1c4", fontWeight:800 }}>{tot}</td>;
-                      })}
-                      <td style={{ padding:"7px 10px", textAlign:"center", color:"rgba(255,255,255,0.3)" }}>—</td>
-                    </tr>
+      <Card style={{ padding:0 }}>
+        <div style={{ padding:"12px 16px 8px", borderBottom:`1px solid ${C.border}`, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+          <span style={{ fontWeight:700, fontSize:13, color:C.navy }}>Scenario Review Status — {activeSit}</span>
+          <span style={{ fontSize:11, color:C.muted }}>{tableRows.length} sub-processes · {totDrafted} scenarios</span>
+        </div>
+        <div style={{ overflowX:"auto" }}>
+          <table style={{ width:"100%", borderCollapse:"collapse", fontSize:11 }}>
+            <thead>
+              <tr style={{ background:C.navy }}>
+                <th style={{ padding:"8px 12px", textAlign:"left", color:"#fff", fontWeight:700, fontSize:10, minWidth:170, position:"sticky", left:0, background:C.navy, borderRight:`1px solid rgba(255,255,255,0.15)`, zIndex:1 }}>SubProcess / Component</th>
+                <th style={{ padding:"8px 8px", textAlign:"center", color:"#a8d8ff", fontWeight:700, fontSize:10, borderRight:`1px solid rgba(255,255,255,0.1)`, minWidth:65 }}>User Stories</th>
+                <th style={{ padding:"8px 8px", textAlign:"center", color:"#a8d8ff", fontWeight:700, fontSize:10, borderRight:`1px solid rgba(255,255,255,0.1)`, minWidth:80 }}>Relevant for Scenarios</th>
+                <th style={{ padding:"8px 8px", textAlign:"center", color:"#a8d8ff", fontWeight:700, fontSize:10, borderRight:`1px solid rgba(255,255,255,0.1)`, minWidth:60 }}>Drafted</th>
+                <th style={{ padding:"8px 8px", textAlign:"center", color:"#fcd34d", fontWeight:700, fontSize:10, borderRight:`1px solid rgba(255,255,255,0.15)`, minWidth:65 }}>Open Feedback</th>
+                {TEAMS.flatMap(t => [
+                  <th key={t.id+"-s"} style={{ padding:"8px 8px", textAlign:"center", color:"#c4f1c4", fontWeight:700, fontSize:10, borderRight:`1px solid rgba(255,255,255,0.08)`, minWidth:120 }}>{t.label}</th>,
+                  <th key={t.id+"-r"} style={{ padding:"8px 8px", textAlign:"left", color:"rgba(196,241,196,0.7)", fontWeight:600, fontSize:9, borderRight:`1px solid rgba(255,255,255,0.15)`, minWidth:85 }}>Reviewer</th>,
+                ])}
+              </tr>
+            </thead>
+            <tbody>
+              {tableRows.length === 0 && (
+                <tr><td colSpan={5+TEAMS.length*2} style={{ padding:24, textAlign:"center", color:C.muted }}>No scenarios found for {activeSit}</td></tr>
+              )}
+              {tableRows.map((row, i) => (
+                <tr key={row.sp}
+                  style={{ background:i%2===0?C.white:"#f7f9fc", borderBottom:`1px solid ${C.border}`, cursor:"pointer", verticalAlign:"top" }}
+                  onClick={() => setSpModal({ title:row.sp, rows:subprocessMap[row.sp]||[] })}
+                  onMouseEnter={e => e.currentTarget.style.background="#eef4ff"}
+                  onMouseLeave={e => e.currentTarget.style.background=i%2===0?C.white:"#f7f9fc"}>
+                  <td style={{ padding:"9px 12px", fontWeight:600, color:C.text, position:"sticky", left:0, background:"inherit", borderRight:`1px solid ${C.border}` }}>
+                    <span style={{ display:"flex", alignItems:"center", gap:6 }}>
+                      <span style={{ width:3, height:14, background:C.navyLight, borderRadius:2, flexShrink:0 }} />
+                      {row.sp}
+                    </span>
+                  </td>
+                  <td style={{ padding:"9px 8px", textAlign:"center", color:C.navyLight, fontWeight:700 }}>{row.userStories||"—"}</td>
+                  <td style={{ padding:"9px 8px", textAlign:"center", color:C.navyLight, fontWeight:700 }}>{row.userStoriesRelevant||"—"}</td>
+                  <td style={{ padding:"9px 8px", textAlign:"center", fontWeight:700, color:C.text }}>{row.drafted}</td>
+                  <td style={{ padding:"9px 8px", textAlign:"center" }}>
+                    {row.openFeedbackCount > 0
+                      ? <span style={{ background:"#fee2e2", color:"#991b1b", borderRadius:4, padding:"2px 8px", fontSize:10, fontWeight:700 }}>{row.openFeedbackCount}</span>
+                      : <span style={{ color:C.muted }}>—</span>}
+                  </td>
+                  {TEAMS.flatMap(t => {
+                    const ts = row.teamStats[t.id] || {};
+                    const rev = ts.reviewed||0, pend = ts.pending||0;
+                    return [
+                      <td key={t.id+"-s"} style={{ padding:"9px 8px", verticalAlign:"top" }}>
+                        <div style={{ display:"flex", flexDirection:"column", gap:2 }}>
+                          <span style={{ color:"#166534", fontSize:10, fontWeight:700, whiteSpace:"nowrap" }}>✓ Reviewed-{rev}({pctStr(rev,row.drafted)})</span>
+                          {pend > 0 && <span style={{ color:"#b45309", fontSize:10, fontWeight:600, whiteSpace:"nowrap" }}>⏳ Pending-{pend}({pctStr(pend,row.drafted)})</span>}
+                        </div>
+                      </td>,
+                      <td key={t.id+"-r"} style={{ padding:"9px 8px", color:C.muted, fontSize:10 }}>{ts.reviewerName||"—"}</td>,
+                    ];
+                  })}
+                </tr>
+              ))}
+              {tableRows.length > 0 && (
+                <tr style={{ background:"#eef4ff", borderTop:`2px solid ${C.navyLight}`, fontWeight:700 }}>
+                  <td style={{ padding:"9px 12px", color:C.navy, fontWeight:800, position:"sticky", left:0, background:"#eef4ff", borderRight:`1px solid ${C.border}` }}>TOTAL</td>
+                  <td style={{ padding:"9px 8px", textAlign:"center", color:C.navyLight, fontWeight:800 }}>{totUserStories||"—"}</td>
+                  <td style={{ padding:"9px 8px", textAlign:"center", color:C.navyLight, fontWeight:800 }}>{totRelevant||"—"}</td>
+                  <td style={{ padding:"9px 8px", textAlign:"center", fontWeight:800 }}>{totDrafted}</td>
+                  <td style={{ padding:"9px 8px", textAlign:"center" }}>
+                    {totOpenFeedback>0 ? <span style={{ background:"#fee2e2", color:"#991b1b", borderRadius:4, padding:"2px 8px", fontSize:10, fontWeight:700 }}>{totOpenFeedback}</span> : "—"}
+                  </td>
+                  {TEAMS.flatMap(t => {
+                    const rev  = tableRows.reduce((s,r) => s+(r.teamStats[t.id]?.reviewed||0), 0);
+                    const pend = tableRows.reduce((s,r) => s+(r.teamStats[t.id]?.pending||0), 0);
+                    return [
+                      <td key={t.id+"-s"} style={{ padding:"9px 8px" }}>
+                        <div style={{ display:"flex", flexDirection:"column", gap:2 }}>
+                          <span style={{ color:"#166534", fontSize:10, fontWeight:800, whiteSpace:"nowrap" }}>✓ Reviewed-{rev}({pctStr(rev,totDrafted)})</span>
+                          {pend>0&&<span style={{ color:"#b45309", fontSize:10, fontWeight:700, whiteSpace:"nowrap" }}>⏳ Pending-{pend}({pctStr(pend,totDrafted)})</span>}
+                        </div>
+                      </td>,
+                      <td key={t.id+"-r"} style={{ padding:"9px 8px" }} />,
+                    ];
+                  })}
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Card>
 
-                    {/* Sub process rows */}
-                    {rows.map((row, i) => {
-                      const ragC = RAG_COLORS[row.overallRag];
-                      return (
-                        <tr key={row.sp}
-                          style={{ background:i%2===0?C.white:"#f7f9fc", borderBottom:`1px solid ${C.border}`, cursor:"pointer" }}
-                          onClick={()=>setModal({ title:row.sp, rows:row.spRows })}
-                          onMouseEnter={e=>e.currentTarget.style.background="#eef4ff"}
-                          onMouseLeave={e=>e.currentTarget.style.background=i%2===0?C.white:"#f7f9fc"}>
-
-                          {/* Name */}
-                          <td style={{ padding:"9px 12px", color:C.text, fontWeight:600, fontSize:11 }}>
-                            <span style={{ display:"flex", alignItems:"center", gap:6 }}>
-                              <span style={{ width:3, height:14, background:ragC.col, borderRadius:2, flexShrink:0 }} />
-                              {row.sp}
-                            </span>
-                          </td>
-
-                          {/* Scenario count */}
-                          <td style={{ padding:"9px 10px", textAlign:"center", color:C.text, fontWeight:700 }}>{row.total}</td>
-
-                          {/* Heatmap cells per team */}
-                          {TEAMS.map(t => {
-                            const { rc, rag, dueDate } = row.teamData[t.key];
-                            const rc2 = RAG_COLORS[rag];
-                            const dl = dueDate != null ? daysUntil(dueDate) : null;
-                            const dateStr = dueDate != null ? fmtDate(dueDate) : null;
-                            return (
-                              <td key={t.key} style={{ padding:"6px 4px", textAlign:"center" }}>
-                                <div style={{ display:"inline-flex", flexDirection:"column", alignItems:"center", gap:2,
-                                  background:rc2.bg, borderRadius:6, padding:"4px 8px", minWidth:52,
-                                  border:`1px solid ${rc2.col}30` }}>
-                                  <span style={{ fontWeight:800, fontSize:14, color:rc2.col, lineHeight:1 }}>{rc}</span>
-                                  {dateStr && <span style={{ fontSize:9, color:rc2.col, opacity:.75, whiteSpace:"nowrap" }}>{dateStr}</span>}
-                                </div>
-                              </td>
-                            );
-                          })}
-
-                          {/* Status pill */}
-                          <td style={{ padding:"9px 10px", textAlign:"center" }}>
-                            <span style={{ background:ragC.bg, color:ragC.col, border:`1px solid ${ragC.col}40`, borderRadius:4, padding:"2px 8px", fontSize:10, fontWeight:700 }}>{ragC.label}</span>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </Card>
-        );
-      })}
-
-      {modal && <ScenarioModal title={modal.title} rows={modal.rows} onClose={()=>setModal(null)} />}
+      {spModal && <ScenarioModal title={spModal.title} rows={spModal.rows} onClose={() => setSpModal(null)} />}
     </div>
   );
 }
+
 
 
 // ─── SCORECARD CLASSIC TAB (dark navy header, refined) ───────────────────────
