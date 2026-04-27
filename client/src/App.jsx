@@ -407,6 +407,28 @@ function parseTestScenarios(sheets) {
     pmReviewer:   ks.find(k => k === "Reviewer (PM)") || ks.find(k => /\breviewer\b.*\bpm\b(?!t)/i.test(k)),
     toBeDeleted:    ks.find(k => k === "To be deleted") || ks.find(k => /to.?be.?deleted/i.test(k)),
     dupDataMiningNA: ks.find(k => k === "Duplicate, Data Mining and Not Applicable") || ks.find(k => /duplicate.*data.?mining|dup.*data.*mining/i.test(k)),
+    // Common scenario detail columns
+    additionalDetails:    ks.find(k => k === "Additional Details") || ks.find(k => /additional.?details/i.test(k)),
+    applicableBusiness:   ks.find(k => k === "Applicable Business") || ks.find(k => /applicable.?business/i.test(k)),
+    applicableExperience: ks.find(k => k === "Applicable Experience") || ks.find(k => /applicable.?experience/i.test(k)),
+    applicableRegion:     ks.find(k => k === "Applicable Region") || ks.find(k => /applicable.?region/i.test(k)),
+    similarUSIds:         ks.find(k => k === "Similar User Story IDs for Other Experiences") || ks.find(k => /similar.*user.?story.*id/i.test(k)),
+    similarUSData:        ks.find(k => k === "Similar User Story Data") || ks.find(k => /similar.*user.?story.*data/i.test(k)),
+    // Per-team feedback & due date
+    sdFeedback:   ks.find(k => k === "Feedback (Consulting SD)")  || ks.find(k => /feedback.*consulting/i.test(k)),
+    sdDueDate:    ks.find(k => k === "Due Date (Consulting SD)")  || ks.find(k => /due.?date.*consulting/i.test(k)),
+    pmtFeedback:  ks.find(k => k === "Feedback (PMT SD)")         || ks.find(k => /feedback.*pmt/i.test(k)),
+    pmtDueDate:   ks.find(k => k === "Due Date (PMT SD)")         || ks.find(k => /due.?date.*pmt/i.test(k)),
+    dtFeedback:   ks.find(k => k === "Feedback (DT)")             || ks.find(k => /feedback.*\bdt\b/i.test(k)),
+    dtDueDate:    ks.find(k => k === "Due Date (DT)")             || ks.find(k => /due.?date.*\bdt\b/i.test(k)),
+    daFeedback:   ks.find(k => k === "Feedback (D&A)")            || ks.find(k => /feedback.*d.?&?a/i.test(k)),
+    daDueDate:    ks.find(k => k === "Due Date (D&A)")            || ks.find(k => /due.?date.*d.?&?a/i.test(k)),
+    pmFeedback:   ks.find(k => k === "Feedback (PM)")             || ks.find(k => /feedback.*\bpm\b(?!t)/i.test(k)),
+    pmDueDate:    ks.find(k => k === "Due Date (PM)")             || ks.find(k => /due.?date.*\bpm\b(?!t)/i.test(k)),
+    funcFeedback: ks.find(k => k === "Feedback (Functional)")     || ks.find(k => /feedback.*functional/i.test(k)),
+    funcDueDate:  ks.find(k => k === "Due Date (Functional)")     || ks.find(k => /due.?date.*functional/i.test(k)),
+    techFeedback: ks.find(k => k === "Feedback (Technical)")      || ks.find(k => /feedback.*technical/i.test(k)),
+    techDueDate:  ks.find(k => k === "Due Date (Technical)")      || ks.find(k => /due.?date.*technical/i.test(k)),
   };
 
   // Exclude deprecated / deferred / duplicate
@@ -4655,14 +4677,24 @@ function TestScenariosTab({ data, wp, req }) {
   const draftedRows = data.activeRows.filter(r => !isDraftExcluded(r));
 
   const TEAMS = [
-    { id:"sd",   label:"SD Consulting", color:"#1d4ed8", statusKey:K.sdStatus,  reviewerKey:K.sdReviewer  },
-    { id:"pmsd", label:"PM SD Review",  color:"#7c3aed", statusKey:K.pmtStatus, reviewerKey:K.pmtReviewer },
-    { id:"dt",   label:"DT Review",     color:"#0891b2", statusKey:K.dtStatus,  reviewerKey:K.dtReviewer  },
-    { id:"da",   label:"D&A Review",    color:"#059669", statusKey:K.daStatus,  reviewerKey:K.daReviewer  },
-    { id:"pmt",  label:"PMT Talent",    color:"#d97706", statusKey:K.pmStatus,  reviewerKey:K.pmReviewer  },
-    { id:"func", label:"Functional",    color:"#dc2626", statusKey:K.funcStatus, reviewerKey:K.funcReviewer},
-    { id:"tech", label:"Technical",     color:"#16a34a", statusKey:K.techStatus, reviewerKey:K.techReviewer},
+    { id:"sd",   label:"SD Consulting", color:"#1d4ed8", statusKey:K.sdStatus,   reviewerKey:K.sdReviewer,   feedbackKey:K.sdFeedback,   dueDateKey:K.sdDueDate   },
+    { id:"pmsd", label:"PM SD Review",  color:"#7c3aed", statusKey:K.pmtStatus,  reviewerKey:K.pmtReviewer,  feedbackKey:K.pmtFeedback,  dueDateKey:K.pmtDueDate  },
+    { id:"dt",   label:"DT Review",     color:"#0891b2", statusKey:K.dtStatus,   reviewerKey:K.dtReviewer,   feedbackKey:K.dtFeedback,   dueDateKey:K.dtDueDate   },
+    { id:"da",   label:"D&A Review",    color:"#059669", statusKey:K.daStatus,   reviewerKey:K.daReviewer,   feedbackKey:K.daFeedback,   dueDateKey:K.daDueDate   },
+    { id:"pmt",  label:"PMT Talent",    color:"#d97706", statusKey:K.pmStatus,   reviewerKey:K.pmReviewer,   feedbackKey:K.pmFeedback,   dueDateKey:K.pmDueDate   },
+    { id:"func", label:"Functional",    color:"#dc2626", statusKey:K.funcStatus, reviewerKey:K.funcReviewer, feedbackKey:K.funcFeedback, dueDateKey:K.funcDueDate },
+    { id:"tech", label:"Technical",     color:"#16a34a", statusKey:K.techStatus, reviewerKey:K.techReviewer, feedbackKey:K.techFeedback, dueDateKey:K.techDueDate },
   ].filter(t => t.statusKey);
+
+  const PRIOR_MAP = {
+    sd:   [],
+    pmsd: ["sd"],
+    dt:   ["pmsd"],
+    da:   ["pmsd", "dt"],
+    pmt:  ["pmsd", "dt", "da"],
+    func: [],
+    tech: [],
+  };
 
   const allSits = Array.from(new Set(
     draftedRows.flatMap(r => {
@@ -4716,6 +4748,89 @@ function TestScenariosTab({ data, wp, req }) {
   const totRelevant     = tableRows.reduce((s,r) => s+r.userStoriesRelevant, 0);
   const totOpenFeedback = tableRows.reduce((s,r) => s+r.openFeedbackCount, 0);
   const pctStr = (n,d) => d > 0 ? `${Math.round(n/d*100)}%` : "—";
+
+  const stPill = (r, t) => {
+    const sv = cleanSt(r[t.statusKey]);
+    if (!sv) return <span style={{ color:C.muted }}>—</span>;
+    const isRev = isReviewedFinal(r[t.statusKey]), isPend = isPendingReview(r[t.statusKey]), isOpen = isOpenFeedback(r[t.statusKey]);
+    const bg  = isRev?"#dcfce7":isPend?"#fef3c7":isOpen?"#fee2e2":"#f1f5f9";
+    const col = isRev?"#166534":isPend?"#92400e":isOpen?"#991b1b":"#64748b";
+    return <span style={{ background:bg, color:col, borderRadius:4, padding:"2px 6px", fontSize:10, fontWeight:600, whiteSpace:"nowrap" }}>{sv}</span>;
+  };
+
+  const TeamDrillModal = ({ title, rows:mRows, teamId:tid, onClose }) => {
+    const curTeam    = TEAMS.find(t => t.id === tid);
+    const priorTeams = (PRIOR_MAP[tid] || []).map(id => TEAMS.find(t => t.id === id)).filter(Boolean);
+    const curCols    = curTeam ? (curTeam.dueDateKey ? 4 : 3) : 0;
+    const thBase = { padding:"7px 8px", textAlign:"left", fontWeight:700, fontSize:10, whiteSpace:"nowrap", color:C.muted };
+    const tdBase = { padding:"7px 8px", verticalAlign:"top", fontSize:11 };
+    return (
+      <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center" }} onClick={onClose}>
+        <div style={{ background:C.white, borderRadius:10, width:"99%", maxWidth:1700, maxHeight:"92vh", display:"flex", flexDirection:"column", boxShadow:"0 24px 60px rgba(0,0,0,0.35)" }} onClick={e=>e.stopPropagation()}>
+          <div style={{ background:C.headerBg, padding:"12px 20px", borderRadius:"10px 10px 0 0", display:"flex", justifyContent:"space-between", alignItems:"center", flexShrink:0 }}>
+            <span style={{ color:"#fff", fontWeight:700, fontSize:13 }}>{title} <span style={{ opacity:.6, fontWeight:400 }}>({mRows.length} scenarios)</span></span>
+            <button onClick={onClose} style={{ background:"rgba(255,255,255,0.15)", border:"none", color:"#fff", borderRadius:5, padding:"5px 14px", cursor:"pointer", fontSize:13, fontWeight:600 }}>✕</button>
+          </div>
+          <div style={{ overflowY:"auto", overflowX:"auto", flex:1 }}>
+            <table style={{ width:"100%", borderCollapse:"collapse", fontSize:11 }}>
+              <thead style={{ position:"sticky", top:0, zIndex:2 }}>
+                <tr>
+                  <th colSpan={10} style={{ padding:"5px 10px", textAlign:"center", background:"#e8edf2", color:C.muted, fontWeight:700, fontSize:9, textTransform:"uppercase", letterSpacing:"0.06em", borderRight:"2px solid #c8d4e0", borderBottom:"1px solid #d1dce8" }}>Scenario Details</th>
+                  {priorTeams.map(t => (
+                    <th key={t.id} colSpan={3} style={{ padding:"5px 10px", textAlign:"center", background:t.color, color:"#fff", fontWeight:700, fontSize:9, textTransform:"uppercase", letterSpacing:"0.06em", borderRight:"2px solid rgba(255,255,255,0.3)", borderBottom:"1px solid rgba(255,255,255,0.3)", opacity:0.88 }}>{t.label}</th>
+                  ))}
+                  {curTeam && <th colSpan={curCols} style={{ padding:"5px 10px", textAlign:"center", background:curTeam.color, color:"#fff", fontWeight:800, fontSize:9, textTransform:"uppercase", letterSpacing:"0.06em", borderBottom:"1px solid rgba(255,255,255,0.3)" }}>▶ {curTeam.label}</th>}
+                </tr>
+                <tr style={{ background:"#f0f4f8", borderBottom:`2px solid ${C.border}` }}>
+                  {["ID","Scenario","SubProcess","Additional Details","Persona","Applicable Business","Applicable Experience","Applicable Region","Similar US IDs","Similar US Data"].map((h,i) => (
+                    <th key={h} style={{ ...thBase, borderRight:i===9?"2px solid #c8d4e0":undefined }}>{h}</th>
+                  ))}
+                  {priorTeams.flatMap(t => [
+                    <th key={t.id+"-rv"} style={{ ...thBase, color:t.color }}>Reviewer</th>,
+                    <th key={t.id+"-fb"} style={{ ...thBase, color:t.color }}>Feedback</th>,
+                    <th key={t.id+"-st"} style={{ ...thBase, color:t.color, borderRight:"2px solid #c8d4e0" }}>Status</th>,
+                  ])}
+                  {curTeam && [
+                    ...(curTeam.dueDateKey ? [<th key="dd" style={{ ...thBase, color:curTeam.color }}>Due Date</th>] : []),
+                    <th key="rv" style={{ ...thBase, color:curTeam.color }}>Reviewer</th>,
+                    <th key="fb" style={{ ...thBase, color:curTeam.color }}>Feedback</th>,
+                    <th key="st" style={{ ...thBase, color:curTeam.color }}>Status</th>,
+                  ]}
+                </tr>
+              </thead>
+              <tbody>
+                {mRows.map((r,i) => (
+                  <tr key={i} style={{ background:i%2===0?C.white:"#f9fafb", borderBottom:`1px solid ${C.border}` }}>
+                    <td style={{ ...tdBase, color:C.muted, fontWeight:600, whiteSpace:"nowrap" }}>{r[K.id]||"—"}</td>
+                    <td style={{ ...tdBase, maxWidth:220, wordBreak:"break-word" }}>{r[K.name]||"—"}</td>
+                    <td style={{ ...tdBase, color:C.muted, whiteSpace:"nowrap" }}>{r[K.subprocess]||"—"}</td>
+                    <td style={{ ...tdBase, maxWidth:160, wordBreak:"break-word", color:C.muted }}>{r[K.additionalDetails]||"—"}</td>
+                    <td style={{ ...tdBase, whiteSpace:"nowrap", color:C.muted }}>{r[K.persona]||"—"}</td>
+                    <td style={{ ...tdBase, whiteSpace:"nowrap", color:C.muted }}>{r[K.applicableBusiness]||"—"}</td>
+                    <td style={{ ...tdBase, whiteSpace:"nowrap", color:C.muted }}>{r[K.applicableExperience]||"—"}</td>
+                    <td style={{ ...tdBase, whiteSpace:"nowrap", color:C.muted }}>{r[K.applicableRegion]||"—"}</td>
+                    <td style={{ ...tdBase, maxWidth:120, wordBreak:"break-word", color:C.muted, borderRight:"none" }}>{r[K.similarUSIds]||"—"}</td>
+                    <td style={{ ...tdBase, maxWidth:120, wordBreak:"break-word", color:C.muted, borderRight:"2px solid #c8d4e0" }}>{r[K.similarUSData]||"—"}</td>
+                    {priorTeams.flatMap(t => [
+                      <td key={t.id+"-rv"} style={{ ...tdBase }}>{r[t.reviewerKey]||"—"}</td>,
+                      <td key={t.id+"-fb"} style={{ ...tdBase, maxWidth:200, wordBreak:"break-word", color:C.muted }}>{r[t.feedbackKey]||"—"}</td>,
+                      <td key={t.id+"-st"} style={{ ...tdBase, borderRight:"2px solid #c8d4e0" }}>{stPill(r,t)}</td>,
+                    ])}
+                    {curTeam && [
+                      ...(curTeam.dueDateKey ? [<td key="dd" style={{ ...tdBase, whiteSpace:"nowrap", color:C.muted }}>{r[curTeam.dueDateKey]||"—"}</td>] : []),
+                      <td key="rv" style={{ ...tdBase, fontWeight:600 }}>{r[curTeam.reviewerKey]||"—"}</td>,
+                      <td key="fb" style={{ ...tdBase, maxWidth:220, wordBreak:"break-word", color:C.muted }}>{r[curTeam.feedbackKey]||"—"}</td>,
+                      <td key="st" style={{ ...tdBase }}>{stPill(r,curTeam)}</td>,
+                    ]}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   const ScenarioModal = ({ title, rows:mRows, onClose }) => (
     <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center" }} onClick={onClose}>
@@ -4796,13 +4911,13 @@ function TestScenariosTab({ data, wp, req }) {
             <div key={t.id} style={{ background:C.white, border:`1px solid ${C.border}`, borderTop:`3px solid ${t.color}`, borderRadius:8, padding:"10px 12px" }}>
               <div style={{ fontSize:9, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.07em", marginBottom:6 }}>{t.label}</div>
               <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
-                <span onClick={() => revRows.length && setDrillModal({ title:`${t.label} — Reviewed · ${activeSit}`, rows:revRows })}
+                <span onClick={() => revRows.length && setDrillModal({ title:`${t.label} — Reviewed · ${activeSit}`, rows:revRows, teamId:t.id })}
                   style={{ background:"#dcfce7", color:"#166534", borderRadius:5, padding:"3px 9px", fontSize:11, fontWeight:700,
                     width:"fit-content", cursor:revRows.length?"pointer":"default", border:"1px solid #bbf7d0",
                     boxShadow:revRows.length?"0 1px 3px rgba(22,101,52,0.15)":undefined }}>
                   ✓ {rev} reviewed ({pct}%)
                 </span>
-                <span onClick={() => pendRows.length && setDrillModal({ title:`${t.label} — Pending Review · ${activeSit}`, rows:pendRows })}
+                <span onClick={() => pendRows.length && setDrillModal({ title:`${t.label} — Pending Review · ${activeSit}`, rows:pendRows, teamId:t.id })}
                   style={{ background:"#fef3c7", color:"#92400e", borderRadius:5, padding:"3px 9px", fontSize:11, fontWeight:700,
                     width:"fit-content", cursor:pendRows.length?"pointer":"default", border:"1px solid #fcd34d",
                     boxShadow:pendRows.length?"0 1px 3px rgba(146,64,14,0.15)":undefined, opacity:pend===0?0.45:1 }}>
@@ -4867,13 +4982,13 @@ function TestScenariosTab({ data, wp, req }) {
                     return [
                       <td key={t.id+"-s"} style={{ padding:"9px 8px", verticalAlign:"top" }}>
                         <div style={{ display:"flex", flexDirection:"column", gap:3 }}>
-                          <span onClick={e => { e.stopPropagation(); revRows.length && setDrillModal({ title:`${row.sp} · ${t.label} — Reviewed`, rows:revRows }); }}
+                          <span onClick={e => { e.stopPropagation(); revRows.length && setDrillModal({ title:`${row.sp} · ${t.label} — Reviewed`, rows:revRows, teamId:t.id }); }}
                             style={{ background:"#dcfce7", color:"#166534", border:"1px solid #bbf7d0", borderRadius:5,
                               padding:"2px 8px", fontSize:10, fontWeight:700, whiteSpace:"nowrap",
                               cursor:revRows.length?"pointer":"default" }}>
                             ✓ {rev} ({pctStr(rev,row.drafted)})
                           </span>
-                          <span onClick={e => { e.stopPropagation(); pendRows.length && setDrillModal({ title:`${row.sp} · ${t.label} — Pending Review`, rows:pendRows }); }}
+                          <span onClick={e => { e.stopPropagation(); pendRows.length && setDrillModal({ title:`${row.sp} · ${t.label} — Pending Review`, rows:pendRows, teamId:t.id }); }}
                             style={{ background:"#fef3c7", color:"#92400e", border:"1px solid #fcd34d", borderRadius:5,
                               padding:"2px 8px", fontSize:10, fontWeight:700, whiteSpace:"nowrap",
                               cursor:pendRows.length?"pointer":"default", opacity:pend===0?0.4:1 }}>
@@ -4903,13 +5018,13 @@ function TestScenariosTab({ data, wp, req }) {
                     return [
                       <td key={t.id+"-s"} style={{ padding:"9px 8px" }}>
                         <div style={{ display:"flex", flexDirection:"column", gap:3 }}>
-                          <span onClick={() => revRows.length && setDrillModal({ title:`${t.label} — All Reviewed · ${activeSit}`, rows:revRows })}
+                          <span onClick={() => revRows.length && setDrillModal({ title:`${t.label} — All Reviewed · ${activeSit}`, rows:revRows, teamId:t.id })}
                             style={{ background:"#dcfce7", color:"#166534", border:"1px solid #bbf7d0", borderRadius:5,
                               padding:"2px 8px", fontSize:10, fontWeight:800, whiteSpace:"nowrap",
                               cursor:revRows.length?"pointer":"default" }}>
                             ✓ {rev} ({pctStr(rev,totDrafted)})
                           </span>
-                          <span onClick={() => pendRows.length && setDrillModal({ title:`${t.label} — All Pending · ${activeSit}`, rows:pendRows })}
+                          <span onClick={() => pendRows.length && setDrillModal({ title:`${t.label} — All Pending · ${activeSit}`, rows:pendRows, teamId:t.id })}
                             style={{ background:"#fef3c7", color:"#92400e", border:"1px solid #fcd34d", borderRadius:5,
                               padding:"2px 8px", fontSize:10, fontWeight:700, whiteSpace:"nowrap",
                               cursor:pendRows.length?"pointer":"default", opacity:pend===0?0.4:1 }}>
@@ -4927,8 +5042,8 @@ function TestScenariosTab({ data, wp, req }) {
         </div>
       </Card>
 
-      {spModal    && <ScenarioModal title={spModal.title}    rows={spModal.rows}    onClose={() => setSpModal(null)} />}
-      {drillModal && <ScenarioModal title={drillModal.title} rows={drillModal.rows} onClose={() => setDrillModal(null)} />}
+      {spModal    && <ScenarioModal   title={spModal.title}    rows={spModal.rows}    onClose={() => setSpModal(null)} />}
+      {drillModal && <TeamDrillModal  title={drillModal.title} rows={drillModal.rows} teamId={drillModal.teamId} onClose={() => setDrillModal(null)} />}
     </div>
   );
 }
