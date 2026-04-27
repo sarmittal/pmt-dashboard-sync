@@ -3839,14 +3839,14 @@ function WorkplanDrillModal({ title, rows, onClose, initialFilter }) {
               <tr style={{ borderBottom:`2px solid ${C.border}` }}>
                 <th style={{ textAlign:"left", padding:"8px 10px", color:C.muted, fontWeight:700, minWidth:320 }}>Task / Group</th>
                 <th style={{ textAlign:"center", padding:"8px 10px", color:C.muted, fontWeight:700, whiteSpace:"nowrap" }}>Status</th>
-                <th style={{ textAlign:"center", padding:"8px 10px", color:C.muted, fontWeight:700, whiteSpace:"nowrap" }}>% Done <span title="Editable" style={{ fontSize:9, opacity:0.5, background:"#e2e8f0", borderRadius:3, padding:"1px 3px" }}>✎</span></th>
+                <th style={{ textAlign:"center", padding:"8px 10px", color:C.muted, fontWeight:700, whiteSpace:"nowrap" }}>% Done <span title="Editable" style={{ marginLeft:4, fontSize:8, fontWeight:700, letterSpacing:"0.04em", background:C.navy, color:"#fff", borderRadius:3, padding:"1px 5px", verticalAlign:"middle", userSelect:"none", lineHeight:1.6 }}>EDIT</span></th>
                 <th style={{ textAlign:"center", padding:"8px 10px", color:C.muted, fontWeight:700, whiteSpace:"nowrap" }}>Start</th>
                 <th style={{ textAlign:"center", padding:"8px 10px", color:C.muted, fontWeight:700, whiteSpace:"nowrap" }}>Finish</th>
                 <th style={{ textAlign:"left",   padding:"8px 10px", color:C.muted, fontWeight:700, whiteSpace:"nowrap" }}>Workstream</th>
                 <th style={{ textAlign:"left",   padding:"8px 10px", color:C.muted, fontWeight:700, whiteSpace:"nowrap" }}>Support</th>
                 <th style={{ textAlign:"left",   padding:"8px 10px", color:C.muted, fontWeight:700, whiteSpace:"nowrap" }}>Primary Owner</th>
                 <th style={{ textAlign:"left",   padding:"8px 10px", color:C.muted, fontWeight:700, whiteSpace:"nowrap" }}>Secondary Owner</th>
-                <th style={{ textAlign:"left",   padding:"8px 10px", color:C.muted, fontWeight:700, minWidth:200 }}>Comments <span title="Editable" style={{ fontSize:9, opacity:0.5, background:"#e2e8f0", borderRadius:3, padding:"1px 3px" }}>✎</span></th>
+                <th style={{ textAlign:"left",   padding:"8px 10px", color:C.muted, fontWeight:700, minWidth:200 }}>Comments <span title="Editable" style={{ marginLeft:4, fontSize:8, fontWeight:700, letterSpacing:"0.04em", background:C.navy, color:"#fff", borderRadius:3, padding:"1px 5px", verticalAlign:"middle", userSelect:"none", lineHeight:1.6 }}>EDIT</span></th>
               </tr>
             </thead>
             <tbody>
