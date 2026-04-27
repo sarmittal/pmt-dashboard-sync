@@ -269,6 +269,7 @@ function parseRequirements(sheets) {
                   || ks.find(k => /build.?management.?comment/i.test(k))
                   || ks.find(k => /build.?mgmt.?comment/i.test(k))
                   || ks.find(k => /build.?comment/i.test(k)),
+    testScriptType:  ks.find(k => k === "Test Script/Test Scenario") || ks.find(k => /test.?script.*scenario|test.?scenario/i.test(k)),
   };
 
   console.log("[PMT] Req key mapping:", K);
@@ -389,13 +390,21 @@ function parseTestScenarios(sheets) {
     storyIds:    ks.find(k => /primary.?user.?story/i.test(k)),
     sitPlan:     ks.find(k => k === "Test Scenario Review SIT Plan") || ks.find(k => /sit.?plan|sit.?review/i.test(k)),
     sprintPlan:  ks.find(k => k === "Sprint Build Plan") || ks.find(k => /sprint.?build/i.test(k)),
-    funcStatus:  ks.find(k => k === "Review Status (Functional)") || ks.find(k => /review.?status.*functional/i.test(k)),
-    techStatus:  ks.find(k => k === "Review Status (Technical)") || ks.find(k => /review.?status.*technical/i.test(k)),
-    sdStatus:    ks.find(k => k === "Review Status (Consulting SD)") || ks.find(k => /review.?status.*consulting/i.test(k)),
-    dtStatus:    ks.find(k => k === "Review Status (DT)") || ks.find(k => /review.?status.*\bdt\b/i.test(k)),
-    daStatus:    ks.find(k => k === "Review Status (D&A)") || ks.find(k => /review.?status.*d.?a/i.test(k)),
-    pmtStatus:   ks.find(k => k === "Review Status (PMT SD)") || ks.find(k => /review.?status.*pmt/i.test(k)),
-    pmStatus:    ks.find(k => k === "Review Status (PM)") || ks.find(k => /review.?status.*\bpm\b/i.test(k)),
+    funcStatus:   ks.find(k => k === "Review Status (Functional)") || ks.find(k => /review.?status.*functional/i.test(k)),
+    techStatus:   ks.find(k => k === "Review Status (Technical)") || ks.find(k => /review.?status.*technical/i.test(k)),
+    sdStatus:     ks.find(k => k === "Review Status (Consulting SD)") || ks.find(k => /review.?status.*consulting/i.test(k)),
+    dtStatus:     ks.find(k => k === "Review Status (DT)") || ks.find(k => /review.?status.*\bdt\b/i.test(k)),
+    daStatus:     ks.find(k => k === "Review Status (D&A)") || ks.find(k => /review.?status.*d.?a/i.test(k)),
+    pmtStatus:    ks.find(k => k === "Review Status (PMT SD)") || ks.find(k => /review.?status.*pmt/i.test(k)),
+    pmStatus:     ks.find(k => k === "Review Status (PM)") || ks.find(k => /review.?status.*\bpm\b/i.test(k)),
+    // Per-team reviewer name columns
+    funcReviewer: ks.find(k => /reviewer.*functional|functional.*reviewer/i.test(k)),
+    techReviewer: ks.find(k => /reviewer.*technical|technical.*reviewer/i.test(k)),
+    sdReviewer:   ks.find(k => k === "Reviewer (Consulting SD)") || ks.find(k => /reviewer.*consulting/i.test(k)),
+    dtReviewer:   ks.find(k => k === "Reviewer (DT)") || ks.find(k => /reviewer.*\bdt\b/i.test(k)),
+    daReviewer:   ks.find(k => k === "Reviewer (D&A)") || ks.find(k => /reviewer.*d.?&?a/i.test(k)),
+    pmtReviewer:  ks.find(k => k === "Reviewer (PMT SD)") || ks.find(k => /reviewer.*pmt/i.test(k)),
+    pmReviewer:   ks.find(k => k === "Reviewer (PM)") || ks.find(k => /\breviewer\b.*\bpm\b(?!t)/i.test(k)),
   };
 
   // Exclude deprecated / deferred / duplicate
@@ -1179,7 +1188,7 @@ export default function App() {
         {tab === "cr"           && <ChangeRequestTab raid={raid} cap={cap} />}
         {tab === "backlog"      && <BacklogTab raid={raid} />}
         {tab === "scorecard"    && <ScorecardTab wp={wp} raid={raid} req={req} openModal={openModal} />}
-        {tab === "testing"      && <TestScenariosTab data={test} wp={wp} />}
+        {tab === "testing"      && <TestScenariosTab data={test} wp={wp} req={req} />}
       </div>
 
       {modal && <Modal title={modal.title} rows={modal.rows} columns={modal.columns} onClose={() => setModal(null)} />}

@@ -55,15 +55,9 @@ const KEEP = {
     "Build Cycle (Playback)", "Targeted Closure Sprint", "Sub Process",
     "Functional Build Status", "Tech Build Status",
     "Build Management Comments", "User Story Derived Status", "Priority",
+    "Test Script/Test Scenario",
   ],
-  test: [
-    "Scenarios","Scenario Id","SubProcess","Process Step ID","Step Description",
-    "Persona","Estimated Test Cases","Primary User Story Ids","SIT Planned Testing",
-    "Test Scenario Review SIT Plan","Sprint Build Plan",
-    "Review Status (Functional)","Review Status (Technical)",
-    "Review Status (Consulting SD)","Review Status (DT)","Review Status (D&A)",
-    "Review Status (PMT SD)","Review Status (PM)",
-  ],
+  test: null, // keep all — many reviewer/feedback/due-date columns needed for redesigned tab
   cap: null, // keep all
 };
 
