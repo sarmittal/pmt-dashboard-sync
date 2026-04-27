@@ -4636,8 +4636,9 @@ function ComponentCardsTab({ wp, raid, req, openModal }) {
 
 // ─── TEST SCENARIOS TAB ──────────────────────────────────────────────────────
 function TestScenariosTab({ data, wp, req }) {
-  const [selSit,  setSelSit]  = useState(null);
-  const [spModal, setSpModal] = useState(null);
+  const [selSit,    setSelSit]    = useState(null);
+  const [spModal,   setSpModal]   = useState(null);
+  const [drillModal, setDrillModal] = useState(null);
 
   if (!data) return <Empty label="Upload Test Scenarios file above to view this tab." />;
 
@@ -4784,13 +4785,26 @@ function TestScenariosTab({ data, wp, req }) {
         {TEAMS.map(t => {
           const rev  = tableRows.reduce((s,r) => s+(r.teamStats[t.id]?.reviewed||0), 0);
           const pend = tableRows.reduce((s,r) => s+(r.teamStats[t.id]?.pending||0), 0);
-          const pct  = totDrafted > 0 ? Math.round(rev/totDrafted*100) : 0;
+          const pct      = totDrafted > 0 ? Math.round(rev/totDrafted*100) : 0;
+          const pendPct  = totDrafted > 0 ? Math.round(pend/totDrafted*100) : 0;
+          const revRows  = sitRows.filter(r => isReviewedFinal(r[t.statusKey]));
+          const pendRows = sitRows.filter(r => isPendingReview(r[t.statusKey]));
           return (
             <div key={t.id} style={{ background:C.white, border:`1px solid ${C.border}`, borderTop:`3px solid ${t.color}`, borderRadius:8, padding:"10px 12px" }}>
               <div style={{ fontSize:9, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.07em", marginBottom:6 }}>{t.label}</div>
-              <div style={{ display:"flex", flexDirection:"column", gap:3 }}>
-                <span style={{ background:"#dcfce7", color:"#166534", borderRadius:4, padding:"2px 8px", fontSize:11, fontWeight:700, width:"fit-content" }}>✓ {rev} ({pct}%)</span>
-                {pend > 0 && <span style={{ background:"#fef9e7", color:"#b45309", borderRadius:4, padding:"2px 8px", fontSize:10, fontWeight:600, width:"fit-content" }}>⏳ {pend} pending</span>}
+              <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
+                <span onClick={() => revRows.length && setDrillModal({ title:`${t.label} — Reviewed · ${activeSit}`, rows:revRows })}
+                  style={{ background:"#dcfce7", color:"#166534", borderRadius:5, padding:"3px 9px", fontSize:11, fontWeight:700,
+                    width:"fit-content", cursor:revRows.length?"pointer":"default", border:"1px solid #bbf7d0",
+                    boxShadow:revRows.length?"0 1px 3px rgba(22,101,52,0.15)":undefined }}>
+                  ✓ {rev} reviewed ({pct}%)
+                </span>
+                <span onClick={() => pendRows.length && setDrillModal({ title:`${t.label} — Pending Review · ${activeSit}`, rows:pendRows })}
+                  style={{ background:"#fef3c7", color:"#92400e", borderRadius:5, padding:"3px 9px", fontSize:11, fontWeight:700,
+                    width:"fit-content", cursor:pendRows.length?"pointer":"default", border:"1px solid #fcd34d",
+                    boxShadow:pendRows.length?"0 1px 3px rgba(146,64,14,0.15)":undefined, opacity:pend===0?0.45:1 }}>
+                  ⏳ {pend} pending ({pendPct}%)
+                </span>
               </div>
             </div>
           );
@@ -4844,11 +4858,24 @@ function TestScenariosTab({ data, wp, req }) {
                   {TEAMS.flatMap(t => {
                     const ts = row.teamStats[t.id] || {};
                     const rev = ts.reviewed||0, pend = ts.pending||0;
+                    const spRows2  = subprocessMap[row.sp] || [];
+                    const revRows  = spRows2.filter(r => isReviewedFinal(r[t.statusKey]));
+                    const pendRows = spRows2.filter(r => isPendingReview(r[t.statusKey]));
                     return [
                       <td key={t.id+"-s"} style={{ padding:"9px 8px", verticalAlign:"top" }}>
-                        <div style={{ display:"flex", flexDirection:"column", gap:2 }}>
-                          <span style={{ color:"#166534", fontSize:10, fontWeight:700, whiteSpace:"nowrap" }}>✓ Reviewed-{rev}({pctStr(rev,row.drafted)})</span>
-                          {pend > 0 && <span style={{ color:"#b45309", fontSize:10, fontWeight:600, whiteSpace:"nowrap" }}>⏳ Pending-{pend}({pctStr(pend,row.drafted)})</span>}
+                        <div style={{ display:"flex", flexDirection:"column", gap:3 }}>
+                          <span onClick={e => { e.stopPropagation(); revRows.length && setDrillModal({ title:`${row.sp} · ${t.label} — Reviewed`, rows:revRows }); }}
+                            style={{ background:"#dcfce7", color:"#166534", border:"1px solid #bbf7d0", borderRadius:5,
+                              padding:"2px 8px", fontSize:10, fontWeight:700, whiteSpace:"nowrap",
+                              cursor:revRows.length?"pointer":"default" }}>
+                            ✓ {rev} ({pctStr(rev,row.drafted)})
+                          </span>
+                          <span onClick={e => { e.stopPropagation(); pendRows.length && setDrillModal({ title:`${row.sp} · ${t.label} — Pending Review`, rows:pendRows }); }}
+                            style={{ background:"#fef3c7", color:"#92400e", border:"1px solid #fcd34d", borderRadius:5,
+                              padding:"2px 8px", fontSize:10, fontWeight:700, whiteSpace:"nowrap",
+                              cursor:pendRows.length?"pointer":"default", opacity:pend===0?0.4:1 }}>
+                            ⏳ {pend} ({pctStr(pend,row.drafted)})
+                          </span>
                         </div>
                       </td>,
                       <td key={t.id+"-r"} style={{ padding:"9px 8px", color:C.muted, fontSize:10 }}>{ts.reviewerName||"—"}</td>,
@@ -4866,13 +4893,25 @@ function TestScenariosTab({ data, wp, req }) {
                     {totOpenFeedback>0 ? <span style={{ background:"#fee2e2", color:"#991b1b", borderRadius:4, padding:"2px 8px", fontSize:10, fontWeight:700 }}>{totOpenFeedback}</span> : "—"}
                   </td>
                   {TEAMS.flatMap(t => {
-                    const rev  = tableRows.reduce((s,r) => s+(r.teamStats[t.id]?.reviewed||0), 0);
-                    const pend = tableRows.reduce((s,r) => s+(r.teamStats[t.id]?.pending||0), 0);
+                    const rev      = tableRows.reduce((s,r) => s+(r.teamStats[t.id]?.reviewed||0), 0);
+                    const pend     = tableRows.reduce((s,r) => s+(r.teamStats[t.id]?.pending||0), 0);
+                    const revRows  = sitRows.filter(r => isReviewedFinal(r[t.statusKey]));
+                    const pendRows = sitRows.filter(r => isPendingReview(r[t.statusKey]));
                     return [
                       <td key={t.id+"-s"} style={{ padding:"9px 8px" }}>
-                        <div style={{ display:"flex", flexDirection:"column", gap:2 }}>
-                          <span style={{ color:"#166534", fontSize:10, fontWeight:800, whiteSpace:"nowrap" }}>✓ Reviewed-{rev}({pctStr(rev,totDrafted)})</span>
-                          {pend>0&&<span style={{ color:"#b45309", fontSize:10, fontWeight:700, whiteSpace:"nowrap" }}>⏳ Pending-{pend}({pctStr(pend,totDrafted)})</span>}
+                        <div style={{ display:"flex", flexDirection:"column", gap:3 }}>
+                          <span onClick={() => revRows.length && setDrillModal({ title:`${t.label} — All Reviewed · ${activeSit}`, rows:revRows })}
+                            style={{ background:"#dcfce7", color:"#166534", border:"1px solid #bbf7d0", borderRadius:5,
+                              padding:"2px 8px", fontSize:10, fontWeight:800, whiteSpace:"nowrap",
+                              cursor:revRows.length?"pointer":"default" }}>
+                            ✓ {rev} ({pctStr(rev,totDrafted)})
+                          </span>
+                          <span onClick={() => pendRows.length && setDrillModal({ title:`${t.label} — All Pending · ${activeSit}`, rows:pendRows })}
+                            style={{ background:"#fef3c7", color:"#92400e", border:"1px solid #fcd34d", borderRadius:5,
+                              padding:"2px 8px", fontSize:10, fontWeight:700, whiteSpace:"nowrap",
+                              cursor:pendRows.length?"pointer":"default", opacity:pend===0?0.4:1 }}>
+                            ⏳ {pend} ({pctStr(pend,totDrafted)})
+                          </span>
                         </div>
                       </td>,
                       <td key={t.id+"-r"} style={{ padding:"9px 8px" }} />,
@@ -4885,7 +4924,8 @@ function TestScenariosTab({ data, wp, req }) {
         </div>
       </Card>
 
-      {spModal && <ScenarioModal title={spModal.title} rows={spModal.rows} onClose={() => setSpModal(null)} />}
+      {spModal    && <ScenarioModal title={spModal.title}    rows={spModal.rows}    onClose={() => setSpModal(null)} />}
+      {drillModal && <ScenarioModal title={drillModal.title} rows={drillModal.rows} onClose={() => setDrillModal(null)} />}
     </div>
   );
 }
