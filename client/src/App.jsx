@@ -405,6 +405,8 @@ function parseTestScenarios(sheets) {
     daReviewer:   ks.find(k => k === "Reviewer (D&A)") || ks.find(k => /reviewer.*d.?&?a/i.test(k)),
     pmtReviewer:  ks.find(k => k === "Reviewer (PMT SD)") || ks.find(k => /reviewer.*pmt/i.test(k)),
     pmReviewer:   ks.find(k => k === "Reviewer (PM)") || ks.find(k => /\breviewer\b.*\bpm\b(?!t)/i.test(k)),
+    toBeDeleted:    ks.find(k => k === "To be deleted") || ks.find(k => /to.?be.?deleted/i.test(k)),
+    dupDataMiningNA: ks.find(k => k === "Duplicate, Data Mining and Not Applicable") || ks.find(k => /duplicate.*data.?mining|dup.*data.*mining/i.test(k)),
   };
 
   // Exclude deprecated / deferred / duplicate
@@ -4648,7 +4650,8 @@ function TestScenariosTab({ data, wp, req }) {
   const isReviewedFinal = s => cleanSt(s).toLowerCase() === "reviewed";
   const isPendingReview = s => { const v = cleanSt(s).toLowerCase(); return v === "ready for review" || v === "updated, ready for review"; };
   const isOpenFeedback  = s => cleanSt(s).toLowerCase().includes("reviewed, request for updates");
-  const isDraftExcluded = r => { const v = cleanSt(r[K.funcStatus] || "").toLowerCase(); return ["duplicate","not applicable","data mining","deprecated","deferred"].some(e => v.includes(e)); };
+  const isTruthy = v => v === true || v === 1 || String(v).trim() === "1";
+  const isDraftExcluded = r => isTruthy(r[K.toBeDeleted]) || isTruthy(r[K.dupDataMiningNA]);
   const draftedRows = data.activeRows.filter(r => !isDraftExcluded(r));
 
   const TEAMS = [
