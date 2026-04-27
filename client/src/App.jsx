@@ -149,7 +149,8 @@ function parseRaid(sheets) {
     experience:ks.find(k => /experience/i.test(k)),
     topic:     ks.find(k => /topic/i.test(k)),
     critPath:  ks.find(k => /critical.?path/i.test(k)),
-    date:      ks.find(k => k === "Due Date") || ks.find(k => /due.?date|target.?date/i.test(k)),
+    date:      ks.find(k => k === "Due Date"),
+    raidDueDate: ks.find(k => k === "RAID Due Date") || ks.find(k => /^raid.?due.?date$/i.test(k)),
     crAnalysis:     ks.find(k => k === "Change Request Analysis") || ks.find(k => /change.?request.?analysis/i.test(k)),
     crStatus:       ks.find(k => k === "Status of Decision Acceptance (PMO)") || ks.find(k => /status.?of.?decision|decision.?acceptance/i.test(k)) || ks.find(k => /pmo.?status/i.test(k)),
     crHours:        ks.find(k => k === "Total Hours Estimate") || ks.find(k => /total.?hours.?estimate/i.test(k)) || ks.find(k => k === "Hours Estimate") || ks.find(k => /hours?.?estimate/i.test(k)),
@@ -708,7 +709,7 @@ function Modal({ title, rows, columns, onClose }) {
 }
 
 // Keys in colConfig-based RAID tables that are editable — used to show ✎ in headers
-const RAID_EDITABLE_HEADER_KEYS = new Set(["desc", "comment", "critPath", "dueDate", "tag"]);
+const RAID_EDITABLE_HEADER_KEYS = new Set(["desc", "comment", "critPath", "raidDueDate", "tag"]);
 
 // Pencil badge rendered next to editable column headers
 const EditHeaderBadge = () => (
@@ -1305,8 +1306,9 @@ function ExecutiveSummaryTab({ wp, raid, req, cap, openModal }) {
     comment:   { label:"Comments / Resolution", visible:true,  width:220 },
     owner:     { label:"Owner",                 visible:true,  width:110 },
     team:      { label:"Primary Team (Owner)",  visible:true,  width:140 },
-    critPath:  { label:"Critical Path",         visible:true,  width:100 },
-    dueDate:   { label:"Due Date",              visible:true,  width:85  },
+    critPath:   { label:"Critical Path",         visible:true,  width:100 },
+    dueDate:    { label:"Due Date",              visible:true,  width:85  },
+    raidDueDate:{ label:"Override Due Date",     visible:true,  width:120 },
   });
 
   const anyData = wp || raid || req || cap;
@@ -1758,7 +1760,7 @@ function RaidKpiModal({ title, rows, K, teamKey, allTeams, allTypes, allComps, s
                 {[["raidId","RAID ID"],["status","Status"],["type","Type"],["component","Component"],
                   ["experience","Experience"],["topic","Topic"],["tag","Tag"],["desc","Description"],
                   ["comment","Comments / Resolution"],["owner","Owner"],["team","Primary Team (Owner)"],
-                  ["critPath","Critical Path"],["dueDate","Due Date"]
+                  ["critPath","Critical Path"],["dueDate","Due Date"],["raidDueDate","Override Due Date"]
                 ].filter(([key]) => colConfig[key]?.visible).map(([key,label],idx,arr) => (
                   <th key={key} style={{ padding:"8px 10px", textAlign:"left", color:"#fff", fontWeight:700, fontSize:10,
                     width:colConfig[key].width, position:"relative",
@@ -1801,7 +1803,8 @@ function RaidKpiModal({ title, rows, K, teamKey, allTeams, allTypes, allComps, s
                     {colConfig.owner?.visible     && <td style={{ padding:"8px 10px", color:C.text, wordBreak:"break-word", width:colConfig.owner.width }}>{String(r[K.owner]||"—")}</td>}
                     {colConfig.team?.visible      && <td style={{ padding:"8px 10px", color:C.text, wordBreak:"break-word", width:colConfig.team?.width||140 }}>{String(r[teamKey]||"—")}</td>}
                     {colConfig.critPath?.visible  && <td style={{ padding:"8px 10px", width:colConfig.critPath.width }}>{r._rowId && K.critPath ? <EditableCell sheet="raid" rowId={r._rowId} colName={K.critPath} value={localVals[r._rowId]?.[K.critPath] ?? String(r[K.critPath]||"")} onSaved={v=>localUpdate(r._rowId,K.critPath,v)} /> : (() => { const v=String(r[K.critPath]||"").trim(); if(!v||v==="—") return <span style={{color:C.muted}}>—</span>; const hi=v.toLowerCase()!=="no"&&v.toLowerCase()!=="n/a"; return <span style={{background:hi?"#fee2e2":"#f1f5f9",color:hi?C.delayed:C.muted,borderRadius:3,padding:"2px 6px",fontSize:10,fontWeight:600}}>{v}</span>; })()}</td>}
-                    {colConfig.dueDate?.visible   && <td style={{ padding:"8px 10px", width:colConfig.dueDate.width }}>{r._rowId && K.date ? <EditableCell sheet="raid" rowId={r._rowId} colName={K.date} value={localVals[r._rowId]?.[K.date] ?? String(r[K.date]||"")} onSaved={v=>localUpdate(r._rowId,K.date,v)} /> : <span style={{color:dueCol,fontWeight:600,whiteSpace:"nowrap"}}>{dueStr}</span>}</td>}
+                    {colConfig.dueDate?.visible   && <td style={{ padding:"8px 10px", color:dueCol, fontWeight:600, whiteSpace:"nowrap", width:colConfig.dueDate.width }}>{dueStr}</td>}
+                    {colConfig.raidDueDate?.visible && <td style={{ padding:"8px 10px", width:colConfig.raidDueDate?.width||120 }}>{r._rowId&&K.raidDueDate?<EditableCell sheet="raid" rowId={r._rowId} colName={K.raidDueDate} value={localVals[r._rowId]?.[K.raidDueDate]??String(r[K.raidDueDate]||"")} onSaved={v=>localUpdate(r._rowId,K.raidDueDate,v)}/>:<span style={{color:C.muted}}>—</span>}</td>}
                   </tr>
                 );
               })}
@@ -2488,7 +2491,8 @@ function BacklogChartDrillModal({ title, rows, K, teamKey, colConfig, COL_KEYS, 
                     {colConfig.owner?.visible     &&<td style={{padding:"8px 10px",color:C.text,wordBreak:"break-word",width:colConfig.owner.width}}>{String(r[K.owner]||"—")}</td>}
                     {colConfig.team?.visible      &&<td style={{padding:"8px 10px",color:C.text,wordBreak:"break-word",width:colConfig.team.width}}>{String(r[teamKey]||"—")}</td>}
                     {colConfig.critPath?.visible  &&<td style={{padding:"8px 10px",width:colConfig.critPath.width}}>{r._rowId&&K.critPath?<EditableCell sheet="raid" rowId={r._rowId} colName={K.critPath} value={localVals[r._rowId]?.[K.critPath]??String(r[K.critPath]||"")} onSaved={v=>localUpdate(r._rowId,K.critPath,v)}/>:renderCritPath(r)}</td>}
-                    {colConfig.dueDate?.visible   &&<td style={{padding:"8px 10px",width:colConfig.dueDate.width}}>{r._rowId&&K.date?<EditableCell sheet="raid" rowId={r._rowId} colName={K.date} value={localVals[r._rowId]?.[K.date]??String(r[K.date]||"")} onSaved={v=>localUpdate(r._rowId,K.date,v)}/>:<span style={{color:dueCol,fontWeight:600,whiteSpace:"nowrap"}}>{dueStr}</span>}</td>}
+                    {colConfig.dueDate?.visible   &&<td style={{padding:"8px 10px",color:dueCol,fontWeight:600,whiteSpace:"nowrap",width:colConfig.dueDate.width}}>{dueStr}</td>}
+                    {colConfig.raidDueDate?.visible&&<td style={{padding:"8px 10px",width:colConfig.raidDueDate?.width||120}}>{r._rowId&&K.raidDueDate?<EditableCell sheet="raid" rowId={r._rowId} colName={K.raidDueDate} value={localVals[r._rowId]?.[K.raidDueDate]??String(r[K.raidDueDate]||"")} onSaved={v=>localUpdate(r._rowId,K.raidDueDate,v)}/>:<span style={{color:C.muted}}>—</span>}</td>}
                   </tr>
                 );
               })}
@@ -2526,8 +2530,9 @@ function BacklogTab({ raid }) {
     comment:   { label:"Comments / Resolution", visible:true,  width:220 },
     owner:     { label:"Owner",                 visible:true,  width:110 },
     team:      { label:"Primary Team (Owner)",  visible:true,  width:140 },
-    critPath:  { label:"Critical Path",         visible:true,  width:100 },
-    dueDate:   { label:"Due Date",              visible:true,  width:85  },
+    critPath:   { label:"Critical Path",         visible:true,  width:100 },
+    dueDate:    { label:"Due Date",              visible:true,  width:85  },
+    raidDueDate:{ label:"Override Due Date",     visible:true,  width:120 },
   });
 
   if (!raid) return <Empty label="Upload RAID Log file above to view this tab." />;
@@ -2603,7 +2608,7 @@ function BacklogTab({ raid }) {
     ["raidId","RAID ID"],["status","Status"],["type","Type"],["priority","Priority"],
     ["component","Component"],["experience","Experience"],["topic","Topic"],
     ["desc","Description"],["comment","Comments / Resolution"],["owner","Owner"],
-    ["team","Primary Team (Owner)"],["critPath","Critical Path"],["dueDate","Due Date"],
+    ["team","Primary Team (Owner)"],["critPath","Critical Path"],["dueDate","Due Date"],["raidDueDate","Override Due Date"],
   ];
 
   return (
@@ -2809,7 +2814,8 @@ function BacklogTab({ raid }) {
                     {colConfig.owner?.visible     &&<td style={{padding:"8px 10px",color:C.text,wordBreak:"break-word",width:colConfig.owner.width}}>{String(r[K.owner]||"—")}</td>}
                     {colConfig.team?.visible      &&<td style={{padding:"8px 10px",color:C.text,wordBreak:"break-word",width:colConfig.team.width}}>{String(r[teamKey]||"—")}</td>}
                     {colConfig.critPath?.visible  &&<td style={{padding:"8px 10px",width:colConfig.critPath.width}}>{r._rowId&&K.critPath?<EditableCell sheet="raid" rowId={r._rowId} colName={K.critPath} value={localVals[r._rowId]?.[K.critPath]??String(r[K.critPath]||"")} onSaved={v=>localUpdate(r._rowId,K.critPath,v)}/>:renderCritPath(r)}</td>}
-                    {colConfig.dueDate?.visible   &&<td style={{padding:"8px 10px",width:colConfig.dueDate.width}}>{r._rowId&&K.date?<EditableCell sheet="raid" rowId={r._rowId} colName={K.date} value={localVals[r._rowId]?.[K.date]??String(r[K.date]||"")} onSaved={v=>localUpdate(r._rowId,K.date,v)}/>:<span style={{color:dueCol,fontWeight:600,whiteSpace:"nowrap"}}>{dueStr}</span>}</td>}
+                    {colConfig.dueDate?.visible   &&<td style={{padding:"8px 10px",color:dueCol,fontWeight:600,whiteSpace:"nowrap",width:colConfig.dueDate.width}}>{dueStr}</td>}
+                    {colConfig.raidDueDate?.visible&&<td style={{padding:"8px 10px",width:colConfig.raidDueDate?.width||120}}>{r._rowId&&K.raidDueDate?<EditableCell sheet="raid" rowId={r._rowId} colName={K.raidDueDate} value={localVals[r._rowId]?.[K.raidDueDate]??String(r[K.raidDueDate]||"")} onSaved={v=>localUpdate(r._rowId,K.raidDueDate,v)}/>:<span style={{color:C.muted}}>—</span>}</td>}
                   </tr>
                 );
               })}
@@ -2912,8 +2918,9 @@ function RaidAnalysisTab({ raid }) {
     comment:   { label:"Comments / Resolution",    visible:true,  width:220 },
     owner:     { label:"Owner",                    visible:true,  width:110 },
     team:      { label:"Primary Team (Owner)",     visible:true,  width:140 },
-    critPath:  { label:"Critical Path",            visible:true,  width:100 },
-    dueDate:   { label:"Due Date",                 visible:true,  width:85  },
+    critPath:    { label:"Critical Path",            visible:true,  width:100 },
+    dueDate:     { label:"Due Date",                 visible:true,  width:85  },
+    raidDueDate: { label:"Override Due Date",        visible:true,  width:120 },
   });
   const [showColPanel, setShowColPanel] = useState(false);
   const [colConfig, setColConfig] = useState({
@@ -2926,8 +2933,9 @@ function RaidAnalysisTab({ raid }) {
     desc:      { label:"Description",          visible:true,  width:260 },
     comment:   { label:"Comments / Resolution",visible:true,  width:220 },
     owner:     { label:"Owner",                visible:true,  width:110 },
-    critPath:  { label:"Critical Path",        visible:true,  width:100 },
-    dueDate:   { label:"Due Date",             visible:true,  width:85  },
+    critPath:    { label:"Critical Path",        visible:true,  width:100 },
+    dueDate:     { label:"Due Date",             visible:true,  width:85  },
+    raidDueDate: { label:"Override Due Date",    visible:true,  width:120 },
   });
 
   if (!raid) return <Empty label="Upload RAID Log file above to view this tab." />;
@@ -3211,7 +3219,7 @@ function RaidAnalysisTab({ raid }) {
                     {[
                       ["raidId","RAID ID"], ["status","Status"], ["type","Type"], ["component","Component"],
                       ["experience","Experience"], ["topic","Topic"], ["desc","Description"],
-                      ["comment","Comments / Resolution"], ["owner","Owner"], ["critPath","Critical Path"], ["dueDate","Due Date"]
+                      ["comment","Comments / Resolution"], ["owner","Owner"], ["critPath","Critical Path"], ["dueDate","Due Date"], ["raidDueDate","Override Due Date"]
                     ].filter(([key]) => colConfig[key].visible).map(([key, label], idx, arr) => (
                       <th key={key} style={{ padding:"8px 10px", textAlign:"left", color:"#fff", fontWeight:700, fontSize:10,
                         width:colConfig[key].width, position:"relative",
@@ -3262,7 +3270,8 @@ function RaidAnalysisTab({ raid }) {
                         {colConfig.comment.visible   && <td style={{ padding:"8px 10px", wordBreak:"break-word", lineHeight:1.5, width:colConfig.comment.width }}>{r._rowId&&K.comment?<EditableCell sheet="raid" rowId={r._rowId} colName={K.comment} value={localVals[r._rowId]?.[K.comment]??String(r[K.comment]||"")} multiline onSaved={v=>localUpdate(r._rowId,K.comment,v)}/>:String(r[K.comment]||"—")}</td>}
                         {colConfig.owner.visible     && <td style={{ padding:"8px 10px", color:C.text, wordBreak:"break-word", width:colConfig.owner.width }}>{String(r[K.owner]||"—")}</td>}
                         {colConfig.critPath.visible  && <td style={{ padding:"8px 10px", width:colConfig.critPath.width }}>{r._rowId&&K.critPath?<EditableCell sheet="raid" rowId={r._rowId} colName={K.critPath} value={localVals[r._rowId]?.[K.critPath]??String(r[K.critPath]||"")} onSaved={v=>localUpdate(r._rowId,K.critPath,v)}/>:(() => { const v=String(r[K.critPath]||"").trim(); if(!v||v==="—") return <span style={{color:C.muted}}>—</span>; const hi=v.toLowerCase()!=="no"&&v.toLowerCase()!=="n/a"; return <span style={{background:hi?"#fee2e2":"#f1f5f9",color:hi?C.delayed:C.muted,borderRadius:3,padding:"2px 6px",fontSize:10,fontWeight:600}}>{v}</span>; })()}</td>}
-                        {colConfig.dueDate.visible   && <td style={{ padding:"8px 10px", width:colConfig.dueDate.width }}>{r._rowId&&K.date?<EditableCell sheet="raid" rowId={r._rowId} colName={K.date} value={localVals[r._rowId]?.[K.date]??String(r[K.date]||"")} onSaved={v=>localUpdate(r._rowId,K.date,v)}/>:<span style={{color:dueCol,fontWeight:600,whiteSpace:"nowrap"}}>{dueStr}</span>}</td>}
+                        {colConfig.dueDate.visible   && <td style={{ padding:"8px 10px", color:dueCol, fontWeight:600, whiteSpace:"nowrap", width:colConfig.dueDate.width }}>{dueStr}</td>}
+                        {colConfig.raidDueDate?.visible && <td style={{ padding:"8px 10px", width:colConfig.raidDueDate?.width||120 }}>{r._rowId&&K.raidDueDate?<EditableCell sheet="raid" rowId={r._rowId} colName={K.raidDueDate} value={localVals[r._rowId]?.[K.raidDueDate]??String(r[K.raidDueDate]||"")} onSaved={v=>localUpdate(r._rowId,K.raidDueDate,v)}/>:<span style={{color:C.muted}}>—</span>}</td>}
                       </tr>
                     );
                   })}
@@ -3326,8 +3335,9 @@ function RaidDrillModal({ title, rows, raidKeys, onClose, initialStatusFilter, i
   const compCol    = K.component || "Component";
   const expCol     = K.experience|| "Experience";
   const topicCol   = K.topic     || "Topic";
-  const critCol    = K.critPath  || "Critical Path";
-  const dateCol    = K.date      || "Due Date";
+  const critCol        = K.critPath    || "Critical Path";
+  const dateCol        = K.date        || "Due Date";
+  const raidDueDateCol = K.raidDueDate || null;
 
   // Derive available types from data
   const allTypes = Array.from(new Set(rows.map(r => String(r[typeCol] || "").trim()).filter(Boolean))).sort();
@@ -3390,11 +3400,13 @@ function RaidDrillModal({ title, rows, raidKeys, onClose, initialStatusFilter, i
   const expandAll   = () => { const e = {}; sortedGroups.forEach(([c]) => e[c] = true);  setExpanded(e); };
   const collapseAll = () => { const e = {}; sortedGroups.forEach(([c]) => e[c] = false); setExpanded(e); };
 
-  const cols = [idCol, priorityCol, statusCol, expCol, compCol, topicCol, descCol, commentCol, ownerCol, critCol, dateCol];
+  const cols = [idCol, priorityCol, statusCol, expCol, compCol, topicCol, descCol, commentCol, ownerCol, critCol, dateCol, ...(raidDueDateCol ? [raidDueDateCol] : [])];
   const wideCols = new Set([descCol, commentCol]);
-  // Columns editable via write-back; multiline for Description and Comments
-  const editableCols = new Set([descCol, commentCol, critCol, dateCol, K.tag, K.crTargetSprint].filter(Boolean));
+  // dateCol (Due Date) is calculated — not editable; raidDueDateCol (RAID Due Date) is the user override
+  const editableCols = new Set([descCol, commentCol, critCol, raidDueDateCol, K.tag, K.crTargetSprint].filter(Boolean));
   const multilineCols = new Set([descCol, commentCol]);
+  // Display labels for columns whose header differs from the raw column name
+  const colLabels = { [raidDueDateCol]: "Override Due Date" };
 
   const FilterPills = ({ filters, counts, active, onSelect, delayedHighlight }) => (
     <div style={{ display:"flex", gap:5, flexWrap:"wrap" }}>
@@ -3472,7 +3484,7 @@ function RaidDrillModal({ title, rows, raidKeys, onClose, initialStatusFilter, i
                   <th key={c} style={{ textAlign:"left", padding:"8px 10px", color:C.muted, fontWeight:700,
                     borderBottom:`2px solid ${C.border}`, whiteSpace:"nowrap",
                     minWidth: wideCols.has(c) ? 260 : c === dateCol ? 95 : 100 }}>
-                    {c}{editableCols.has(c) && <span title="Editable" style={{ fontSize:9, opacity:0.5, background:"#e2e8f0", borderRadius:3, padding:"1px 3px", marginLeft:4 }}>✎</span>}
+                    {colLabels[c] || c}{editableCols.has(c) && <span title="Editable" style={{ fontSize:9, opacity:0.5, background:"#e2e8f0", borderRadius:3, padding:"1px 3px", marginLeft:4 }}>✎</span>}
                   </th>
                 ))}
               </tr>
@@ -5354,8 +5366,9 @@ function ScorecardTab({ wp, raid, req, openModal }) {
     comment:   { label:"Comments / Resolution",visible:true,  width:220 },
     owner:     { label:"Owner",                visible:true,  width:110 },
     team:      { label:"Primary Team (Owner)", visible:true,  width:140 },
-    critPath:  { label:"Critical Path",        visible:true,  width:100 },
-    dueDate:   { label:"Due Date",             visible:true,  width:85  },
+    critPath:    { label:"Critical Path",        visible:true,  width:100 },
+    dueDate:     { label:"Due Date",             visible:true,  width:85  },
+    raidDueDate: { label:"Override Due Date",    visible:true,  width:120 },
   });
   if (!raid && !req && !wp) return <Empty label="Upload files to view Component Scorecard." />;
 
