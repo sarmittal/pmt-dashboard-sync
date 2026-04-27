@@ -2296,7 +2296,9 @@ function ChangeRequestTab({ raid, cap }) {
                   <TH col={K.crSdOps}       label="SD/Ops Hrs"    minW={80}  align="right" />
                   <TH col={K.crOcm}         label="OCM Hrs"       minW={70}  align="right" />
                   <TH col={K.crUx}          label="UX Hrs"        minW={70}  align="right" />
-                  <TH col={K.crTargetSprint} label="Target Sprint" minW={95} />
+                  <th onClick={()=>thClick(K.crTargetSprint)} style={{ padding:"7px 8px", textAlign:"left", color:"#fff", fontWeight:700, fontSize:10, whiteSpace:"nowrap", cursor:"pointer", userSelect:"none", minWidth:95, borderRight:"1px solid rgba(255,255,255,0.1)" }}>
+                    Target Sprint{sortIco(K.crTargetSprint)}<EditHeaderBadge />
+                  </th>
                 </tr>
               </thead>
               <tbody>
