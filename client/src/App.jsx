@@ -55,6 +55,9 @@ const normaliseWs = name => {
   return WS_ALIASES[key] || name;
 };
 
+// Column options fetched from Smartsheet (PICKLIST columns) — populated by applyApiData
+const _colOptions = {};
+
 // ─── PARSERS ─────────────────────────────────────────────────────────────────
 function parseWorkplan(sheets) {
   const key = Object.keys(sheets).find(k => k.toLowerCase().includes("workplan")) || Object.keys(sheets)[0];
@@ -720,16 +723,18 @@ const EditHeaderBadge = () => (
 
 // ── Editable cell — click to edit, saves to Smartsheet on blur/Enter ─────────
 // To add more editable columns: update EDITABLE in server/smartsheet.js only.
-function EditableCell({ sheet, rowId, colName, value, multiline = false, onSaved }) {
+function EditableCell({ sheet, rowId, colName, value, multiline = false, options: optionsProp = null, onSaved }) {
   const [editing, setEditing]   = useState(false);
   const [draft,   setDraft]     = useState(value ?? "");
   const [saving,  setSaving]    = useState(false);
   const [error,   setError]     = useState(null);
 
+  const options = optionsProp ?? _colOptions[sheet]?.[colName] ?? null;
+
   const startEdit = () => { setDraft(value ?? ""); setError(null); setEditing(true); };
 
   const save = async () => {
-    const trimmed = draft.trim();
+    const trimmed = typeof draft === "string" ? draft.trim() : String(draft ?? "").trim();
     if (trimmed === String(value ?? "").trim()) { setEditing(false); return; }
     setSaving(true);
     setError(null);
@@ -764,6 +769,18 @@ function EditableCell({ sheet, rowId, colName, value, multiline = false, onSaved
       width: "100%", padding: "4px 6px", fontSize: 12, border: `1.5px solid ${C.navyLight}`,
       borderRadius: 4, outline: "none", fontFamily: "inherit", boxSizing: "border-box",
     };
+    if (options && options.length > 0) {
+      return (
+        <div>
+          <select value={draft} onChange={e => setDraft(e.target.value)}
+            onBlur={save} autoFocus style={{ ...sharedStyle, background: C.white }}>
+            <option value="">— select —</option>
+            {options.map(o => <option key={o} value={o}>{o}</option>)}
+          </select>
+          {error && <div style={{ color: C.delayed, fontSize: 10, marginTop: 2 }}>{error}</div>}
+        </div>
+      );
+    }
     return (
       <div>
         {multiline
@@ -972,6 +989,11 @@ export default function App() {
     if (apiJson.cap?.length)  { const s={"07. SAP Tech Sprint Capacity Management":apiJson.cap}; setCap(parseCapacity(s)); setRawSheets(p=>({...p,cap:s})); }
     if (apiJson.test?.length) { const s={"110. Test Scenarios":apiJson.test}; setTest(parseTestScenarios(s)); setRawSheets(p=>({...p,test:s})); }
     if (apiJson.meta)         setSyncMeta({ lastSync: apiJson.meta.lastSync, source: "smartsheet" });
+    if (apiJson.columnOptions) {
+      Object.keys(apiJson.columnOptions).forEach(k => {
+        _colOptions[k] = { ...(_colOptions[k] || {}), ...(apiJson.columnOptions[k] || {}) };
+      });
+    }
     console.log("[PMT] API data applied:", apiJson.meta);
   }, []);
 
@@ -1826,6 +1848,9 @@ function CRDrillModal({ title, rows, K, showCompletion, onClose }) {
   const [sprintF,  setSprintF]  = useState("All");
   const [compSF,   setCompSF]   = useState(showCompletion ? "Not Completed" : "All");
   const [showColPanel, setShowColPanel] = useState(false);
+  const [localVals, setLocalVals] = useState({});
+  const localUpdate = (rowId, col, val) =>
+    setLocalVals(prev => ({ ...prev, [rowId]: { ...(prev[rowId] || {}), [col]: val } }));
   const [colCfg, setColCfg] = useState({
     link:    { label:"Link",          visible:true,  width:50  },
     raidId:  { label:"RAID ID",       visible:true,  width:90  },
@@ -1891,8 +1916,8 @@ function CRDrillModal({ title, rows, K, showCompletion, onClose }) {
     { key:"exp",     td:(r)=><td style={{padding:"6px 8px",color:C.text,wordBreak:"break-word",width:colCfg.exp.width,overflow:"hidden"}}>{String(r[K.experience]||"—")}</td> },
     { key:"comp",    td:(r)=><td style={{padding:"6px 8px",color:C.text,wordBreak:"break-word",width:colCfg.comp.width,overflow:"hidden"}}>{String(r[K.component]||"—")}</td> },
     { key:"topic",   td:(r)=><td style={{padding:"6px 8px",color:C.muted,wordBreak:"break-word",width:colCfg.topic.width,overflow:"hidden"}}>{String(r[K.topic]||"—")}</td> },
-    { key:"desc",    td:(r)=><td style={{padding:"6px 8px",color:C.text,wordBreak:"break-word",width:colCfg.desc.width,overflow:"hidden",lineHeight:1.5}}>{String(r[K.desc]||"—")}</td> },
-    { key:"comment", td:(r)=><td style={{padding:"6px 8px",color:C.muted,wordBreak:"break-word",width:colCfg.comment.width,overflow:"hidden",lineHeight:1.5}}>{String(r[K.comment]||"—")}</td> },
+    { key:"desc",    td:(r)=><td style={{padding:"6px 8px",color:C.text,wordBreak:"break-word",width:colCfg.desc.width,overflow:"hidden",lineHeight:1.5}}>{r._rowId&&K.desc?<EditableCell sheet="raid" rowId={r._rowId} colName={K.desc} value={localVals[r._rowId]?.[K.desc]??String(r[K.desc]||"")} multiline onSaved={v=>localUpdate(r._rowId,K.desc,v)}/>:String(r[K.desc]||"—")}</td> },
+    { key:"comment", td:(r)=><td style={{padding:"6px 8px",color:C.muted,wordBreak:"break-word",width:colCfg.comment.width,overflow:"hidden",lineHeight:1.5}}>{r._rowId&&K.comment?<EditableCell sheet="raid" rowId={r._rowId} colName={K.comment} value={localVals[r._rowId]?.[K.comment]??String(r[K.comment]||"")} multiline onSaved={v=>localUpdate(r._rowId,K.comment,v)}/>:String(r[K.comment]||"—")}</td> },
     { key:"owner",   td:(r)=><td style={{padding:"6px 8px",color:C.muted,whiteSpace:"nowrap",width:colCfg.owner.width,overflow:"hidden"}}>{String(r[K.owner]||"—")}</td> },
     { key:"dueDate", td:(r)=><td style={{padding:"6px 8px",color:C.muted,whiteSpace:"nowrap",width:colCfg.dueDate.width,overflow:"hidden"}}>{String(r[K.date]||"—")}</td> },
     { key:"totHrs",  td:(r)=>numCell(r,K.crHours) },
@@ -1901,7 +1926,7 @@ function CRDrillModal({ title, rows, K, showCompletion, onClose }) {
     { key:"sdOps",   td:(r)=>numCell(r,K.crSdOps) },
     { key:"ocm",     td:(r)=>numCell(r,K.crOcm) },
     { key:"ux",      td:(r)=>numCell(r,K.crUx) },
-    { key:"sprint",  td:(r)=><td style={{padding:"6px 8px",color:C.muted,whiteSpace:"nowrap",width:colCfg.sprint.width,overflow:"hidden"}}>{String(r[K.crTargetSprint]||"—")}</td> },
+    { key:"sprint",  td:(r)=><td style={{padding:"6px 8px",whiteSpace:"nowrap",width:colCfg.sprint.width,overflow:"hidden"}}>{r._rowId&&K.crTargetSprint?<EditableCell sheet="raid" rowId={r._rowId} colName={K.crTargetSprint} value={localVals[r._rowId]?.[K.crTargetSprint]??String(r[K.crTargetSprint]||"")} onSaved={v=>localUpdate(r._rowId,K.crTargetSprint,v)}/>:String(r[K.crTargetSprint]||"—")}</td> },
     { key:"compl",   td:(r)=>showCompletion?<td style={{padding:"6px 8px",width:colCfg.compl.width,overflow:"hidden"}}><span style={{background:isCompleted(r)?"#dcfce7":"#f3f4f6",color:isCompleted(r)?"#166534":"#6b7280",borderRadius:4,padding:"2px 7px",fontSize:10,fontWeight:700}}>{String(r[K.crCompletion]||"—")}</span></td>:null },
   ];
 
@@ -1977,7 +2002,7 @@ function CRDrillModal({ title, rows, K, showCompletion, onClose }) {
                   <th key={d.key} style={{ padding:"7px 8px", textAlign:"left", color:"#fff", fontWeight:700, fontSize:10,
                     whiteSpace:"nowrap", width:colCfg[d.key].width, position:"relative",
                     borderRight:i<arr.length-1?"1px solid rgba(255,255,255,0.1)":"none", overflow:"hidden" }}>
-                    {colCfg[d.key].label}
+                    {colCfg[d.key].label}{["desc","comment","sprint"].includes(d.key) && <EditHeaderBadge />}
                     <div onMouseDown={e => resizeStart(d.key, e)}
                       style={{ position:"absolute", right:0, top:0, bottom:0, width:6, cursor:"col-resize", zIndex:10 }}
                       onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,0.3)"}
@@ -2051,6 +2076,9 @@ function ChangeRequestTab({ raid, cap }) {
   const [sortDir,     setSortDir]     = useState("asc");
   const [checkedIds,  setCheckedIds]  = useState(new Set());
   const [expandedIds, setExpandedIds] = useState(new Set());
+  const [localVals,   setLocalVals]   = useState({});
+  const localUpdate = (rowId, col, val) =>
+    setLocalVals(prev => ({ ...prev, [rowId]: { ...(prev[rowId] || {}), [col]: val } }));
 
   if (!raid) return <Empty label="Upload RAID Log file above to view this tab." />;
   if (!raid.cr || raid.cr.all.length === 0) return (
@@ -2321,19 +2349,23 @@ function ChangeRequestTab({ raid, cap }) {
                         <td style={{ padding:"7px 8px", color:C.text, wordBreak:"break-word", maxWidth:120 }}>{String(r[K.component]||"—")}</td>
                         <td style={{ padding:"7px 8px", color:C.muted, wordBreak:"break-word", maxWidth:130 }}>{String(r[K.topic]||"—")}</td>
                         {[K.crHours, K.crSapFunc, K.crSapTech, K.crSdOps, K.crOcm, K.crUx].map(kk => numTd(kk))}
-                        <td style={{ padding:"7px 8px", color:C.muted, whiteSpace:"nowrap" }}>{String(r[K.crTargetSprint]||"—")}</td>
+                        <td style={{ padding:"7px 8px", whiteSpace:"nowrap" }}>
+                          {r._rowId&&K.crTargetSprint
+                            ? <EditableCell sheet="raid" rowId={r._rowId} colName={K.crTargetSprint} value={localVals[r._rowId]?.[K.crTargetSprint]??String(r[K.crTargetSprint]||"")} onSaved={v=>localUpdate(r._rowId,K.crTargetSprint,v)}/>
+                            : String(r[K.crTargetSprint]||"—")}
+                        </td>
                       </tr>
                       {expanded && (
                         <tr style={{ background:"#f0f6ff", borderBottom:`2px solid #93c5fd` }}>
                           <td colSpan={14} style={{ padding:"10px 16px 12px 48px" }}>
                             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 200px", gap:16 }}>
                               <div>
-                                <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:4 }}>Description</div>
-                                <div style={{ fontSize:11, color:C.text, lineHeight:1.6 }}>{String(r[K.desc]||"—")}</div>
+                                <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:4 }}>Description <EditHeaderBadge /></div>
+                                <div style={{ fontSize:11, color:C.text, lineHeight:1.6 }}>{r._rowId&&K.desc?<EditableCell sheet="raid" rowId={r._rowId} colName={K.desc} value={localVals[r._rowId]?.[K.desc]??String(r[K.desc]||"")} multiline onSaved={v=>localUpdate(r._rowId,K.desc,v)}/>:String(r[K.desc]||"—")}</div>
                               </div>
                               <div>
-                                <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:4 }}>Comments / Resolution History</div>
-                                <div style={{ fontSize:11, color:C.muted, lineHeight:1.6 }}>{String(r[K.comment]||"—")}</div>
+                                <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:4 }}>Comments / Resolution History <EditHeaderBadge /></div>
+                                <div style={{ fontSize:11, color:C.muted, lineHeight:1.6 }}>{r._rowId&&K.comment?<EditableCell sheet="raid" rowId={r._rowId} colName={K.comment} value={localVals[r._rowId]?.[K.comment]??String(r[K.comment]||"")} multiline onSaved={v=>localUpdate(r._rowId,K.comment,v)}/>:String(r[K.comment]||"—")}</div>
                               </div>
                               <div>
                                 <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:4 }}>Primary Owner</div>

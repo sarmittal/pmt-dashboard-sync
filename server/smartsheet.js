@@ -99,12 +99,16 @@ async function fetchSheet(sheetId, token, fetchAttachments = false) {
   }
   const data = await res.json();
 
-  // id→name for reading; name→id stored for write-back
+  // id→name for reading; name→id stored for write-back; PICKLIST options for dropdowns
   const columnNameById = {};
   const columnIdByName = {};
+  const columnOptions  = {};
   for (const col of data.columns || []) {
     columnNameById[col.id] = col.title;
     columnIdByName[col.title] = col.id;
+    if (col.type === "PICKLIST" && Array.isArray(col.options) && col.options.length) {
+      columnOptions[col.title] = col.options;
+    }
   }
 
   const attachMap = fetchAttachments ? await fetchRowAttachments(sheetId, token) : {};
@@ -122,7 +126,7 @@ async function fetchSheet(sheetId, token, fetchAttachments = false) {
     }
     rows.push(record);
   }
-  return { rows, columnIdByName };
+  return { rows, columnIdByName, columnOptions };
 }
 
 function slim(rows, cols) {
@@ -203,15 +207,17 @@ export async function fetchAllSheets(token) {
 
   const results = {};
   const columnMaps = {};
+  const allColumnOptions = {};
   const errors = [];
 
   await Promise.allSettled(
     Object.entries(SHEETS).map(async ([key, id]) => {
       try {
-        const { rows, columnIdByName } = await fetchSheet(id, token, key === "raid");
+        const { rows, columnIdByName, columnOptions } = await fetchSheet(id, token, key === "raid");
         const slimmed = slim(rows, KEEP[key]);
         results[key] = key === "cap" ? cleanCapacityColumns(slimmed) : slimmed;
         columnMaps[key] = columnIdByName;
+        if (Object.keys(columnOptions).length) allColumnOptions[key] = columnOptions;
         console.log(`[smartsheet] ${key}: ${rows.length} rows`);
       } catch (err) {
         errors.push(`${key}: ${err.message}`);
@@ -232,6 +238,7 @@ export async function fetchAllSheets(token) {
         errors: errors.length ? errors : undefined,
       },
       ...results,
+      columnOptions: allColumnOptions,
     },
     columnMaps,
   };
