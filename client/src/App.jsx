@@ -4679,6 +4679,12 @@ function TestScenariosTab({ data, wp, req }) {
   const [subTab,    setSubTab]    = useState("metrics");
   const [spModal,   setSpModal]   = useState(null);
   const [drillModal,    setDrillModal]    = useState(null);
+  // Scenarios sub-tab state
+  const [scenExpanded,  setScenExpanded]  = useState(new Set());
+  const [scenActiveReq, setScenActiveReq] = useState({});
+  const [scenSpF,       setScenSpF]       = useState("ALL");
+  const [scenPersonaF,  setScenPersonaF]  = useState("ALL");
+  const [scenSitF,      setScenSitF]      = useState("ALL");
   const [untaggedModal,  setUntaggedModal]  = useState(null);
   const [taggedModal,    setTaggedModal]    = useState(null);
   const [relevantModal,      setRelevantModal]      = useState(null);
@@ -5323,7 +5329,7 @@ function TestScenariosTab({ data, wp, req }) {
   const subTabBar = (
     <div style={{ background:"#43978F", borderBottom:"1px solid #357a73", marginBottom:16 }}>
       <div style={{ display:"flex", paddingLeft:4 }}>
-        {[{id:"metrics",label:"Overall Metrics"},{id:"review",label:"Review Status"}].map(st => (
+        {[{id:"metrics",label:"Overall Metrics"},{id:"review",label:"Review Status"},{id:"scenarios",label:"Test Scenarios"}].map(st => (
           <button key={st.id} onClick={() => setSubTab(st.id)} style={{
             padding:"10px 20px", border:"none", background:"transparent", cursor:"pointer",
             color: subTab===st.id ? "#fff" : "rgba(255,255,255,0.7)",
@@ -5687,11 +5693,211 @@ function TestScenariosTab({ data, wp, req }) {
     </div>
   );
 
+  // ── Scenarios sub-tab ────────────────────────────────────────────────────
+  const _splitUSIds = v => Array.from(new Set(String(v||"").split(/[\n,;]/).map(s=>s.trim()).filter(Boolean)));
+  const _taggedCount = r => _splitUSIds(r[K.similarUSIds]).length;
+
+  const _allScenSps      = Array.from(new Set(draftedRows.map(r=>String(r[K.subprocess]||"").trim()).filter(Boolean))).sort();
+  const _allScenPersonas = Array.from(new Set(draftedRows.map(r=>String(r[K.persona]||"").trim()).filter(Boolean))).sort();
+  const _allScenSits     = Array.from(new Set(draftedRows.map(r=>String(r[K.sitPlan]||"").trim()).filter(Boolean))).sort();
+
+  const _scenFiltered = draftedRows.filter(r =>
+    (scenSpF      === "ALL" || String(r[K.subprocess]||"").trim() === scenSpF) &&
+    (scenPersonaF === "ALL" || String(r[K.persona]||"").trim()    === scenPersonaF) &&
+    (scenSitF     === "ALL" || String(r[K.sitPlan]||"").trim()    === scenSitF)
+  );
+
+  const _toggleScen = id => setScenExpanded(prev => { const n=new Set(prev); n.has(id)?n.delete(id):n.add(id); return n; });
+  const _toggleReq  = (scenId, reqId) => setScenActiveReq(prev => ({
+    ...prev, [scenId]: prev[scenId]===reqId ? null : reqId
+  }));
+
+  const _statusBadge = v => {
+    const s = String(v||"").replace(/^\d+\.\s*/,"").trim();
+    if (!s || s==="None" || s==="nan") return <span style={{ color:C.muted }}>—</span>;
+    const sl = s.toLowerCase();
+    const [bg,color,border] = sl.includes("reviewed, request") ? ["#fef3c7","#92400e","#fcd34d"]
+      : sl.includes("reviewed")        ? ["#dcfce7","#166534","#86efac"]
+      : sl.includes("ready for review") || sl.includes("updated, ready") ? ["#dbeafe","#1e40af","#93c5fd"]
+      : sl.includes("not applicable")  ? ["#f1f5f9","#64748b","#cbd5e1"]
+      : ["#f8fafc","#475569","#e2e8f0"];
+    return <span style={{ background:bg, color, border:`1px solid ${border}`, borderRadius:4, padding:"2px 6px", fontSize:10, fontWeight:600, whiteSpace:"nowrap" }}>{s.length>20?s.slice(0,19)+"…":s}</span>;
+  };
+
+  const _fpill = (label, isActive, count, onClick) => (
+    <button key={label} onClick={onClick}
+      style={{ display:"flex", alignItems:"center", gap:4, padding:"3px 9px", borderRadius:20,
+        border:`2px solid ${isActive?C.navyLight:C.border}`,
+        background:isActive?C.navyLight:C.white, color:isActive?"#fff":C.text,
+        cursor:"pointer", fontSize:10, fontWeight:700, transition:"all .12s" }}>
+      {label}
+      <span style={{ background:isActive?"rgba(255,255,255,0.25)":"#f1f5f9", color:isActive?"#fff":C.text,
+        borderRadius:10, padding:"1px 6px", fontSize:10, fontWeight:800 }}>{count}</span>
+    </button>
+  );
+
+  const scenariosSubTab = (
+    <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+      {/* Filter bar */}
+      <div style={{ background:"#f8fafc", border:`1px solid ${C.border}`, borderRadius:8, padding:"10px 14px", display:"flex", flexDirection:"column", gap:8 }}>
+        <div style={{ fontSize:10, fontWeight:700, color:C.text, textTransform:"uppercase", letterSpacing:"0.06em" }}>Filters</div>
+        {_allScenSps.length > 0 && (
+          <div style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
+            <span style={{ fontSize:10, fontWeight:700, color:"#374151", minWidth:90 }}>Sub Process</span>
+            {_fpill("All", scenSpF==="ALL", draftedRows.filter(r=>(scenPersonaF==="ALL"||String(r[K.persona]||"").trim()===scenPersonaF)&&(scenSitF==="ALL"||String(r[K.sitPlan]||"").trim()===scenSitF)).length, ()=>setScenSpF("ALL"))}
+            {_allScenSps.map(v => _fpill(v, scenSpF===v, draftedRows.filter(r=>String(r[K.subprocess]||"").trim()===v&&(scenPersonaF==="ALL"||String(r[K.persona]||"").trim()===scenPersonaF)&&(scenSitF==="ALL"||String(r[K.sitPlan]||"").trim()===scenSitF)).length, ()=>setScenSpF(scenSpF===v?"ALL":v)))}
+          </div>
+        )}
+        {_allScenPersonas.length > 0 && (
+          <div style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
+            <span style={{ fontSize:10, fontWeight:700, color:"#374151", minWidth:90 }}>Persona</span>
+            {_fpill("All", scenPersonaF==="ALL", draftedRows.filter(r=>(scenSpF==="ALL"||String(r[K.subprocess]||"").trim()===scenSpF)&&(scenSitF==="ALL"||String(r[K.sitPlan]||"").trim()===scenSitF)).length, ()=>setScenPersonaF("ALL"))}
+            {_allScenPersonas.map(v => _fpill(v, scenPersonaF===v, draftedRows.filter(r=>String(r[K.persona]||"").trim()===v&&(scenSpF==="ALL"||String(r[K.subprocess]||"").trim()===scenSpF)&&(scenSitF==="ALL"||String(r[K.sitPlan]||"").trim()===scenSitF)).length, ()=>setScenPersonaF(scenPersonaF===v?"ALL":v)))}
+          </div>
+        )}
+        {_allScenSits.length > 0 && (
+          <div style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
+            <span style={{ fontSize:10, fontWeight:700, color:"#374151", minWidth:90 }}>Target SIT</span>
+            {_fpill("All", scenSitF==="ALL", draftedRows.filter(r=>(scenSpF==="ALL"||String(r[K.subprocess]||"").trim()===scenSpF)&&(scenPersonaF==="ALL"||String(r[K.persona]||"").trim()===scenPersonaF)).length, ()=>setScenSitF("ALL"))}
+            {_allScenSits.map(v => _fpill(v, scenSitF===v, draftedRows.filter(r=>String(r[K.sitPlan]||"").trim()===v&&(scenSpF==="ALL"||String(r[K.subprocess]||"").trim()===scenSpF)&&(scenPersonaF==="ALL"||String(r[K.persona]||"").trim()===scenPersonaF)).length, ()=>setScenSitF(scenSitF===v?"ALL":v)))}
+          </div>
+        )}
+      </div>
+
+      {/* Table */}
+      <Card style={{ padding:0 }}>
+        <div style={{ overflowX:"auto" }}>
+          <table style={{ width:"100%", borderCollapse:"collapse", fontSize:11 }}>
+            <thead style={{ position:"sticky", top:0, zIndex:2 }}>
+              <tr style={{ background:C.navy }}>
+                <th style={{ padding:"8px 10px", textAlign:"left", color:"#fff", fontWeight:700, fontSize:10, minWidth:36, borderRight:"1px solid rgba(255,255,255,0.1)" }}></th>
+                <th style={{ padding:"8px 10px", textAlign:"left", color:"#fff", fontWeight:700, fontSize:10, minWidth:80, borderRight:"1px solid rgba(255,255,255,0.1)" }}>ID</th>
+                <th style={{ padding:"8px 10px", textAlign:"left", color:"#a8d8ff", fontWeight:700, fontSize:10, minWidth:220, borderRight:"1px solid rgba(255,255,255,0.1)" }}>Scenario</th>
+                <th style={{ padding:"8px 10px", textAlign:"left", color:"#a8d8ff", fontWeight:700, fontSize:10, minWidth:130, borderRight:"1px solid rgba(255,255,255,0.1)" }}>Sub Process</th>
+                <th style={{ padding:"8px 10px", textAlign:"left", color:"#a8d8ff", fontWeight:700, fontSize:10, minWidth:180, borderRight:"1px solid rgba(255,255,255,0.1)" }}>Additional Details</th>
+                <th style={{ padding:"8px 10px", textAlign:"left", color:"#a8d8ff", fontWeight:700, fontSize:10, minWidth:100, borderRight:"1px solid rgba(255,255,255,0.1)" }}>Persona</th>
+                <th style={{ padding:"8px 10px", textAlign:"center", color:"#a8d8ff", fontWeight:700, fontSize:10, minWidth:60, borderRight:"1px solid rgba(255,255,255,0.1)" }}>Est. Cases</th>
+                <th style={{ padding:"8px 10px", textAlign:"left", color:"#a8d8ff", fontWeight:700, fontSize:10, minWidth:100, borderRight:"1px solid rgba(255,255,255,0.1)" }}>Target SIT</th>
+                <th style={{ padding:"8px 10px", textAlign:"center", color:"#fcd34d", fontWeight:700, fontSize:10, minWidth:90, borderRight:"1px solid rgba(255,255,255,0.1)" }}>SD Review</th>
+                <th style={{ padding:"8px 10px", textAlign:"center", color:"#fcd34d", fontWeight:700, fontSize:10, minWidth:90, borderRight:"1px solid rgba(255,255,255,0.1)" }}>PMT SD</th>
+                <th style={{ padding:"8px 10px", textAlign:"center", color:"#fcd34d", fontWeight:700, fontSize:10, minWidth:90, borderRight:"1px solid rgba(255,255,255,0.1)" }}>DT</th>
+                <th style={{ padding:"8px 10px", textAlign:"center", color:"#c4f1c4", fontWeight:700, fontSize:10, minWidth:90, borderRight:"1px solid rgba(255,255,255,0.1)" }}>D&A</th>
+                <th style={{ padding:"8px 10px", textAlign:"center", color:"#c4f1c4", fontWeight:700, fontSize:10, minWidth:80 }}>Tagged US</th>
+              </tr>
+            </thead>
+            <tbody>
+              {_scenFiltered.length === 0 && (
+                <tr><td colSpan={13} style={{ padding:24, textAlign:"center", color:C.muted }}>No scenarios match selected filters</td></tr>
+              )}
+              {_scenFiltered.map((r, i) => {
+                const scenId  = String(r[K.id]||i);
+                const isOpen  = scenExpanded.has(scenId);
+                const tagIds  = _splitUSIds(r[K.similarUSIds]);
+                const activeReqId = scenActiveReq[scenId] || null;
+                const reqRow  = activeReqId ? reqById[activeReqId] : null;
+                const rowBg   = i%2===0 ? C.white : "#f9fafb";
+                return (
+                  <React.Fragment key={scenId}>
+                    <tr style={{ background:rowBg, borderBottom:isOpen?`1px solid #93c5fd`:`1px solid ${C.border}`, verticalAlign:"top", cursor:"pointer" }}
+                      onClick={() => _toggleScen(scenId)}>
+                      <td style={{ padding:"8px 10px", textAlign:"center", color:isOpen?C.navyLight:C.muted, fontWeight:700 }}>{isOpen?"▾":"▸"}</td>
+                      <td style={{ padding:"8px 10px", fontWeight:700, color:C.navyLight, whiteSpace:"nowrap", borderRight:`1px solid ${C.border}` }}>{String(r[K.id]||"—")}</td>
+                      <td style={{ padding:"8px 10px", color:C.text, wordBreak:"break-word", borderRight:`1px solid ${C.border}` }}>{String(r[K.name]||"—")}</td>
+                      <td style={{ padding:"8px 10px", color:C.muted, whiteSpace:"nowrap", borderRight:`1px solid ${C.border}` }}>{String(r[K.subprocess]||"—")}</td>
+                      <td style={{ padding:"8px 10px", color:C.text, wordBreak:"break-word", maxWidth:220, borderRight:`1px solid ${C.border}` }}>{String(r[K.additionalDetails]||"—")}</td>
+                      <td style={{ padding:"8px 10px", color:C.muted, whiteSpace:"nowrap", borderRight:`1px solid ${C.border}` }}>{String(r[K.persona]||"—")}</td>
+                      <td style={{ padding:"8px 10px", textAlign:"center", fontWeight:700, color:C.text, borderRight:`1px solid ${C.border}` }}>{r[K.estCases]||"—"}</td>
+                      <td style={{ padding:"8px 10px", color:C.muted, whiteSpace:"nowrap", borderRight:`1px solid ${C.border}` }}>{String(r[K.sitPlan]||"—")}</td>
+                      <td style={{ padding:"8px 10px", textAlign:"center", borderRight:`1px solid ${C.border}` }}>{_statusBadge(r[K.sdStatus])}</td>
+                      <td style={{ padding:"8px 10px", textAlign:"center", borderRight:`1px solid ${C.border}` }}>{_statusBadge(r[K.pmtStatus])}</td>
+                      <td style={{ padding:"8px 10px", textAlign:"center", borderRight:`1px solid ${C.border}` }}>{_statusBadge(r[K.dtStatus])}</td>
+                      <td style={{ padding:"8px 10px", textAlign:"center", borderRight:`1px solid ${C.border}` }}>{_statusBadge(r[K.daStatus])}</td>
+                      <td style={{ padding:"8px 10px", textAlign:"center" }} onClick={e=>e.stopPropagation()}>
+                        {tagIds.length > 0
+                          ? <span onClick={()=>_toggleScen(scenId)} style={{ background:"#eff6ff", color:"#1d4ed8", borderRadius:4, padding:"2px 8px", fontSize:10, fontWeight:700, cursor:"pointer" }}>{tagIds.length}</span>
+                          : <span style={{ color:C.muted }}>—</span>}
+                      </td>
+                    </tr>
+                    {isOpen && (
+                      <tr style={{ background:"#f0f6ff", borderBottom:`2px solid #93c5fd` }}>
+                        <td colSpan={13} style={{ padding:"12px 16px 14px 52px" }}>
+                          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:16, marginBottom: tagIds.length ? 14 : 0 }}>
+                            <div>
+                              <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:4 }}>Applicable Experience</div>
+                              <div style={{ fontSize:11, color:C.text, lineHeight:1.5 }}>{String(r[K.applicableExperience]||"—")}</div>
+                            </div>
+                            <div>
+                              <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:4 }}>Applicable Business</div>
+                              <div style={{ fontSize:11, color:C.text, lineHeight:1.5 }}>{String(r[K.applicableBusiness]||"—")}</div>
+                            </div>
+                            <div>
+                              <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:4 }}>Applicable Region</div>
+                              <div style={{ fontSize:11, color:C.text, lineHeight:1.5 }}>{String(r[K.applicableRegion]||"—")}</div>
+                            </div>
+                          </div>
+                          {tagIds.length > 0 && (
+                            <div>
+                              <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:6 }}>Tagged User Stories ({tagIds.length})</div>
+                              <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+                                {tagIds.map(usId => {
+                                  const isActive = activeReqId === usId;
+                                  return (
+                                    <span key={usId} onClick={()=>_toggleReq(scenId, usId)}
+                                      style={{ background:isActive?"#1d4ed8":"#eff6ff", color:isActive?"#fff":"#1d4ed8",
+                                        border:`1px solid ${isActive?"#1d4ed8":"#93c5fd"}`,
+                                        borderRadius:4, padding:"3px 9px", fontSize:11, fontWeight:700,
+                                        cursor:"pointer", transition:"all .12s" }}>
+                                      {usId}
+                                    </span>
+                                  );
+                                })}
+                              </div>
+                              {activeReqId && (
+                                <div style={{ marginTop:10, background:C.white, border:`1px solid #93c5fd`, borderRadius:6, padding:"10px 14px" }}>
+                                  {reqRow ? (
+                                    <div style={{ display:"grid", gridTemplateColumns:"120px 1fr 1fr", gap:12, alignItems:"start" }}>
+                                      <div>
+                                        <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:4 }}>Req ID</div>
+                                        <div style={{ fontSize:12, fontWeight:700, color:C.navyLight }}>{String(reqRow[reqK?.reqId]||activeReqId)}</div>
+                                      </div>
+                                      <div>
+                                        <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:4 }}>User Story</div>
+                                        <div style={{ fontSize:11, color:C.text, lineHeight:1.5 }}>{String(reqRow[reqK?.story]||"—")}</div>
+                                      </div>
+                                      <div>
+                                        <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:4 }}>Acceptance Criteria</div>
+                                        <div style={{ fontSize:11, color:C.muted, lineHeight:1.5 }}>{String(reqRow[reqK?.acceptance]||"—")}</div>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <div style={{ fontSize:11, color:C.muted, fontStyle:"italic" }}>No requirement data found for ID: {activeReqId}</div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        <div style={{ padding:"8px 14px", background:"#f8fafc", borderTop:`1px solid ${C.border}`, fontSize:10, color:C.muted }}>
+          Showing {_scenFiltered.length} of {draftedRows.length} scenarios
+        </div>
+      </Card>
+    </div>
+  );
+
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
       {subTabBar}
       {subTab === "review"  && reviewSubTab}
       {subTab === "metrics" && metricsSubTab}
+      {subTab === "scenarios" && scenariosSubTab}
 
       {spModal        && <ScenarioModal   title={spModal.title}        rows={spModal.rows}        onClose={() => setSpModal(null)} />}
       {drillModal     && <TeamDrillModal  title={drillModal.title}     rows={drillModal.rows}     teamId={drillModal.teamId} reqById={reqById} reqK={reqK} onClose={() => setDrillModal(null)} />}
