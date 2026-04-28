@@ -4774,16 +4774,11 @@ function TestScenariosTab({ data, wp, req }) {
       return () => { document.removeEventListener("mousemove", onMove); document.removeEventListener("mouseup", onUp); };
     }, []);
 
-    const startResize = (key, def, e) => {
-      e.preventDefault();
-      resizing.current = { key, startX: e.clientX, startW: colW[key] ?? def };
-    };
-
     const cw = (key, def) => colW[key] ?? def;
 
-    // Drag handle — the thin bar on the right edge of every <th>
-    const RH = ({ ck, def }) => (
-      <div onMouseDown={e => startResize(ck, def, e)}
+    // Plain function (not a React component) — avoids remount on every state update
+    const rh = (ck, def) => (
+      <div onMouseDown={e => { e.preventDefault(); resizing.current = { key:ck, startX:e.clientX, startW:cw(ck,def) }; }}
         style={{ position:"absolute", right:0, top:0, bottom:0, width:5, cursor:"col-resize", zIndex:4, userSelect:"none" }}
         onMouseEnter={e => e.currentTarget.style.background="rgba(99,140,200,0.45)"}
         onMouseLeave={e => e.currentTarget.style.background="transparent"} />
@@ -4791,32 +4786,42 @@ function TestScenariosTab({ data, wp, req }) {
 
     const curTeam    = TEAMS.find(t => t.id === tid);
     const priorTeams = (PRIOR_MAP[tid] || []).map(id => TEAMS.find(t => t.id === id)).filter(Boolean);
-    const curCols    = curTeam ? (curTeam.dueDateKey ? 4 : 3) : 0;
 
-    const th = (ck, def, label, extra={}) => (
-      <th key={ck} style={{ padding:"7px 8px", textAlign:"left", fontWeight:700, fontSize:10,
-        whiteSpace:"nowrap", color:C.muted, position:"relative", userSelect:"none",
-        width:cw(ck,def), minWidth:cw(ck,def), overflow:"hidden", ...extra }}>
-        {label}<RH ck={ck} def={def} />
-      </th>
-    );
-    const td = (content, extra={}) => (
-      <td style={{ padding:"7px 8px", verticalAlign:"top", fontSize:11, overflow:"hidden", ...extra }}>{content}</td>
-    );
-
-    // Common column definitions  [key, defaultWidth, label, dataKey, extraTdStyle]
-    const COMMON = [
-      ["id",   80,  "ID",                   K.id,                   { color:C.muted, fontWeight:600, whiteSpace:"nowrap" }],
-      ["nm",   220, "Scenario",             K.name,                 { wordBreak:"break-word" }],
-      ["sp",   130, "SubProcess",           K.subprocess,           { color:C.muted, whiteSpace:"nowrap" }],
-      ["ad",   160, "Additional Details",   K.additionalDetails,    { color:C.muted, wordBreak:"break-word" }],
-      ["pe",   90,  "Persona",              K.persona,              { color:C.muted, whiteSpace:"nowrap" }],
-      ["bz",   120, "Applicable Business",  K.applicableBusiness,   { color:C.muted, whiteSpace:"nowrap" }],
-      ["xp",   130, "Applicable Exp.",      K.applicableExperience, { color:C.muted, whiteSpace:"nowrap" }],
-      ["rg",   110, "Applicable Region",    K.applicableRegion,     { color:C.muted, whiteSpace:"nowrap" }],
-      ["ui",   120, "Similar US IDs",       K.similarUSIds,         { color:C.muted, wordBreak:"break-word" }],
-      ["ud",   130, "Similar US Data",      K.similarUSData,        { color:C.muted, wordBreak:"break-word" }],
+    // Flat column spec — drives colgroup, thead, and tbody uniformly
+    const mkTeamCols = (t, withDueDate) => [
+      ...(withDueDate && t.dueDateKey ? [{ ck:`${t.id}-dd`, def:100, label:"Due Date", render:r=>String(r[t.dueDateKey]||"—"), tdEx:{ color:C.muted, whiteSpace:"nowrap" }, team:t }] : []),
+      { ck:`${t.id}-rv`, def:110, label:"Reviewer", render:r=>String(r[t.reviewerKey]||"—"), tdEx:{ fontWeight:600 }, team:t },
+      { ck:`${t.id}-fb`, def:200, label:"Feedback",  render:r=>String(r[t.feedbackKey]||"—"), tdEx:{ color:C.muted, wordBreak:"break-word" }, team:t },
+      { ck:`${t.id}-st`, def:130, label:"Status",    render:r=>stPill(r,t),                    tdEx:{},                                        team:t, border:true },
     ];
+
+    const COMMON_COLS = [
+      { ck:"c-id",  def:80,  label:"ID",                   render:r=>String(r[K.id]||"—"),                   tdEx:{ color:C.muted, fontWeight:600, whiteSpace:"nowrap" } },
+      { ck:"c-nm",  def:220, label:"Scenario",              render:r=>String(r[K.name]||"—"),                 tdEx:{ wordBreak:"break-word" } },
+      { ck:"c-sp",  def:130, label:"SubProcess",            render:r=>String(r[K.subprocess]||"—"),           tdEx:{ color:C.muted, whiteSpace:"nowrap" } },
+      { ck:"c-ad",  def:160, label:"Additional Details",    render:r=>String(r[K.additionalDetails]||"—"),    tdEx:{ color:C.muted, wordBreak:"break-word" } },
+      { ck:"c-pe",  def:90,  label:"Persona",               render:r=>String(r[K.persona]||"—"),              tdEx:{ color:C.muted, whiteSpace:"nowrap" } },
+      { ck:"c-bz",  def:120, label:"Applicable Business",   render:r=>String(r[K.applicableBusiness]||"—"),   tdEx:{ color:C.muted, whiteSpace:"nowrap" } },
+      { ck:"c-xp",  def:130, label:"Applicable Exp.",       render:r=>String(r[K.applicableExperience]||"—"), tdEx:{ color:C.muted, whiteSpace:"nowrap" } },
+      { ck:"c-rg",  def:110, label:"Applicable Region",     render:r=>String(r[K.applicableRegion]||"—"),     tdEx:{ color:C.muted, whiteSpace:"nowrap" } },
+      { ck:"c-ui",  def:120, label:"Similar US IDs",        render:r=>String(r[K.similarUSIds]||"—"),         tdEx:{ color:C.muted, wordBreak:"break-word" } },
+      { ck:"c-ud",  def:130, label:"Similar US Data",       render:r=>String(r[K.similarUSData]||"—"),        tdEx:{ color:C.muted, wordBreak:"break-word" }, border:true },
+    ];
+
+    const curTeamCols   = curTeam ? mkTeamCols(curTeam, true)          : [];
+    const priorTeamCols = priorTeams.flatMap(t => mkTeamCols(t, false));
+    // Mark last of each prior-team group for the divider border
+    priorTeamCols.forEach((c, i, arr) => { if (i===arr.length-1 || arr[i+1].team!==c.team) c.border=true; });
+
+    const ALL_COLS = [...COMMON_COLS, ...curTeamCols, ...priorTeamCols];
+
+    const thSt = (col, extra={}) => ({
+      padding:"7px 8px", textAlign:"left", fontWeight:700, fontSize:10, whiteSpace:"nowrap",
+      color:col.team ? col.team.color : C.muted,
+      position:"relative", userSelect:"none", overflow:"hidden",
+      borderRight: col.border ? "2px solid #c8d4e0" : undefined,
+      ...extra,
+    });
 
     return (
       <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center" }} onClick={onClose}>
@@ -4827,52 +4832,36 @@ function TestScenariosTab({ data, wp, req }) {
           </div>
           <div style={{ overflowY:"auto", overflowX:"auto", flex:1 }}>
             <table style={{ borderCollapse:"collapse", fontSize:11, tableLayout:"fixed" }}>
+              {/* colgroup is the authoritative source of column widths for tableLayout:fixed */}
+              <colgroup>
+                {ALL_COLS.map(c => <col key={c.ck} style={{ width: cw(c.ck, c.def) }} />)}
+              </colgroup>
               <thead style={{ position:"sticky", top:0, zIndex:2 }}>
-                {/* Group header row */}
                 <tr>
-                  <th colSpan={COMMON.length} style={{ padding:"5px 10px", textAlign:"center", background:"#e8edf2", color:C.muted, fontWeight:700, fontSize:9, textTransform:"uppercase", letterSpacing:"0.06em", borderRight:"2px solid #c8d4e0", borderBottom:"1px solid #d1dce8" }}>Scenario Details</th>
-                  {/* Current team FIRST */}
-                  {curTeam && <th colSpan={curCols} style={{ padding:"5px 10px", textAlign:"center", background:curTeam.color, color:"#fff", fontWeight:800, fontSize:9, textTransform:"uppercase", letterSpacing:"0.06em", borderRight:"2px solid rgba(255,255,255,0.4)", borderBottom:"1px solid rgba(255,255,255,0.3)" }}>▶ {curTeam.label}</th>}
-                  {/* Prior teams after, in sequence order */}
-                  {priorTeams.map(t => (
-                    <th key={t.id} colSpan={3} style={{ padding:"5px 10px", textAlign:"center", background:t.color, color:"#fff", fontWeight:700, fontSize:9, textTransform:"uppercase", letterSpacing:"0.06em", borderRight:"2px solid rgba(255,255,255,0.3)", borderBottom:"1px solid rgba(255,255,255,0.3)", opacity:0.82 }}>{t.label}</th>
-                  ))}
+                  <th colSpan={COMMON_COLS.length} style={{ padding:"5px 10px", textAlign:"center", background:"#e8edf2", color:C.muted, fontWeight:700, fontSize:9, textTransform:"uppercase", letterSpacing:"0.06em", borderRight:"2px solid #c8d4e0", borderBottom:"1px solid #d1dce8" }}>Scenario Details</th>
+                  {curTeam && <th colSpan={curTeamCols.length} style={{ padding:"5px 10px", textAlign:"center", background:curTeam.color, color:"#fff", fontWeight:800, fontSize:9, textTransform:"uppercase", letterSpacing:"0.06em", borderRight:"2px solid rgba(255,255,255,0.4)", borderBottom:"1px solid rgba(255,255,255,0.3)" }}>▶ {curTeam.label}</th>}
+                  {priorTeams.map(t => {
+                    const n = priorTeamCols.filter(c => c.team===t).length;
+                    return <th key={t.id} colSpan={n} style={{ padding:"5px 10px", textAlign:"center", background:t.color, color:"#fff", fontWeight:700, fontSize:9, textTransform:"uppercase", letterSpacing:"0.06em", borderRight:"2px solid rgba(255,255,255,0.3)", borderBottom:"1px solid rgba(255,255,255,0.3)", opacity:0.82 }}>{t.label}</th>;
+                  })}
                 </tr>
-                {/* Column label row */}
                 <tr style={{ background:"#f0f4f8", borderBottom:`2px solid ${C.border}` }}>
-                  {COMMON.map(([ck, def, label], i) => th(ck, def, label, { borderRight:i===COMMON.length-1?"2px solid #c8d4e0":undefined }))}
-                  {/* Current team columns */}
-                  {curTeam && [
-                    ...(curTeam.dueDateKey ? [th(`${curTeam.id}-dd`, 100, "Due Date", { color:curTeam.color })] : []),
-                    th(`${curTeam.id}-rv`, 110, "Reviewer",  { color:curTeam.color }),
-                    th(`${curTeam.id}-fb`, 200, "Feedback",  { color:curTeam.color }),
-                    th(`${curTeam.id}-st`, 130, "Status",    { color:curTeam.color, borderRight:"2px solid #c8d4e0" }),
-                  ]}
-                  {/* Prior team columns */}
-                  {priorTeams.flatMap(t => [
-                    th(`${t.id}-rv`, 110, "Reviewer", { color:t.color }),
-                    th(`${t.id}-fb`, 200, "Feedback", { color:t.color }),
-                    th(`${t.id}-st`, 130, "Status",   { color:t.color, borderRight:"2px solid #c8d4e0" }),
-                  ])}
+                  {ALL_COLS.map(c => (
+                    <th key={c.ck} style={thSt(c)}>
+                      {c.label}{rh(c.ck, c.def)}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
-                {mRows.map((r,i) => (
+                {mRows.map((r, i) => (
                   <tr key={i} style={{ background:i%2===0?C.white:"#f9fafb", borderBottom:`1px solid ${C.border}` }}>
-                    {COMMON.map(([ck, def, , dk, ex], ci) => (
-                      <td key={ck} style={{ padding:"7px 8px", verticalAlign:"top", fontSize:11, width:cw(ck,def), overflow:"hidden", ...ex, ...(ci===COMMON.length-1?{borderRight:"2px solid #c8d4e0"}:{}) }}>{String(r[dk]||"—")}</td>
+                    {ALL_COLS.map(c => (
+                      <td key={c.ck} style={{ padding:"7px 8px", verticalAlign:"top", fontSize:11, overflow:"hidden",
+                        borderRight:c.border?"2px solid #c8d4e0":undefined, ...c.tdEx }}>
+                        {c.render(r)}
+                      </td>
                     ))}
-                    {curTeam && [
-                      ...(curTeam.dueDateKey ? [td(r[curTeam.dueDateKey]||"—", { color:C.muted, whiteSpace:"nowrap", width:cw(`${curTeam.id}-dd`,100) })] : []),
-                      td(<span style={{ fontWeight:600 }}>{r[curTeam.reviewerKey]||"—"}</span>, { width:cw(`${curTeam.id}-rv`,110) }),
-                      td(r[curTeam.feedbackKey]||"—", { color:C.muted, wordBreak:"break-word", width:cw(`${curTeam.id}-fb`,200) }),
-                      td(stPill(r,curTeam), { width:cw(`${curTeam.id}-st`,130), borderRight:"2px solid #c8d4e0" }),
-                    ]}
-                    {priorTeams.flatMap(t => [
-                      td(r[t.reviewerKey]||"—", { width:cw(`${t.id}-rv`,110) }),
-                      td(r[t.feedbackKey]||"—",  { color:C.muted, wordBreak:"break-word", width:cw(`${t.id}-fb`,200) }),
-                      td(stPill(r,t), { width:cw(`${t.id}-st`,130), borderRight:"2px solid #c8d4e0" }),
-                    ])}
                   </tr>
                 ))}
               </tbody>
