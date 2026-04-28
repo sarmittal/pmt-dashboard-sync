@@ -405,8 +405,9 @@ function parseTestScenarios(sheets) {
     daReviewer:   ks.find(k => k === "Reviewer (D&A)") || ks.find(k => /reviewer.*d.?&?a/i.test(k)),
     pmtReviewer:  ks.find(k => k === "Reviewer (PMT SD)") || ks.find(k => /reviewer.*pmt/i.test(k)),
     pmReviewer:   ks.find(k => k === "Reviewer (PM)") || ks.find(k => /\breviewer\b.*\bpm\b(?!t)/i.test(k)),
-    toBeDeleted:    ks.find(k => k === "To be deleted") || ks.find(k => /to.?be.?deleted/i.test(k)),
-    dupDataMiningNA: ks.find(k => k === "Duplicate, Data Mining and Not Applicable") || ks.find(k => /duplicate.*data.?mining|dup.*data.*mining/i.test(k)),
+    toBeDeleted:      ks.find(k => k === "To be deleted") || ks.find(k => /to.?be.?deleted/i.test(k)),
+    dupDataMiningNA:  ks.find(k => k === "Duplicate, Data Mining and Not Applicable") || ks.find(k => /duplicate.*data.?mining|dup.*data.*mining/i.test(k)),
+    openFeedbackFlag: ks.find(k => k === "Scenarios with Open Review feedback") || ks.find(k => /scenarios.*open.*review|open.*review.*feedback/i.test(k)),
     // Common scenario detail columns
     additionalDetails:    ks.find(k => k === "Additional Details") || ks.find(k => /additional.?details/i.test(k)),
     applicableBusiness:   ks.find(k => k === "Applicable Business") || ks.find(k => /applicable.?business/i.test(k)),
@@ -4730,12 +4731,25 @@ function TestScenariosTab({ data, wp, req }) {
     subprocessMap[sp].push(r);
   });
 
+  // Pre-build per-subprocess totals across ALL SITs (matches Smartsheet formula — no SIT filter)
+  const allSpDrafted = {}, allSpOpenFb = {};
+  draftedRows.forEach(r => {
+    const sp = String(r[K.subprocess] || "Unknown").trim();
+    allSpDrafted[sp] = (allSpDrafted[sp] || 0) + 1;
+    if (K.openFeedbackFlag && isTruthy(r[K.openFeedbackFlag]))
+      allSpOpenFb[sp] = (allSpOpenFb[sp] || 0) + 1;
+  });
+
   const tableRows = Object.entries(subprocessMap).map(([sp, spRows]) => {
     const reqRows = reqBySubprocess[sp] || [];
     const userStories         = reqRows.filter(r => !isReqExcluded(r)).length;
     const userStoriesRelevant = reqRows.filter(r => !isReqExcluded(r) && isTestScenarioReq(r)).length;
-    const drafted = spRows.length;
-    const openFeedbackCount = spRows.filter(r => TEAMS.some(t => isOpenFeedback(r[t.statusKey]))).length;
+    // Drafted = total across ALL SITs (no SIT filter) to match Smartsheet COUNTIFS formula
+    const drafted = allSpDrafted[sp] || 0;
+    // Open Feedback = dedicated boolean column (no SIT filter)
+    const openFeedbackCount = K.openFeedbackFlag
+      ? (allSpOpenFb[sp] || 0)
+      : spRows.filter(r => TEAMS.some(t => isOpenFeedback(r[t.statusKey]))).length;
     const teamStats = Object.fromEntries(TEAMS.map(t => {
       const reviewed = spRows.filter(r => isReviewedFinal(r[t.statusKey])).length;
       const pending  = spRows.filter(r => isPendingReview(r[t.statusKey])).length;
@@ -4797,15 +4811,24 @@ function TestScenariosTab({ data, wp, req }) {
       { ck:`${t.id}-st`, def:130, label:"Status",    render:r=>stPill(r,t),                    tdEx:{},                                        team:t, border:true },
     ];
 
+    // Split multi-select cell values and render each as a small pill
+    const multiVal = v => {
+      const parts = String(v||"").split(/\n|,|;/).map(s=>s.trim()).filter(Boolean);
+      if (!parts.length) return <span style={{color:C.muted}}>—</span>;
+      return <span style={{display:"flex",flexWrap:"wrap",gap:2}}>
+        {parts.map((p,i)=><span key={i} style={{background:"#f0f4f8",color:C.muted,borderRadius:3,padding:"1px 5px",fontSize:10,whiteSpace:"nowrap"}}>{p}</span>)}
+      </span>;
+    };
+
     const COMMON_COLS = [
       { ck:"c-id",  def:80,  label:"ID",                   render:r=>String(r[K.id]||"—"),                   tdEx:{ color:C.muted, fontWeight:600, whiteSpace:"nowrap" } },
       { ck:"c-nm",  def:220, label:"Scenario",              render:r=>String(r[K.name]||"—"),                 tdEx:{ wordBreak:"break-word" } },
       { ck:"c-sp",  def:130, label:"SubProcess",            render:r=>String(r[K.subprocess]||"—"),           tdEx:{ color:C.muted, whiteSpace:"nowrap" } },
       { ck:"c-ad",  def:160, label:"Additional Details",    render:r=>String(r[K.additionalDetails]||"—"),    tdEx:{ color:C.muted, wordBreak:"break-word" } },
       { ck:"c-pe",  def:90,  label:"Persona",               render:r=>String(r[K.persona]||"—"),              tdEx:{ color:C.muted, whiteSpace:"nowrap" } },
-      { ck:"c-bz",  def:120, label:"Applicable Business",   render:r=>String(r[K.applicableBusiness]||"—"),   tdEx:{ color:C.muted, whiteSpace:"nowrap" } },
-      { ck:"c-xp",  def:130, label:"Applicable Exp.",       render:r=>String(r[K.applicableExperience]||"—"), tdEx:{ color:C.muted, whiteSpace:"nowrap" } },
-      { ck:"c-rg",  def:110, label:"Applicable Region",     render:r=>String(r[K.applicableRegion]||"—"),     tdEx:{ color:C.muted, whiteSpace:"nowrap" } },
+      { ck:"c-bz",  def:140, label:"Applicable Business",   render:r=>multiVal(r[K.applicableBusiness]),   tdEx:{ wordBreak:"break-word" } },
+      { ck:"c-xp",  def:150, label:"Applicable Exp.",       render:r=>multiVal(r[K.applicableExperience]), tdEx:{ wordBreak:"break-word" } },
+      { ck:"c-rg",  def:130, label:"Applicable Region",     render:r=>multiVal(r[K.applicableRegion]),     tdEx:{ wordBreak:"break-word" } },
       { ck:"c-ui",  def:120, label:"Similar US IDs",        render:r=>String(r[K.similarUSIds]||"—"),         tdEx:{ color:C.muted, wordBreak:"break-word" } },
       { ck:"c-ud",  def:130, label:"Similar US Data",       render:r=>String(r[K.similarUSData]||"—"),        tdEx:{ color:C.muted, wordBreak:"break-word" }, border:true },
     ];
