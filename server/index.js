@@ -65,6 +65,18 @@ app.get("/api/health", (_req, res) => {
   });
 });
 
+// Temporary debug endpoint — returns all column names for test + req sheets
+app.get("/api/debug/columns", async (req, res) => {
+  try {
+    if (!cache) await doRefresh();
+    const testCols = cache.data.test?.[0] ? Object.keys(cache.data.test[0]).filter(k=>!k.startsWith("_")).sort() : [];
+    const reqCols  = cache.data.req?.[0]  ? Object.keys(cache.data.req[0]).filter(k=>!k.startsWith("_")).sort()  : [];
+    res.json({ testColumns: testCols, reqColumns: reqCols });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get("/api/data", async (req, res) => {
   try {
     if (!cache) await doRefresh();
