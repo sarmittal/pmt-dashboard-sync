@@ -5858,58 +5858,58 @@ function TestScenariosTab({ data, wp, req }) {
       <Card style={{ padding:0 }}>
         <div style={{ overflowX:"auto" }}>
           <table style={{ width:"100%", borderCollapse:"collapse", fontSize:11, tableLayout:"fixed" }}>
-            {/* colgroup drives column widths — updated on resize drag */}
+            {/* colgroup drives column widths — updated on resize drag (~1200px total default) */}
             <colgroup>
-              <col style={{ width: scenColW["expand"]||36  }} />
-              <col style={{ width: scenColW["del"]   ||75  }} />
-              <col style={{ width: scenColW["dup"]   ||75  }} />
-              <col style={{ width: scenColW["openFb"]||75  }} />
-              <col style={{ width: scenColW["id"]    ||90  }} />
-              <col style={{ width: scenColW["scen"]  ||220 }} />
-              <col style={{ width: scenColW["sp"]    ||130 }} />
-              <col style={{ width: scenColW["det"]   ||180 }} />
-              <col style={{ width: scenColW["pers"]  ||120 }} />
-              <col style={{ width: scenColW["est"]   ||65  }} />
-              <col style={{ width: scenColW["sit"]   ||100 }} />
-              <col style={{ width: scenColW["owner"] ||120 }} />
-              <col style={{ width: scenColW["func"]  ||100 }} />
-              <col style={{ width: scenColW["tech"]  ||100 }} />
-              <col style={{ width: scenColW["sd"]    ||110 }} />
-              <col style={{ width: scenColW["pmtsd"] ||90  }} />
-              <col style={{ width: scenColW["dt"]    ||70  }} />
-              <col style={{ width: scenColW["da"]    ||90  }} />
-              <col style={{ width: scenColW["tagUs"] ||80  }} />
-              <col style={{ width: scenColW["man"]   ||55  }} />
-              <col style={{ width: scenColW["rev"]   ||110 }} />
+              <col style={{ width: scenColW["expand"]||28  }} />
+              <col style={{ width: scenColW["del"]   ||46  }} />
+              <col style={{ width: scenColW["dup"]   ||46  }} />
+              <col style={{ width: scenColW["openFb"]||46  }} />
+              <col style={{ width: scenColW["id"]    ||60  }} />
+              <col style={{ width: scenColW["scen"]  ||100 }} />
+              <col style={{ width: scenColW["sp"]    ||65  }} />
+              <col style={{ width: scenColW["det"]   ||72  }} />
+              <col style={{ width: scenColW["pers"]  ||60  }} />
+              <col style={{ width: scenColW["est"]   ||44  }} />
+              <col style={{ width: scenColW["sit"]   ||56  }} />
+              <col style={{ width: scenColW["owner"] ||70  }} />
+              <col style={{ width: scenColW["func"]  ||60  }} />
+              <col style={{ width: scenColW["tech"]  ||60  }} />
+              <col style={{ width: scenColW["sd"]    ||72  }} />
+              <col style={{ width: scenColW["pmtsd"] ||58  }} />
+              <col style={{ width: scenColW["dt"]    ||44  }} />
+              <col style={{ width: scenColW["da"]    ||58  }} />
+              <col style={{ width: scenColW["tagUs"] ||48  }} />
+              <col style={{ width: scenColW["man"]   ||46  }} />
+              <col style={{ width: scenColW["rev"]   ||58  }} />
             </colgroup>
             <thead style={{ position:"sticky", top:0, zIndex:2 }}>
               {/* Group header row */}
               <tr style={{ background:C.navy }}>
-                <th rowSpan={2} style={{ padding:"8px 10px", color:"#fff",    fontWeight:700, fontSize:10, borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative", verticalAlign:"bottom" }}>{_rh("expand",36)}</th>
-                <th rowSpan={2} style={{ padding:"8px 6px",  textAlign:"center", color:"#fda4af", fontWeight:700, fontSize:10, borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative", verticalAlign:"bottom" }}>To Be Deleted{_rh("del",75)}</th>
-                <th rowSpan={2} style={{ padding:"8px 6px",  textAlign:"center", color:"#fbbf24", fontWeight:700, fontSize:10, borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative", verticalAlign:"bottom" }}>Dup / Data Mining / NA{_rh("dup",75)}</th>
-                <th rowSpan={2} style={{ padding:"8px 6px",  textAlign:"center", color:"#fde68a", fontWeight:700, fontSize:10, borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative", verticalAlign:"bottom" }}>Open Feedback{_rh("openFb",75)}</th>
-                <th rowSpan={2} style={{ padding:"8px 10px", textAlign:"left",   color:"#fff",    fontWeight:700, fontSize:10, borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative", verticalAlign:"bottom" }}>ID{_rh("id",90)}</th>
-                <th rowSpan={2} style={{ padding:"8px 10px", textAlign:"left",   color:"#fff",    fontWeight:700, fontSize:10, borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative", verticalAlign:"bottom" }}>Scenario{_rh("scen",220)}</th>
-                <th rowSpan={2} style={{ padding:"8px 10px", textAlign:"left",   color:"#fff",    fontWeight:700, fontSize:10, borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative", verticalAlign:"bottom" }}>Sub Process{_rh("sp",130)}</th>
-                <th rowSpan={2} style={{ padding:"8px 10px", textAlign:"left",   color:"#fff",    fontWeight:700, fontSize:10, borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative", verticalAlign:"bottom" }}>Additional Details{_rh("det",180)}</th>
-                <th rowSpan={2} style={{ padding:"8px 10px", textAlign:"left",   color:"#fff",    fontWeight:700, fontSize:10, borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative", verticalAlign:"bottom" }}>Persona{_rh("pers",120)}</th>
-                <th rowSpan={2} style={{ padding:"8px 10px", textAlign:"center", color:"#fff",    fontWeight:700, fontSize:10, borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative", verticalAlign:"bottom" }}>Est. Cases{_rh("est",65)}</th>
-                <th rowSpan={2} style={{ padding:"8px 10px", textAlign:"left",   color:"#fff",    fontWeight:700, fontSize:10, borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative", verticalAlign:"bottom" }}>Target SIT{_rh("sit",100)}</th>
-                <th colSpan={3}  style={{ padding:"6px 10px", textAlign:"center", color:"#166534", fontWeight:700, fontSize:10, background:"#dcfce7", borderRight:"1px solid rgba(255,255,255,0.1)", borderBottom:"1px solid #86efac", letterSpacing:"0.05em" }}>Internal Tech Team Reviews</th>
-                <th rowSpan={2} style={{ padding:"8px 10px", textAlign:"center", color:"#fcd34d", fontWeight:700, fontSize:10, borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative", verticalAlign:"bottom" }}>Consulting SD Review{_rh("sd",110)}</th>
-                <th rowSpan={2} style={{ padding:"8px 10px", textAlign:"center", color:"#fcd34d", fontWeight:700, fontSize:10, borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative", verticalAlign:"bottom" }}>PMT SD{_rh("pmtsd",90)}</th>
-                <th rowSpan={2} style={{ padding:"8px 10px", textAlign:"center", color:"#fcd34d", fontWeight:700, fontSize:10, borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative", verticalAlign:"bottom" }}>DT{_rh("dt",70)}</th>
-                <th rowSpan={2} style={{ padding:"8px 10px", textAlign:"center", color:"#c4f1c4", fontWeight:700, fontSize:10, borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative", verticalAlign:"bottom" }}>D&A{_rh("da",90)}</th>
-                <th rowSpan={2} style={{ padding:"8px 10px", textAlign:"center", color:"#c4f1c4", fontWeight:700, fontSize:10, borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative", verticalAlign:"bottom" }}>Tagged US{_rh("tagUs",80)}</th>
-                <th rowSpan={2} style={{ padding:"8px 10px", textAlign:"center", color:"#93c5fd", fontWeight:700, fontSize:10, borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative", verticalAlign:"bottom" }} title="Manual (Not Tech Enabled)">Man{_rh("man",55)}</th>
-                <th rowSpan={2} style={{ padding:"8px 10px", textAlign:"center", color:"#e2e8f0", fontWeight:700, fontSize:10, position:"relative", verticalAlign:"bottom" }}>Review Comments{_rh("rev",110)}</th>
+                <th rowSpan={2} style={{ padding:"6px 4px",  color:"#fff",    fontWeight:700, fontSize:10, borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative", verticalAlign:"bottom" }}>{_rh("expand",28)}</th>
+                <th rowSpan={2} style={{ padding:"6px 4px",  textAlign:"center", color:"#fda4af", fontWeight:700, fontSize:10, borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative", verticalAlign:"bottom" }}>To Be Deleted{_rh("del",46)}</th>
+                <th rowSpan={2} style={{ padding:"6px 4px",  textAlign:"center", color:"#fbbf24", fontWeight:700, fontSize:10, borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative", verticalAlign:"bottom" }}>Dup / Data Mining / NA{_rh("dup",46)}</th>
+                <th rowSpan={2} style={{ padding:"6px 4px",  textAlign:"center", color:"#fde68a", fontWeight:700, fontSize:10, borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative", verticalAlign:"bottom" }}>Open Feedback{_rh("openFb",46)}</th>
+                <th rowSpan={2} style={{ padding:"6px 6px",  textAlign:"left",   color:"#fff",    fontWeight:700, fontSize:10, borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative", verticalAlign:"bottom" }}>ID{_rh("id",60)}</th>
+                <th rowSpan={2} style={{ padding:"6px 6px",  textAlign:"left",   color:"#fff",    fontWeight:700, fontSize:10, borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative", verticalAlign:"bottom" }}>Scenario{_rh("scen",100)}</th>
+                <th rowSpan={2} style={{ padding:"6px 6px",  textAlign:"left",   color:"#fff",    fontWeight:700, fontSize:10, borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative", verticalAlign:"bottom" }}>Sub Process{_rh("sp",65)}</th>
+                <th rowSpan={2} style={{ padding:"6px 6px",  textAlign:"left",   color:"#fff",    fontWeight:700, fontSize:10, borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative", verticalAlign:"bottom" }}>Additional Details{_rh("det",72)}</th>
+                <th rowSpan={2} style={{ padding:"6px 6px",  textAlign:"left",   color:"#fff",    fontWeight:700, fontSize:10, borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative", verticalAlign:"bottom" }}>Persona{_rh("pers",60)}</th>
+                <th rowSpan={2} style={{ padding:"6px 4px",  textAlign:"center", color:"#fff",    fontWeight:700, fontSize:10, borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative", verticalAlign:"bottom" }}>Est. Cases{_rh("est",44)}</th>
+                <th rowSpan={2} style={{ padding:"6px 6px",  textAlign:"left",   color:"#fff",    fontWeight:700, fontSize:10, borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative", verticalAlign:"bottom" }}>Target SIT{_rh("sit",56)}</th>
+                <th colSpan={3}  style={{ padding:"5px 6px",  textAlign:"center", color:"#166534", fontWeight:700, fontSize:10, background:"#dcfce7", borderRight:"1px solid rgba(255,255,255,0.1)", borderBottom:"1px solid #86efac", letterSpacing:"0.05em" }}>Internal Tech Team Reviews</th>
+                <th rowSpan={2} style={{ padding:"6px 4px",  textAlign:"center", color:"#fcd34d", fontWeight:700, fontSize:10, borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative", verticalAlign:"bottom" }}>Consulting SD Review{_rh("sd",72)}</th>
+                <th rowSpan={2} style={{ padding:"6px 4px",  textAlign:"center", color:"#fcd34d", fontWeight:700, fontSize:10, borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative", verticalAlign:"bottom" }}>PMT SD{_rh("pmtsd",58)}</th>
+                <th rowSpan={2} style={{ padding:"6px 4px",  textAlign:"center", color:"#fcd34d", fontWeight:700, fontSize:10, borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative", verticalAlign:"bottom" }}>DT{_rh("dt",44)}</th>
+                <th rowSpan={2} style={{ padding:"6px 4px",  textAlign:"center", color:"#c4f1c4", fontWeight:700, fontSize:10, borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative", verticalAlign:"bottom" }}>D&A{_rh("da",58)}</th>
+                <th rowSpan={2} style={{ padding:"6px 4px",  textAlign:"center", color:"#c4f1c4", fontWeight:700, fontSize:10, borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative", verticalAlign:"bottom" }}>Tagged US{_rh("tagUs",48)}</th>
+                <th rowSpan={2} style={{ padding:"6px 4px",  textAlign:"center", color:"#93c5fd", fontWeight:700, fontSize:10, borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative", verticalAlign:"bottom" }} title="Manual (Not Tech Enabled)">Manual{_rh("man",46)}</th>
+                <th rowSpan={2} style={{ padding:"6px 4px",  textAlign:"center", color:"#e2e8f0", fontWeight:700, fontSize:10, position:"relative", verticalAlign:"bottom" }}>Review Comments{_rh("rev",58)}</th>
               </tr>
               {/* Sub-header for Internal Tech Team Reviews columns */}
               <tr style={{ background:"#dcfce7" }}>
-                <th style={{ padding:"6px 8px", textAlign:"center", color:"#166534", fontWeight:700, fontSize:10, borderRight:"1px solid #86efac", position:"relative" }}>Req Repository Owner{_rh("owner",120)}</th>
-                <th style={{ padding:"6px 8px", textAlign:"center", color:"#166534", fontWeight:700, fontSize:10, borderRight:"1px solid #86efac", position:"relative" }}>Functional{_rh("func",100)}</th>
-                <th style={{ padding:"6px 8px", textAlign:"center", color:"#166534", fontWeight:700, fontSize:10, borderRight:"1px solid #86efac", position:"relative" }}>Technical{_rh("tech",100)}</th>
+                <th style={{ padding:"5px 4px", textAlign:"center", color:"#166534", fontWeight:700, fontSize:10, borderRight:"1px solid #86efac", position:"relative" }}>Req Repository Owner{_rh("owner",70)}</th>
+                <th style={{ padding:"5px 4px", textAlign:"center", color:"#166534", fontWeight:700, fontSize:10, borderRight:"1px solid #86efac", position:"relative" }}>Functional{_rh("func",60)}</th>
+                <th style={{ padding:"5px 4px", textAlign:"center", color:"#166534", fontWeight:700, fontSize:10, borderRight:"1px solid #86efac", position:"relative" }}>Technical{_rh("tech",60)}</th>
               </tr>
             </thead>
             <tbody>
