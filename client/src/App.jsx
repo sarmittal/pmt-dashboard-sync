@@ -4663,7 +4663,7 @@ function ComponentCardsTab({ wp, raid, req, openModal }) {
 function TestScenariosTab({ data, wp, req }) {
   const [selSit,    setSelSit]    = useState("ALL");
   const [selSp,     setSelSp]     = useState("ALL");
-  const [subTab,    setSubTab]    = useState("review");
+  const [subTab,    setSubTab]    = useState("metrics");
   const [spModal,   setSpModal]   = useState(null);
   const [drillModal, setDrillModal] = useState(null);
 
@@ -5007,7 +5007,7 @@ function TestScenariosTab({ data, wp, req }) {
 
   const subTabBar = (
     <div style={{ display:"flex", gap:0, borderBottom:`2px solid ${C.border}`, marginBottom:4 }}>
-      {[{id:"review",label:"Review Status"},{id:"metrics",label:"Overall Metrics"}].map(st => (
+      {[{id:"metrics",label:"Overall Metrics"},{id:"review",label:"Review Status"}].map(st => (
         <button key={st.id} onClick={() => setSubTab(st.id)}
           style={{ padding:"9px 22px", background:"none", border:"none", cursor:"pointer", fontSize:13, fontWeight:subTab===st.id?700:500,
             color:subTab===st.id?C.navy:C.muted,
@@ -5020,27 +5020,59 @@ function TestScenariosTab({ data, wp, req }) {
   );
 
   const reviewSubTab = (
-    <>
-      {/* Filter bar */}
-      <div style={{ display:"flex", gap:16, alignItems:"center", flexWrap:"wrap", padding:"8px 0" }}>
-        <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-          <span style={{ fontSize:11, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.05em" }}>SIT</span>
-          <select value={activeSit} onChange={e => { setSelSit(e.target.value); setSelSp("ALL"); }}
-            style={{ padding:"5px 10px", border:`1px solid ${C.border}`, borderRadius:6, fontSize:12, background:"#fff", color:C.text, cursor:"pointer" }}>
-            <option value="ALL">All SITs</option>
-            {allSits.map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
-        </div>
-        <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-          <span style={{ fontSize:11, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.05em" }}>Sub Process</span>
-          <select value={selSp} onChange={e => setSelSp(e.target.value)}
-            style={{ padding:"5px 10px", border:`1px solid ${C.border}`, borderRadius:6, fontSize:12, background:"#fff", color:C.text, cursor:"pointer", maxWidth:260 }}>
-            <option value="ALL">All Sub Processes</option>
-            {allSpsForFilter.map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
-        </div>
-        <span style={{ fontSize:11, color:C.muted, marginLeft:"auto" }}>{tableRows.length} sub-processes · {totDrafted} scenarios</span>
-      </div>
+    <>{(() => {
+      // RAID-style cross-filtering helpers
+      const matchSit = (r, sit) => sit === "ALL" ? true : String(r[K.sitPlan]||"").split(/\n|,/).map(s=>s.trim()).includes(sit);
+      const matchSp  = (r, sp)  => sp  === "ALL" ? true : String(r[K.subprocess]||"Unknown").trim() === sp;
+      // Pill: counts based on OTHER filter, not its own
+      const sitCounts = allSits.map(sit => ({ val:sit, count: draftedRows.filter(r => matchSit(r,sit) && matchSp(r,selSp)).length }));
+      const allSitCt  = draftedRows.filter(r => matchSp(r, selSp)).length;
+      const spCounts  = allSubprocesses.map(sp => ({ val:sp, count: draftedRows.filter(r => matchSit(r,activeSit) && matchSp(r,sp)).length }));
+      const allSpCt   = draftedRows.filter(r => matchSit(r, activeSit)).length;
+      const pill = (val, isActive, count, onClick, col) => {
+        const has = count > 0;
+        return (
+          <button key={val} onClick={onClick} disabled={!has && val!=="All"}
+            style={{ display:"flex", alignItems:"center", gap:4, padding:"4px 10px", borderRadius:20,
+              border:`2px solid ${isActive?(col||C.navyLight):has?(col?col+"80":C.border):C.border}`,
+              background: isActive?(col||C.navyLight):C.white,
+              color: isActive?"#fff":has?C.text:C.muted,
+              cursor: has||val==="All"?"pointer":"default", fontSize:10, fontWeight:700,
+              opacity: !has&&val!=="All"?0.4:1, transition:"all .12s" }}>
+            {val}
+            <span style={{ background:isActive?"rgba(255,255,255,0.25)":"#f1f5f9",
+              color:isActive?"#fff":C.text, borderRadius:10, padding:"1px 6px", fontSize:10, fontWeight:800, minWidth:18, textAlign:"center" }}>
+              {count}
+            </span>
+          </button>
+        );
+      };
+      return (
+        <>
+          {/* Filter card — matches RAID Analysis style */}
+          <div style={{ background:C.white, border:`1px solid ${C.border}`, borderRadius:10, overflow:"hidden" }}>
+            <div style={{ padding:"12px 16px 10px", background:"#d0d5de", borderBottom:`1px solid ${C.border}` }}>
+              <div style={{ fontSize:10, fontWeight:700, color:C.text, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:8 }}>
+                Filters
+                <span style={{ fontSize:9, color:C.muted, fontWeight:400, textTransform:"none", marginLeft:8 }}>— selecting one filter adjusts the counts on the other</span>
+              </div>
+              {/* Row 1: SIT */}
+              <div style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"wrap", marginBottom:8 }}>
+                <span style={{ fontSize:10, color:"#374151", fontWeight:700, marginRight:2, minWidth:60 }}>SIT Plan</span>
+                {pill("All", activeSit==="ALL", allSitCt, () => { setSelSit("ALL"); }, C.navyLight)}
+                {sitCounts.map(({val,count}) => pill(val, activeSit===val, count, () => setSelSit(activeSit===val?"ALL":val), C.navyLight))}
+              </div>
+              {/* Row 2: Sub Process */}
+              <div style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
+                <span style={{ fontSize:10, color:"#374151", fontWeight:700, marginRight:2, minWidth:60 }}>Sub Process</span>
+                {pill("All", selSp==="ALL", allSpCt, () => setSelSp("ALL"), null)}
+                {spCounts.map(({val,count}) => pill(val, selSp===val, count, () => setSelSp(selSp===val?"ALL":val), null))}
+              </div>
+            </div>
+            <div style={{ padding:"6px 16px", background:C.white, fontSize:10, color:C.muted, borderBottom:`1px solid ${C.border}` }}>
+              Showing <b style={{ color:C.text }}>{tableRows.length}</b> sub-processes · <b style={{ color:C.text }}>{totDrafted}</b> scenarios
+            </div>
+          </div>
 
       {/* KPI cards */}
       <div style={{ display:"grid", gridTemplateColumns:`repeat(${Math.min(TEAMS.length,7)},1fr)`, gap:8 }}>
@@ -5203,7 +5235,9 @@ function TestScenariosTab({ data, wp, req }) {
           </table>
         </div>
       </Card>
-    </>
+        </>
+      );
+    })()}</>
   );
 
   const metricsSubTab = (
