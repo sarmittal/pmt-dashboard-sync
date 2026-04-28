@@ -5241,47 +5241,6 @@ function TestScenariosTab({ data, wp, req }) {
             </div>
           </div>
 
-      {/* KPI cards */}
-      <div style={{ display:"grid", gridTemplateColumns:`repeat(${Math.min(TEAMS.length,7)},1fr)`, gap:8 }}>
-        {TEAMS.map(t => {
-          const rev      = tableRows.reduce((s,r) => s+(r.teamStats[t.id]?.reviewed||0), 0);
-          const pend     = tableRows.reduce((s,r) => s+(r.teamStats[t.id]?.pending||0), 0);
-          const notPush  = tableRows.reduce((s,r) => s+(r.teamStats[t.id]?.notPushed||0), 0);
-          const pct      = totDrafted > 0 ? Math.round(rev/totDrafted*100) : 0;
-          const pendPct  = totDrafted > 0 ? Math.round(pend/totDrafted*100) : 0;
-          const npPct    = totDrafted > 0 ? Math.round(notPush/totDrafted*100) : 0;
-          const sitLabel = activeSit === "ALL" ? "All SITs" : activeSit;
-          const revRows      = tableRows.flatMap(r => r.teamStats[t.id]?.revRows       || []);
-          const pendRows     = tableRows.flatMap(r => r.teamStats[t.id]?.pendRows      || []);
-          const notPushRows  = tableRows.flatMap(r => r.teamStats[t.id]?.notPushedRows || []);
-          return (
-            <div key={t.id} style={{ background:C.white, border:`1px solid ${C.border}`, borderTop:`3px solid ${t.color}`, borderRadius:8, padding:"10px 12px" }}>
-              <div style={{ fontSize:9, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.07em", marginBottom:6 }}>{t.label}</div>
-              <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
-                <span onClick={() => revRows.length && setDrillModal({ title:`${t.label} — Reviewed · ${sitLabel}`, rows:revRows, teamId:t.id })}
-                  style={{ background:"#dcfce7", color:"#166534", borderRadius:5, padding:"3px 9px", fontSize:11, fontWeight:700,
-                    width:"fit-content", cursor:revRows.length?"pointer":"default", border:"1px solid #bbf7d0",
-                    boxShadow:revRows.length?"0 1px 3px rgba(22,101,52,0.15)":undefined }}>
-                  ✓ {rev} reviewed ({pct}%)
-                </span>
-                <span onClick={() => pendRows.length && setDrillModal({ title:`${t.label} — Pending · ${sitLabel}`, rows:pendRows, teamId:t.id })}
-                  style={{ background:"#fef3c7", color:"#92400e", borderRadius:5, padding:"3px 9px", fontSize:11, fontWeight:700,
-                    width:"fit-content", cursor:pendRows.length?"pointer":"default", border:"1px solid #fcd34d",
-                    boxShadow:pendRows.length?"0 1px 3px rgba(146,64,14,0.15)":undefined, opacity:pend===0?0.45:1 }}>
-                  ⏳ {pend} pending ({pendPct}%)
-                </span>
-                <span onClick={() => notPushRows.length && setDrillModal({ title:`${t.label} — Not Yet Pushed · ${sitLabel}`, rows:notPushRows, teamId:t.id })}
-                  style={{ background:"#f1f5f9", color:"#475569", borderRadius:5, padding:"3px 9px", fontSize:11, fontWeight:700,
-                    width:"fit-content", cursor:notPushRows.length?"pointer":"default", border:"1px solid #cbd5e1",
-                    opacity:notPush===0?0.45:1 }}>
-                  ○ {notPush} not pushed ({npPct}%)
-                </span>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
       {/* Review status table with subtotal row pinned below header */}
       <Card style={{ padding:0 }}>
         <div style={{ overflowX:"auto" }}>
@@ -5426,6 +5385,45 @@ function TestScenariosTab({ data, wp, req }) {
   );
 
   const metricsSubTab = (
+    <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+      {/* Team KPI cards — SIT-independent */}
+      <div style={{ display:"grid", gridTemplateColumns:`repeat(${Math.min(TEAMS.length,7)},1fr)`, gap:8 }}>
+        {TEAMS.map(t => {
+          const hasOpenFb = r => isTruthy(r[K.openFeedbackFlag]);
+          const stVal     = r => String(r[t.statusKey]||"").trim();
+          const revRows   = draftedRows.filter(r => isReviewedFinal(r[t.statusKey]) && !hasOpenFb(r));
+          const pendRows  = draftedRows.filter(r => isPendingReview(r[t.statusKey])  && !hasOpenFb(r));
+          const npRows    = draftedRows.filter(r => !stVal(r)                        && !hasOpenFb(r));
+          const rev = revRows.length, pend = pendRows.length, np = npRows.length;
+          const total = draftedRows.length;
+          const pct     = total > 0 ? Math.round(rev/total*100)  : 0;
+          const pendPct = total > 0 ? Math.round(pend/total*100) : 0;
+          const npPct   = total > 0 ? Math.round(np/total*100)   : 0;
+          return (
+            <div key={t.id} style={{ background:C.white, border:`1px solid ${C.border}`, borderTop:`3px solid ${t.color}`, borderRadius:8, padding:"10px 12px" }}>
+              <div style={{ fontSize:9, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.07em", marginBottom:6 }}>{t.label}</div>
+              <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
+                <span onClick={() => revRows.length && setDrillModal({ title:`${t.label} — Reviewed · All SITs`, rows:revRows, teamId:t.id })}
+                  style={{ background:"#dcfce7", color:"#166534", borderRadius:5, padding:"3px 9px", fontSize:11, fontWeight:700,
+                    width:"fit-content", cursor:revRows.length?"pointer":"default", border:"1px solid #bbf7d0" }}>
+                  ✓ {rev} reviewed ({pct}%)
+                </span>
+                <span onClick={() => pendRows.length && setDrillModal({ title:`${t.label} — Pending · All SITs`, rows:pendRows, teamId:t.id })}
+                  style={{ background:"#fef3c7", color:"#92400e", borderRadius:5, padding:"3px 9px", fontSize:11, fontWeight:700,
+                    width:"fit-content", cursor:pendRows.length?"pointer":"default", border:"1px solid #fcd34d", opacity:pend===0?0.45:1 }}>
+                  ⏳ {pend} pending ({pendPct}%)
+                </span>
+                <span onClick={() => npRows.length && setDrillModal({ title:`${t.label} — Not Pushed · All SITs`, rows:npRows, teamId:t.id })}
+                  style={{ background:"#f1f5f9", color:"#475569", borderRadius:5, padding:"3px 9px", fontSize:11, fontWeight:700,
+                    width:"fit-content", cursor:npRows.length?"pointer":"default", border:"1px solid #cbd5e1", opacity:np===0?0.45:1 }}>
+                  ○ {np} not pushed ({npPct}%)
+                </span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
     <Card style={{ padding:0 }}>
       <div style={{ padding:"12px 16px 8px", borderBottom:`1px solid ${C.border}`, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
         <span style={{ fontWeight:700, fontSize:13, color:C.navy }}>Overall Metrics — All SITs</span>
@@ -5513,6 +5511,7 @@ function TestScenariosTab({ data, wp, req }) {
         </table>
       </div>
     </Card>
+    </div>
   );
 
   return (
