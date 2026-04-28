@@ -5321,16 +5321,17 @@ function TestScenariosTab({ data, wp, req }) {
   );
 
   const subTabBar = (
-    <div style={{ display:"flex", gap:0, borderBottom:`2px solid ${C.border}`, marginBottom:4 }}>
-      {[{id:"metrics",label:"Overall Metrics"},{id:"review",label:"Review Status"}].map(st => (
-        <button key={st.id} onClick={() => setSubTab(st.id)}
-          style={{ padding:"9px 22px", background:"none", border:"none", cursor:"pointer", fontSize:13, fontWeight:subTab===st.id?700:500,
-            color:subTab===st.id?C.navy:C.muted,
-            borderBottom:`3px solid ${subTab===st.id?C.navyLight:"transparent"}`,
-            transition:"all .12s" }}>
-          {st.label}
-        </button>
-      ))}
+    <div style={{ background:"#43978F", borderBottom:"1px solid #357a73", marginBottom:16 }}>
+      <div style={{ display:"flex", paddingLeft:4 }}>
+        {[{id:"metrics",label:"Overall Metrics"},{id:"review",label:"Review Status"}].map(st => (
+          <button key={st.id} onClick={() => setSubTab(st.id)} style={{
+            padding:"10px 20px", border:"none", background:"transparent", cursor:"pointer",
+            color: subTab===st.id ? "#fff" : "rgba(255,255,255,0.7)",
+            borderBottom:`3px solid ${subTab===st.id?"#fff":"transparent"}`,
+            fontWeight: subTab===st.id ? 700 : 500, fontSize:13, transition:"all .12s",
+          }}>{st.label}</button>
+        ))}
+      </div>
     </div>
   );
 
