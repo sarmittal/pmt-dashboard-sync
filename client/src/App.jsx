@@ -430,6 +430,7 @@ function parseTestScenarios(sheets) {
     funcDueDate:  ks.find(k => k === "Due Date (Functional)")     || ks.find(k => /due.?date.*functional/i.test(k)),
     techFeedback: ks.find(k => k === "Feedback (Technical)")      || ks.find(k => /feedback.*technical/i.test(k)),
     techDueDate:  ks.find(k => k === "Due Date (Technical)")      || ks.find(k => /due.?date.*technical/i.test(k)),
+    tag:          ks.find(k => k === "Tag") || ks.find(k => k === "Tags") || ks.find(k => /^tags?$/i.test(k)),
   };
 
   // Exclude deprecated / deferred / duplicate
@@ -4728,6 +4729,14 @@ function TestScenariosTab({ data, wp, req }) {
     req.items.forEach(r => { const id = String(r[reqK.reqId]||"").trim(); if (id) reqById[id] = r; });
   }
 
+  // Set of all req IDs referenced in any drafted scenario's Primary User Story IDs field
+  const taggedReqIds = new Set();
+  if (K.storyIds) {
+    draftedRows.forEach(r => {
+      String(r[K.storyIds]||"").split(/\n|,|;/).map(s=>s.trim()).filter(Boolean).forEach(id => taggedReqIds.add(id));
+    });
+  }
+
   const sitFilteredRows = activeSit === "ALL"
     ? draftedRows
     : draftedRows.filter(r => {
@@ -4746,6 +4755,7 @@ function TestScenariosTab({ data, wp, req }) {
     const reqRows = reqBySubprocess[sp] || [];
     const userStories         = reqRows.filter(r => !isReqExcluded(r)).length;
     const userStoriesRelevant = reqRows.filter(r => !isReqExcluded(r) && isTestScenarioReq(r)).length;
+    const untaggedUS = reqK?.reqId ? reqRows.filter(r => !isReqExcluded(r) && !taggedReqIds.has(String(r[reqK.reqId]||"").trim())).length : 0;
     const drafted         = spRows.length;
     const openFeedbackCount = K.openFeedbackFlag ? spRows.filter(r => isTruthy(r[K.openFeedbackFlag])).length : 0;
     const teamStats = Object.fromEntries(TEAMS.map(t => {
@@ -4757,13 +4767,14 @@ function TestScenariosTab({ data, wp, req }) {
       const reviewerName  = spRows.map(r => String(r[t.reviewerKey]||"").trim()).find(v => v) || "";
       return [t.id, { reviewed: revRows.length, pending: pendRows.length, notPushed: notPushedRows.length, reviewerName, revRows, pendRows, notPushedRows }];
     }));
-    return { sp, drafted, userStories, userStoriesRelevant, openFeedbackCount, teamStats };
+    return { sp, drafted, userStories, userStoriesRelevant, untaggedUS, openFeedbackCount, teamStats };
   });
   const tableRows = selSp === "ALL" ? allTableRows : allTableRows.filter(r => r.sp === selSp);
 
   const totDrafted      = tableRows.reduce((s,r) => s+r.drafted, 0);
   const totUserStories  = tableRows.reduce((s,r) => s+r.userStories, 0);
   const totRelevant     = tableRows.reduce((s,r) => s+r.userStoriesRelevant, 0);
+  const totUntagged     = tableRows.reduce((s,r) => s+r.untaggedUS, 0);
   const totOpenFeedback = tableRows.reduce((s,r) => s+r.openFeedbackCount, 0);
   const pctStr = (n,d) => d > 0 ? `${Math.round(n/d*100)}%` : "—";
 
@@ -4785,10 +4796,12 @@ function TestScenariosTab({ data, wp, req }) {
     const maxReviews = drafted * REVIEW_TEAMS_5.length;
     const reviewPct  = maxReviews > 0 ? Math.round(totalTeamReviews / maxReviews * 100) : 0;
     const fully      = spRows.filter(r => REVIEW_TEAMS_5.every(t => isReviewedFinal(r[t.statusKey]) && !isTruthy(r[K.openFeedbackFlag]))).length;
-    return { sp, userStories, userStoriesRelevant, drafted, totalTeamReviews, maxReviews, reviewPct, fully };
+    const untaggedUS = reqK?.reqId ? reqRows.filter(r => !isReqExcluded(r) && !taggedReqIds.has(String(r[reqK.reqId]||"").trim())).length : 0;
+    return { sp, userStories, userStoriesRelevant, untaggedUS, drafted, totalTeamReviews, maxReviews, reviewPct, fully };
   });
   const omTotUS  = overallMetrics.reduce((s,r)=>s+r.userStories,0);
   const omTotRel = overallMetrics.reduce((s,r)=>s+r.userStoriesRelevant,0);
+  const omTotUntag = overallMetrics.reduce((s,r)=>s+r.untaggedUS,0);
   const omTotDr  = overallMetrics.reduce((s,r)=>s+r.drafted,0);
   const omTotTR  = overallMetrics.reduce((s,r)=>s+r.totalTeamReviews,0);
   const omTotMax = overallMetrics.reduce((s,r)=>s+r.maxReviews,0);
@@ -4852,6 +4865,7 @@ function TestScenariosTab({ data, wp, req }) {
 
     const COMMON_COLS = [
       { ck:"c-id",  def:80,  label:"ID",                   render:r=>String(r[K.id]||"—"),                   tdEx:{ color:C.muted, fontWeight:600, whiteSpace:"nowrap" } },
+      { ck:"c-tg",  def:110, label:"Tag",                  render:r=>multiVal(r[K.tag]),                      tdEx:{ wordBreak:"break-word" } },
       { ck:"c-nm",  def:220, label:"Scenario",              render:r=>String(r[K.name]||"—"),                 tdEx:{ wordBreak:"break-word" } },
       { ck:"c-sp",  def:130, label:"SubProcess",            render:r=>String(r[K.subprocess]||"—"),           tdEx:{ color:C.muted, whiteSpace:"nowrap" } },
       { ck:"c-ad",  def:160, label:"Additional Details",    render:r=>String(r[K.additionalDetails]||"—"),    tdEx:{ color:C.muted, wordBreak:"break-word" } },
@@ -5108,6 +5122,7 @@ function TestScenariosTab({ data, wp, req }) {
                 <th style={{ padding:"8px 12px", textAlign:"left", color:"#fff", fontWeight:700, fontSize:10, minWidth:170, position:"sticky", left:0, background:C.navy, borderRight:`1px solid rgba(255,255,255,0.15)`, zIndex:2 }}>SubProcess / Component</th>
                 <th style={{ padding:"8px 8px", textAlign:"center", color:"#a8d8ff", fontWeight:700, fontSize:10, borderRight:`1px solid rgba(255,255,255,0.1)`, minWidth:65 }}>User Stories</th>
                 <th style={{ padding:"8px 8px", textAlign:"center", color:"#a8d8ff", fontWeight:700, fontSize:10, borderRight:`1px solid rgba(255,255,255,0.1)`, minWidth:80 }}>Relevant for Scenarios</th>
+                <th style={{ padding:"8px 8px", textAlign:"center", color:"#fcd34d", fontWeight:700, fontSize:10, borderRight:`1px solid rgba(255,255,255,0.1)`, minWidth:75 }}>Untagged US</th>
                 <th style={{ padding:"8px 8px", textAlign:"center", color:"#a8d8ff", fontWeight:700, fontSize:10, borderRight:`1px solid rgba(255,255,255,0.1)`, minWidth:60 }}>Drafted</th>
                 <th style={{ padding:"8px 8px", textAlign:"center", color:"#fcd34d", fontWeight:700, fontSize:10, borderRight:`1px solid rgba(255,255,255,0.15)`, minWidth:65 }}>Open Feedback</th>
                 {TEAMS.flatMap(t => [
@@ -5116,13 +5131,16 @@ function TestScenariosTab({ data, wp, req }) {
                 ])}
               </tr>
               {/* Subtotal row pinned below column headers */}
-              <tr style={{ background:"#1e3a5f", borderBottom:`2px solid ${C.navyLight}` }}>
-                <td style={{ padding:"7px 12px", color:"#fbbf24", fontWeight:800, fontSize:10, position:"sticky", left:0, background:"#1e3a5f", borderRight:`1px solid rgba(255,255,255,0.15)`, zIndex:2, textTransform:"uppercase", letterSpacing:"0.06em" }}>SUBTOTAL</td>
-                <td style={{ padding:"7px 8px", textAlign:"center", color:"#93c5fd", fontWeight:700, fontSize:10 }}>{totUserStories||"—"}</td>
-                <td style={{ padding:"7px 8px", textAlign:"center", color:"#93c5fd", fontWeight:700, fontSize:10 }}>{totRelevant||"—"}</td>
-                <td style={{ padding:"7px 8px", textAlign:"center", color:"#fff", fontWeight:800, fontSize:10 }}>{totDrafted}</td>
+              <tr style={{ background:"#eef4ff", borderBottom:`2px solid ${C.navyLight}` }}>
+                <td style={{ padding:"7px 12px", color:C.navy, fontWeight:800, fontSize:10, position:"sticky", left:0, background:"#eef4ff", borderRight:`1px solid ${C.border}`, zIndex:2, textTransform:"uppercase", letterSpacing:"0.06em" }}>SUBTOTAL</td>
+                <td style={{ padding:"7px 8px", textAlign:"center", color:C.navyLight, fontWeight:700, fontSize:10 }}>{totUserStories||"—"}</td>
+                <td style={{ padding:"7px 8px", textAlign:"center", color:C.navyLight, fontWeight:700, fontSize:10 }}>{totRelevant||"—"}</td>
+                <td style={{ padding:"7px 8px", textAlign:"center", fontSize:10 }}>
+                  {totUntagged>0 ? <span style={{ background:"#fef3c7", color:"#92400e", borderRadius:4, padding:"1px 6px", fontSize:10, fontWeight:700 }}>{totUntagged}</span> : <span style={{ color:C.muted }}>—</span>}
+                </td>
+                <td style={{ padding:"7px 8px", textAlign:"center", color:C.text, fontWeight:800, fontSize:10 }}>{totDrafted}</td>
                 <td style={{ padding:"7px 8px", textAlign:"center" }}>
-                  {totOpenFeedback>0 ? <span style={{ background:"#7f1d1d", color:"#fca5a5", borderRadius:4, padding:"1px 6px", fontSize:10, fontWeight:700 }}>{totOpenFeedback}</span> : <span style={{ color:"rgba(255,255,255,0.3)" }}>—</span>}
+                  {totOpenFeedback>0 ? <span style={{ background:"#fee2e2", color:"#991b1b", borderRadius:4, padding:"1px 6px", fontSize:10, fontWeight:700 }}>{totOpenFeedback}</span> : <span style={{ color:C.muted }}>—</span>}
                 </td>
                 {TEAMS.flatMap(t => {
                   const rev  = tableRows.reduce((s,r) => s+(r.teamStats[t.id]?.reviewed||0), 0);
@@ -5133,20 +5151,20 @@ function TestScenariosTab({ data, wp, req }) {
                   const pendRows    = tableRows.flatMap(r => r.teamStats[t.id]?.pendRows      || []);
                   const npRows      = tableRows.flatMap(r => r.teamStats[t.id]?.notPushedRows || []);
                   return [
-                    <td key={t.id+"-s"} style={{ padding:"7px 8px", borderRight:`1px solid rgba(255,255,255,0.08)` }}>
+                    <td key={t.id+"-s"} style={{ padding:"7px 8px", borderRight:`1px solid ${C.border}` }}>
                       <div style={{ display:"flex", flexDirection:"column", gap:2 }}>
                         <span onClick={() => revRows.length && setDrillModal({ title:`${t.label} — All Reviewed · ${sitLabel}`, rows:revRows, teamId:t.id })}
-                          style={{ background:"rgba(34,197,94,0.2)", color:"#86efac", border:"1px solid rgba(34,197,94,0.3)", borderRadius:4,
+                          style={{ background:"#dcfce7", color:"#166534", border:"1px solid #bbf7d0", borderRadius:4,
                             padding:"1px 6px", fontSize:10, fontWeight:700, whiteSpace:"nowrap", cursor:revRows.length?"pointer":"default" }}>
                           ✓ {rev} ({pctStr(rev,totDrafted)})
                         </span>
                         <span onClick={() => pendRows.length && setDrillModal({ title:`${t.label} — All Pending · ${sitLabel}`, rows:pendRows, teamId:t.id })}
-                          style={{ background:"rgba(234,179,8,0.2)", color:"#fde68a", border:"1px solid rgba(234,179,8,0.3)", borderRadius:4,
+                          style={{ background:"#fef3c7", color:"#92400e", border:"1px solid #fcd34d", borderRadius:4,
                             padding:"1px 6px", fontSize:10, fontWeight:700, whiteSpace:"nowrap", cursor:pendRows.length?"pointer":"default", opacity:pend===0?0.4:1 }}>
                           ⏳ {pend} ({pctStr(pend,totDrafted)})
                         </span>
                         <span onClick={() => npRows.length && setDrillModal({ title:`${t.label} — All Not Pushed · ${sitLabel}`, rows:npRows, teamId:t.id })}
-                          style={{ background:"rgba(148,163,184,0.15)", color:"#cbd5e1", border:"1px solid rgba(148,163,184,0.2)", borderRadius:4,
+                          style={{ background:"#f1f5f9", color:"#475569", border:"1px solid #cbd5e1", borderRadius:4,
                             padding:"1px 6px", fontSize:10, fontWeight:700, whiteSpace:"nowrap", cursor:npRows.length?"pointer":"default", opacity:np===0?0.35:1 }}>
                           ○ {np}
                         </span>
@@ -5175,6 +5193,11 @@ function TestScenariosTab({ data, wp, req }) {
                   </td>
                   <td style={{ padding:"9px 8px", textAlign:"center", color:C.navyLight, fontWeight:700 }}>{row.userStories||"—"}</td>
                   <td style={{ padding:"9px 8px", textAlign:"center", color:C.navyLight, fontWeight:700 }}>{row.userStoriesRelevant||"—"}</td>
+                  <td style={{ padding:"9px 8px", textAlign:"center" }}>
+                    {row.untaggedUS > 0
+                      ? <span style={{ background:"#fef3c7", color:"#92400e", borderRadius:4, padding:"2px 8px", fontSize:10, fontWeight:700 }}>{row.untaggedUS}</span>
+                      : <span style={{ color:C.muted }}>—</span>}
+                  </td>
                   <td style={{ padding:"9px 8px", textAlign:"center", fontWeight:700, color:C.text }}>{row.drafted}</td>
                   <td style={{ padding:"9px 8px", textAlign:"center" }}>
                     {row.openFeedbackCount > 0
@@ -5237,21 +5260,25 @@ function TestScenariosTab({ data, wp, req }) {
               <th style={{ padding:"8px 14px", textAlign:"left", color:"#fff", fontWeight:700, fontSize:10, minWidth:200, position:"sticky", left:0, background:C.navy, borderRight:`1px solid rgba(255,255,255,0.15)`, zIndex:2 }}>SubProcess / Component</th>
               <th style={{ padding:"8px 10px", textAlign:"center", color:"#a8d8ff", fontWeight:700, fontSize:10, borderRight:`1px solid rgba(255,255,255,0.1)`, minWidth:80 }}>User Stories</th>
               <th style={{ padding:"8px 10px", textAlign:"center", color:"#a8d8ff", fontWeight:700, fontSize:10, borderRight:`1px solid rgba(255,255,255,0.1)`, minWidth:100 }}>Relevant for Scenarios</th>
+              <th style={{ padding:"8px 10px", textAlign:"center", color:"#fcd34d", fontWeight:700, fontSize:10, borderRight:`1px solid rgba(255,255,255,0.1)`, minWidth:75 }}>Untagged US</th>
               <th style={{ padding:"8px 10px", textAlign:"center", color:"#a8d8ff", fontWeight:700, fontSize:10, borderRight:`1px solid rgba(255,255,255,0.1)`, minWidth:70 }}>Scenarios Drafted</th>
               <th style={{ padding:"8px 10px", textAlign:"center", color:"#c4f1c4", fontWeight:700, fontSize:10, borderRight:`1px solid rgba(255,255,255,0.1)`, minWidth:80 }}>Fully Reviewed</th>
               <th style={{ padding:"8px 10px", textAlign:"center", color:"#fde68a", fontWeight:700, fontSize:10, borderRight:`1px solid rgba(255,255,255,0.15)`, minWidth:120 }}>Review Completion</th>
             </tr>
             {/* Subtotal row */}
-            <tr style={{ background:"#1e3a5f", borderBottom:`2px solid ${C.navyLight}` }}>
-              <td style={{ padding:"7px 14px", color:"#fbbf24", fontWeight:800, fontSize:10, position:"sticky", left:0, background:"#1e3a5f", borderRight:`1px solid rgba(255,255,255,0.15)`, zIndex:2, textTransform:"uppercase", letterSpacing:"0.06em" }}>SUBTOTAL</td>
-              <td style={{ padding:"7px 10px", textAlign:"center", color:"#93c5fd", fontWeight:700, fontSize:10 }}>{omTotUS||"—"}</td>
-              <td style={{ padding:"7px 10px", textAlign:"center", color:"#93c5fd", fontWeight:700, fontSize:10 }}>{omTotRel||"—"}</td>
-              <td style={{ padding:"7px 10px", textAlign:"center", color:"#fff", fontWeight:800, fontSize:10 }}>{omTotDr}</td>
+            <tr style={{ background:"#eef4ff", borderBottom:`2px solid ${C.navyLight}` }}>
+              <td style={{ padding:"7px 14px", color:C.navy, fontWeight:800, fontSize:10, position:"sticky", left:0, background:"#eef4ff", borderRight:`1px solid ${C.border}`, zIndex:2, textTransform:"uppercase", letterSpacing:"0.06em" }}>SUBTOTAL</td>
+              <td style={{ padding:"7px 10px", textAlign:"center", color:C.navyLight, fontWeight:700, fontSize:10 }}>{omTotUS||"—"}</td>
+              <td style={{ padding:"7px 10px", textAlign:"center", color:C.navyLight, fontWeight:700, fontSize:10 }}>{omTotRel||"—"}</td>
               <td style={{ padding:"7px 10px", textAlign:"center" }}>
-                <span style={{ background:"rgba(34,197,94,0.2)", color:"#86efac", borderRadius:4, padding:"1px 7px", fontSize:10, fontWeight:700 }}>{omTotFull}</span>
+                {omTotUntag>0 ? <span style={{ background:"#fef3c7", color:"#92400e", borderRadius:4, padding:"1px 7px", fontSize:10, fontWeight:700 }}>{omTotUntag}</span> : <span style={{ color:C.muted }}>—</span>}
+              </td>
+              <td style={{ padding:"7px 10px", textAlign:"center", color:C.text, fontWeight:800, fontSize:10 }}>{omTotDr}</td>
+              <td style={{ padding:"7px 10px", textAlign:"center" }}>
+                {omTotFull>0 ? <span style={{ background:"#dcfce7", color:"#166534", borderRadius:4, padding:"1px 7px", fontSize:10, fontWeight:700 }}>{omTotFull}</span> : <span style={{ color:C.muted }}>—</span>}
               </td>
               <td style={{ padding:"7px 10px", textAlign:"center" }}>
-                {(() => { const bg=omTotPct>=80?"rgba(34,197,94,0.25)":omTotPct>=50?"rgba(234,179,8,0.25)":"rgba(239,68,68,0.25)"; const col=omTotPct>=80?"#86efac":omTotPct>=50?"#fde68a":"#fca5a5";
+                {(() => { const bg=omTotPct>=80?"#dcfce7":omTotPct>=50?"#fef9c3":"#fee2e2"; const col=omTotPct>=80?"#166534":omTotPct>=50?"#854d0e":"#991b1b";
                   return <span style={{ background:bg, color:col, borderRadius:4, padding:"2px 10px", fontSize:11, fontWeight:800 }}>{omTotPct}% ({omTotTR}/{omTotMax})</span>; })()}
               </td>
             </tr>
@@ -5271,6 +5298,11 @@ function TestScenariosTab({ data, wp, req }) {
                   </td>
                   <td style={{ padding:"9px 10px", textAlign:"center", color:C.navyLight, fontWeight:700 }}>{row.userStories||"—"}</td>
                   <td style={{ padding:"9px 10px", textAlign:"center", color:C.navyLight, fontWeight:700 }}>{row.userStoriesRelevant||"—"}</td>
+                  <td style={{ padding:"9px 10px", textAlign:"center" }}>
+                    {row.untaggedUS > 0
+                      ? <span style={{ background:"#fef3c7", color:"#92400e", borderRadius:4, padding:"2px 8px", fontSize:10, fontWeight:700 }}>{row.untaggedUS}</span>
+                      : <span style={{ color:C.muted }}>—</span>}
+                  </td>
                   <td style={{ padding:"9px 10px", textAlign:"center", fontWeight:700, color:C.text }}>{row.drafted}</td>
                   <td style={{ padding:"9px 10px", textAlign:"center" }}>
                     {row.fully > 0
