@@ -4750,11 +4750,13 @@ function TestScenariosTab({ data, wp, req }) {
       allSpOpenFb[sp] = (allSpOpenFb[sp] || 0) + 1;
     if (!allSpTeamStats[sp]) allSpTeamStats[sp] = {};
     TEAMS.forEach(t => {
-      if (!allSpTeamStats[sp][t.id]) allSpTeamStats[sp][t.id] = { reviewed:0, pending:0, reviewerName:"", revRows:[], pendRows:[] };
+      if (!allSpTeamStats[sp][t.id]) allSpTeamStats[sp][t.id] = { reviewed:0, pending:0, notPushed:0, reviewerName:"", revRows:[], pendRows:[], notPushedRows:[] };
       const ts = allSpTeamStats[sp][t.id];
       const hasOpenFb = isTruthy(r[K.openFeedbackFlag]);
-      if (isReviewedFinal(r[t.statusKey]) && !hasOpenFb) { ts.reviewed++; ts.revRows.push(r); }
-      if (isPendingReview(r[t.statusKey]) && !hasOpenFb) { ts.pending++;  ts.pendRows.push(r); }
+      const statusVal = String(r[t.statusKey]||"").trim();
+      if (isReviewedFinal(r[t.statusKey]) && !hasOpenFb) { ts.reviewed++;  ts.revRows.push(r); }
+      if (isPendingReview(r[t.statusKey]) && !hasOpenFb) { ts.pending++;   ts.pendRows.push(r); }
+      if (!statusVal && !hasOpenFb)                      { ts.notPushed++; ts.notPushedRows.push(r); }
       if (!ts.reviewerName) { const rv = String(r[t.reviewerKey]||"").trim(); if (rv) ts.reviewerName = rv; }
     });
   });
@@ -4765,7 +4767,7 @@ function TestScenariosTab({ data, wp, req }) {
     const userStoriesRelevant = reqRows.filter(r => !isReqExcluded(r) && isTestScenarioReq(r)).length;
     const drafted         = allSpDrafted[sp] || 0;
     const openFeedbackCount = K.openFeedbackFlag ? (allSpOpenFb[sp] || 0) : 0;
-    const teamStats = Object.fromEntries(TEAMS.map(t => [t.id, allSpTeamStats[sp]?.[t.id] || { reviewed:0, pending:0, reviewerName:"", revRows:[], pendRows:[] }]));
+    const teamStats = Object.fromEntries(TEAMS.map(t => [t.id, allSpTeamStats[sp]?.[t.id] || { reviewed:0, pending:0, notPushed:0, reviewerName:"", revRows:[], pendRows:[], notPushedRows:[] }]));
     return { sp, drafted, userStories, userStoriesRelevant, openFeedbackCount, teamStats };
   });
 
@@ -4993,13 +4995,15 @@ function TestScenariosTab({ data, wp, req }) {
 
       <div style={{ display:"grid", gridTemplateColumns:`repeat(${Math.min(TEAMS.length,7)},1fr)`, gap:8 }}>
         {TEAMS.map(t => {
-          const rev  = tableRows.reduce((s,r) => s+(r.teamStats[t.id]?.reviewed||0), 0);
-          const pend = tableRows.reduce((s,r) => s+(r.teamStats[t.id]?.pending||0), 0);
+          const rev      = tableRows.reduce((s,r) => s+(r.teamStats[t.id]?.reviewed||0), 0);
+          const pend     = tableRows.reduce((s,r) => s+(r.teamStats[t.id]?.pending||0), 0);
+          const notPush  = tableRows.reduce((s,r) => s+(r.teamStats[t.id]?.notPushed||0), 0);
           const pct      = totDrafted > 0 ? Math.round(rev/totDrafted*100) : 0;
           const pendPct  = totDrafted > 0 ? Math.round(pend/totDrafted*100) : 0;
-          // Use all-SIT rows so drill-down matches the displayed count
-          const revRows  = draftedRows.filter(r => isReviewedFinal(r[t.statusKey]) && !isTruthy(r[K.openFeedbackFlag]));
-          const pendRows = draftedRows.filter(r => isPendingReview(r[t.statusKey]) && !isTruthy(r[K.openFeedbackFlag]));
+          const npPct    = totDrafted > 0 ? Math.round(notPush/totDrafted*100) : 0;
+          const revRows      = draftedRows.filter(r => isReviewedFinal(r[t.statusKey]) && !isTruthy(r[K.openFeedbackFlag]));
+          const pendRows     = draftedRows.filter(r => isPendingReview(r[t.statusKey]) && !isTruthy(r[K.openFeedbackFlag]));
+          const notPushRows  = draftedRows.filter(r => !String(r[t.statusKey]||"").trim() && !isTruthy(r[K.openFeedbackFlag]));
           return (
             <div key={t.id} style={{ background:C.white, border:`1px solid ${C.border}`, borderTop:`3px solid ${t.color}`, borderRadius:8, padding:"10px 12px" }}>
               <div style={{ fontSize:9, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.07em", marginBottom:6 }}>{t.label}</div>
@@ -5015,6 +5019,12 @@ function TestScenariosTab({ data, wp, req }) {
                     width:"fit-content", cursor:pendRows.length?"pointer":"default", border:"1px solid #fcd34d",
                     boxShadow:pendRows.length?"0 1px 3px rgba(146,64,14,0.15)":undefined, opacity:pend===0?0.45:1 }}>
                   ⏳ {pend} pending ({pendPct}%)
+                </span>
+                <span onClick={() => notPushRows.length && setDrillModal({ title:`${t.label} — Not Yet Pushed · ${activeSit}`, rows:notPushRows, teamId:t.id })}
+                  style={{ background:"#f1f5f9", color:"#475569", borderRadius:5, padding:"3px 9px", fontSize:11, fontWeight:700,
+                    width:"fit-content", cursor:notPushRows.length?"pointer":"default", border:"1px solid #cbd5e1",
+                    opacity:notPush===0?0.45:1 }}>
+                  ○ {notPush} not pushed ({npPct}%)
                 </span>
               </div>
             </div>
@@ -5068,10 +5078,10 @@ function TestScenariosTab({ data, wp, req }) {
                   </td>
                   {TEAMS.flatMap(t => {
                     const ts = row.teamStats[t.id] || {};
-                    const rev = ts.reviewed||0, pend = ts.pending||0;
-                    // Use pre-built rows from allSpTeamStats so drill-down matches the count
-                    const revRows  = ts.revRows  || [];
-                    const pendRows = ts.pendRows || [];
+                    const rev = ts.reviewed||0, pend = ts.pending||0, np = ts.notPushed||0;
+                    const revRows      = ts.revRows       || [];
+                    const pendRows     = ts.pendRows      || [];
+                    const notPushRows  = ts.notPushedRows || [];
                     return [
                       <td key={t.id+"-s"} style={{ padding:"9px 8px", verticalAlign:"top" }}>
                         <div style={{ display:"flex", flexDirection:"column", gap:3 }}>
@@ -5086,6 +5096,12 @@ function TestScenariosTab({ data, wp, req }) {
                               padding:"2px 8px", fontSize:10, fontWeight:700, whiteSpace:"nowrap",
                               cursor:pendRows.length?"pointer":"default", opacity:pend===0?0.4:1 }}>
                             ⏳ {pend} ({pctStr(pend,row.drafted)})
+                          </span>
+                          <span onClick={e => { e.stopPropagation(); notPushRows.length && setDrillModal({ title:`${row.sp} · ${t.label} — Not Yet Pushed`, rows:notPushRows, teamId:t.id }); }}
+                            style={{ background:"#f1f5f9", color:"#475569", border:"1px solid #cbd5e1", borderRadius:5,
+                              padding:"2px 8px", fontSize:10, fontWeight:700, whiteSpace:"nowrap",
+                              cursor:notPushRows.length?"pointer":"default", opacity:np===0?0.35:1 }}>
+                            ○ {np}
                           </span>
                         </div>
                       </td>,
@@ -5104,11 +5120,12 @@ function TestScenariosTab({ data, wp, req }) {
                     {totOpenFeedback>0 ? <span style={{ background:"#fee2e2", color:"#991b1b", borderRadius:4, padding:"2px 8px", fontSize:10, fontWeight:700 }}>{totOpenFeedback}</span> : "—"}
                   </td>
                   {TEAMS.flatMap(t => {
-                    const rev      = tableRows.reduce((s,r) => s+(r.teamStats[t.id]?.reviewed||0), 0);
-                    const pend     = tableRows.reduce((s,r) => s+(r.teamStats[t.id]?.pending||0), 0);
-                    // Aggregate pre-built rows from all subprocesses shown in this SIT
-                    const revRows  = tableRows.flatMap(r => r.teamStats[t.id]?.revRows  || []);
-                    const pendRows = tableRows.flatMap(r => r.teamStats[t.id]?.pendRows || []);
+                    const rev     = tableRows.reduce((s,r) => s+(r.teamStats[t.id]?.reviewed||0), 0);
+                    const pend    = tableRows.reduce((s,r) => s+(r.teamStats[t.id]?.pending||0), 0);
+                    const np      = tableRows.reduce((s,r) => s+(r.teamStats[t.id]?.notPushed||0), 0);
+                    const revRows      = tableRows.flatMap(r => r.teamStats[t.id]?.revRows       || []);
+                    const pendRows     = tableRows.flatMap(r => r.teamStats[t.id]?.pendRows      || []);
+                    const notPushRows  = tableRows.flatMap(r => r.teamStats[t.id]?.notPushedRows || []);
                     return [
                       <td key={t.id+"-s"} style={{ padding:"9px 8px" }}>
                         <div style={{ display:"flex", flexDirection:"column", gap:3 }}>
@@ -5123,6 +5140,12 @@ function TestScenariosTab({ data, wp, req }) {
                               padding:"2px 8px", fontSize:10, fontWeight:700, whiteSpace:"nowrap",
                               cursor:pendRows.length?"pointer":"default", opacity:pend===0?0.4:1 }}>
                             ⏳ {pend} ({pctStr(pend,totDrafted)})
+                          </span>
+                          <span onClick={() => notPushRows.length && setDrillModal({ title:`${t.label} — All Not Yet Pushed · ${activeSit}`, rows:notPushRows, teamId:t.id })}
+                            style={{ background:"#f1f5f9", color:"#475569", border:"1px solid #cbd5e1", borderRadius:5,
+                              padding:"2px 8px", fontSize:10, fontWeight:700, whiteSpace:"nowrap",
+                              cursor:notPushRows.length?"pointer":"default", opacity:np===0?0.35:1 }}>
+                            ○ {np}
                           </span>
                         </div>
                       </td>,
