@@ -4688,6 +4688,7 @@ function TestScenariosTab({ data, wp, req }) {
   const [scenSitF,      setScenSitF]      = useState("ALL");
   const [scenFlagF,     setScenFlagF]     = useState(new Set());
   const [scenReviewRow, setScenReviewRow] = useState(null);
+  const [scenColW,      setScenColW]      = useState({});
   const [untaggedModal,  setUntaggedModal]  = useState(null);
   const [taggedModal,    setTaggedModal]    = useState(null);
   const [relevantModal,      setRelevantModal]      = useState(null);
@@ -5697,23 +5698,41 @@ function TestScenariosTab({ data, wp, req }) {
   );
 
   // ── Scenarios sub-tab ────────────────────────────────────────────────────
+  // Source: data.activeRows includes toBeDeleted/dupDataMiningNA rows — draftedRows excludes them
+  const _allScenRows = data.activeRows || data.allRows || [];
+
   const _splitUSIds  = v => Array.from(new Set(String(v||"").split(/[\n,;]/).map(s=>s.trim()).filter(Boolean)));
 
-  const _allScenSps      = Array.from(new Set(draftedRows.map(r=>String(r[K.subprocess]||"").trim()).filter(Boolean))).sort();
-  const _allScenPersonas = Array.from(new Set(draftedRows.map(r=>String(r[K.persona]||"").trim()).filter(Boolean))).sort();
-  const _allScenSits     = Array.from(new Set(draftedRows.map(r=>String(r[K.sitPlan]||"").trim()).filter(Boolean))).sort();
+  const _allScenSps      = Array.from(new Set(_allScenRows.map(r=>String(r[K.subprocess]||"").trim()).filter(Boolean))).sort();
+  const _allScenPersonas = Array.from(new Set(_allScenRows.map(r=>String(r[K.persona]||"").trim()).filter(Boolean))).sort();
+  const _allScenSits     = Array.from(new Set(_allScenRows.map(r=>String(r[K.sitPlan]||"").trim()).filter(Boolean))).sort();
 
   const _flagMatch = r => scenFlagF.size === 0 || Array.from(scenFlagF).some(f =>
-    f==="del"    ? isTruthy(r[K.toBeDeleted])    :
-    f==="dup"    ? isTruthy(r[K.dupDataMiningNA]) :
-    f==="openFb" ? isTruthy(r[K.openFeedbackFlag]):
-    f==="manual" ? isTruthy(r[K.manualNotTech])   : false
+    f==="del"    ? isTruthy(r[K.toBeDeleted])     :
+    f==="dup"    ? isTruthy(r[K.dupDataMiningNA])  :
+    f==="openFb" ? isTruthy(r[K.openFeedbackFlag]) :
+    f==="manual" ? isTruthy(r[K.manualNotTech])    : false
   );
-  const _scenFiltered = draftedRows.filter(r =>
+  const _scenFiltered = _allScenRows.filter(r =>
     (scenSpF      === "ALL" || String(r[K.subprocess]||"").trim() === scenSpF) &&
     (scenPersonaF === "ALL" || String(r[K.persona]||"").trim()    === scenPersonaF) &&
     (scenSitF     === "ALL" || String(r[K.sitPlan]||"").trim()    === scenSitF) &&
     _flagMatch(r)
+  );
+
+  // Column resize
+  const _startResize = (key, defW, e) => {
+    e.preventDefault(); e.stopPropagation();
+    const startX = e.clientX, startW = scenColW[key] ?? defW;
+    const onMove = me => setScenColW(p => ({ ...p, [key]: Math.max(40, startW + me.clientX - startX) }));
+    const onUp   = () => { document.removeEventListener("mousemove", onMove); document.removeEventListener("mouseup", onUp); };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup",   onUp);
+  };
+  const _rh = (key, defW) => (
+    <div onMouseDown={e=>_startResize(key,defW,e)} onClick={e=>e.stopPropagation()}
+      style={{ position:"absolute", right:0, top:0, bottom:0, width:5, cursor:"col-resize", zIndex:3,
+               background:"transparent", borderRight:"2px solid rgba(255,255,255,0.25)" }} />
   );
 
   const _toggleScen  = id => setScenExpanded(prev => { const n=new Set(prev); n.has(id)?n.delete(id):n.add(id); return n; });
@@ -5767,35 +5786,35 @@ function TestScenariosTab({ data, wp, req }) {
         {_allScenSps.length > 0 && (
           <div style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
             <span style={{ fontSize:10, fontWeight:700, color:"#374151", minWidth:90 }}>Sub Process</span>
-            {_fpill("All", scenSpF==="ALL", draftedRows.filter(r=>(scenPersonaF==="ALL"||String(r[K.persona]||"").trim()===scenPersonaF)&&(scenSitF==="ALL"||String(r[K.sitPlan]||"").trim()===scenSitF)&&_flagMatch(r)).length, ()=>setScenSpF("ALL"))}
-            {_allScenSps.map(v => _fpill(v, scenSpF===v, draftedRows.filter(r=>String(r[K.subprocess]||"").trim()===v&&(scenPersonaF==="ALL"||String(r[K.persona]||"").trim()===scenPersonaF)&&(scenSitF==="ALL"||String(r[K.sitPlan]||"").trim()===scenSitF)&&_flagMatch(r)).length, ()=>setScenSpF(scenSpF===v?"ALL":v)))}
+            {_fpill("All", scenSpF==="ALL", _allScenRows.filter(r=>(scenPersonaF==="ALL"||String(r[K.persona]||"").trim()===scenPersonaF)&&(scenSitF==="ALL"||String(r[K.sitPlan]||"").trim()===scenSitF)&&_flagMatch(r)).length, ()=>setScenSpF("ALL"))}
+            {_allScenSps.map(v => _fpill(v, scenSpF===v, _allScenRows.filter(r=>String(r[K.subprocess]||"").trim()===v&&(scenPersonaF==="ALL"||String(r[K.persona]||"").trim()===scenPersonaF)&&(scenSitF==="ALL"||String(r[K.sitPlan]||"").trim()===scenSitF)&&_flagMatch(r)).length, ()=>setScenSpF(scenSpF===v?"ALL":v)))}
           </div>
         )}
         {_allScenPersonas.length > 0 && (
           <div style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
             <span style={{ fontSize:10, fontWeight:700, color:"#374151", minWidth:90 }}>Persona</span>
-            {_fpill("All", scenPersonaF==="ALL", draftedRows.filter(r=>(scenSpF==="ALL"||String(r[K.subprocess]||"").trim()===scenSpF)&&(scenSitF==="ALL"||String(r[K.sitPlan]||"").trim()===scenSitF)&&_flagMatch(r)).length, ()=>setScenPersonaF("ALL"))}
-            {_allScenPersonas.map(v => _fpill(v, scenPersonaF===v, draftedRows.filter(r=>String(r[K.persona]||"").trim()===v&&(scenSpF==="ALL"||String(r[K.subprocess]||"").trim()===scenSpF)&&(scenSitF==="ALL"||String(r[K.sitPlan]||"").trim()===scenSitF)&&_flagMatch(r)).length, ()=>setScenPersonaF(scenPersonaF===v?"ALL":v)))}
+            {_fpill("All", scenPersonaF==="ALL", _allScenRows.filter(r=>(scenSpF==="ALL"||String(r[K.subprocess]||"").trim()===scenSpF)&&(scenSitF==="ALL"||String(r[K.sitPlan]||"").trim()===scenSitF)&&_flagMatch(r)).length, ()=>setScenPersonaF("ALL"))}
+            {_allScenPersonas.map(v => _fpill(v, scenPersonaF===v, _allScenRows.filter(r=>String(r[K.persona]||"").trim()===v&&(scenSpF==="ALL"||String(r[K.subprocess]||"").trim()===scenSpF)&&(scenSitF==="ALL"||String(r[K.sitPlan]||"").trim()===scenSitF)&&_flagMatch(r)).length, ()=>setScenPersonaF(scenPersonaF===v?"ALL":v)))}
           </div>
         )}
         {_allScenSits.length > 0 && (
           <div style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
             <span style={{ fontSize:10, fontWeight:700, color:"#374151", minWidth:90 }}>Target SIT</span>
-            {_fpill("All", scenSitF==="ALL", draftedRows.filter(r=>(scenSpF==="ALL"||String(r[K.subprocess]||"").trim()===scenSpF)&&(scenPersonaF==="ALL"||String(r[K.persona]||"").trim()===scenPersonaF)&&_flagMatch(r)).length, ()=>setScenSitF("ALL"))}
-            {_allScenSits.map(v => _fpill(v, scenSitF===v, draftedRows.filter(r=>String(r[K.sitPlan]||"").trim()===v&&(scenSpF==="ALL"||String(r[K.subprocess]||"").trim()===scenSpF)&&(scenPersonaF==="ALL"||String(r[K.persona]||"").trim()===scenPersonaF)&&_flagMatch(r)).length, ()=>setScenSitF(scenSitF===v?"ALL":v)))}
+            {_fpill("All", scenSitF==="ALL", _allScenRows.filter(r=>(scenSpF==="ALL"||String(r[K.subprocess]||"").trim()===scenSpF)&&(scenPersonaF==="ALL"||String(r[K.persona]||"").trim()===scenPersonaF)&&_flagMatch(r)).length, ()=>setScenSitF("ALL"))}
+            {_allScenSits.map(v => _fpill(v, scenSitF===v, _allScenRows.filter(r=>String(r[K.sitPlan]||"").trim()===v&&(scenSpF==="ALL"||String(r[K.subprocess]||"").trim()===scenSpF)&&(scenPersonaF==="ALL"||String(r[K.persona]||"").trim()===scenPersonaF)&&_flagMatch(r)).length, ()=>setScenSitF(scenSitF===v?"ALL":v)))}
           </div>
         )}
         {/* Flag filters */}
         <div style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"wrap", paddingTop:4, borderTop:`1px dashed ${C.border}` }}>
           <span style={{ fontSize:10, fontWeight:700, color:"#374151", minWidth:90 }}>Flags</span>
           {[
-            { f:"del",    label:"To Be Deleted",     color:"#b91c1c", bg:"#fee2e2", key:K.toBeDeleted    },
-            { f:"dup",    label:"Duplicate / NA",     color:"#92400e", bg:"#fde8cc", key:K.dupDataMiningNA},
-            { f:"openFb", label:"Open Feedback",      color:"#92400e", bg:"#fefce8", key:K.openFeedbackFlag},
-            { f:"manual", label:"Manual (Not Tech)",  color:"#1e40af", bg:"#dbeafe", key:K.manualNotTech  },
+            { f:"del",    label:"To Be Deleted",    color:"#b91c1c", bg:"#fee2e2", key:K.toBeDeleted     },
+            { f:"dup",    label:"Duplicate / NA",    color:"#92400e", bg:"#fde8cc", key:K.dupDataMiningNA },
+            { f:"openFb", label:"Open Feedback",     color:"#854d0e", bg:"#fefce8", key:K.openFeedbackFlag},
+            { f:"manual", label:"Manual (Not Tech)", color:"#1e40af", bg:"#dbeafe", key:K.manualNotTech   },
           ].filter(x=>x.key).map(({f,label,color,bg,key}) => {
             const active = scenFlagF.has(f);
-            const cnt = draftedRows.filter(r=>isTruthy(r[key])).length;
+            const cnt = _allScenRows.filter(r=>isTruthy(r[key])).length;
             return (
               <button key={f} onClick={()=>_toggleFlag(f)}
                 style={{ display:"flex", alignItems:"center", gap:4, padding:"3px 9px", borderRadius:20,
@@ -5815,24 +5834,24 @@ function TestScenariosTab({ data, wp, req }) {
           <table style={{ width:"100%", borderCollapse:"collapse", fontSize:11 }}>
             <thead style={{ position:"sticky", top:0, zIndex:2 }}>
               <tr style={{ background:C.navy }}>
-                <th style={{ padding:"8px 10px", textAlign:"left",   color:"#fff",    fontWeight:700, fontSize:10, minWidth:36,  borderRight:"1px solid rgba(255,255,255,0.1)" }}></th>
-                <th style={{ padding:"8px 10px", textAlign:"left",   color:"#fff",    fontWeight:700, fontSize:10, minWidth:80,  borderRight:"1px solid rgba(255,255,255,0.1)" }}>ID</th>
-                <th style={{ padding:"8px 10px", textAlign:"left",   color:"#a8d8ff", fontWeight:700, fontSize:10, minWidth:220, borderRight:"1px solid rgba(255,255,255,0.1)" }}>Scenario</th>
-                <th style={{ padding:"8px 10px", textAlign:"left",   color:"#a8d8ff", fontWeight:700, fontSize:10, minWidth:130, borderRight:"1px solid rgba(255,255,255,0.1)" }}>Sub Process</th>
-                <th style={{ padding:"8px 10px", textAlign:"left",   color:"#a8d8ff", fontWeight:700, fontSize:10, minWidth:180, borderRight:"1px solid rgba(255,255,255,0.1)" }}>Additional Details</th>
-                <th style={{ padding:"8px 10px", textAlign:"left",   color:"#a8d8ff", fontWeight:700, fontSize:10, minWidth:100, borderRight:"1px solid rgba(255,255,255,0.1)" }}>Persona</th>
-                <th style={{ padding:"8px 10px", textAlign:"center", color:"#a8d8ff", fontWeight:700, fontSize:10, minWidth:60,  borderRight:"1px solid rgba(255,255,255,0.1)" }}>Est. Cases</th>
-                <th style={{ padding:"8px 10px", textAlign:"left",   color:"#a8d8ff", fontWeight:700, fontSize:10, minWidth:100, borderRight:"1px solid rgba(255,255,255,0.1)" }}>Target SIT</th>
-                <th style={{ padding:"8px 10px", textAlign:"center", color:"#fcd34d", fontWeight:700, fontSize:10, minWidth:90,  borderRight:"1px solid rgba(255,255,255,0.1)" }}>SD Review</th>
-                <th style={{ padding:"8px 10px", textAlign:"center", color:"#fcd34d", fontWeight:700, fontSize:10, minWidth:90,  borderRight:"1px solid rgba(255,255,255,0.1)" }}>PMT SD</th>
-                <th style={{ padding:"8px 10px", textAlign:"center", color:"#fcd34d", fontWeight:700, fontSize:10, minWidth:70,  borderRight:"1px solid rgba(255,255,255,0.1)" }}>DT</th>
-                <th style={{ padding:"8px 10px", textAlign:"center", color:"#c4f1c4", fontWeight:700, fontSize:10, minWidth:90,  borderRight:"1px solid rgba(255,255,255,0.1)" }}>D&A</th>
-                <th style={{ padding:"8px 10px", textAlign:"center", color:"#c4f1c4", fontWeight:700, fontSize:10, minWidth:80,  borderRight:"1px solid rgba(255,255,255,0.1)" }}>Tagged US</th>
-                <th style={{ padding:"8px 10px", textAlign:"center", color:"#fda4af", fontWeight:700, fontSize:10, minWidth:40,  borderRight:"1px solid rgba(255,255,255,0.1)" }} title="To Be Deleted">Del</th>
-                <th style={{ padding:"8px 10px", textAlign:"center", color:"#fbbf24", fontWeight:700, fontSize:10, minWidth:40,  borderRight:"1px solid rgba(255,255,255,0.1)" }} title="Duplicate / Data Mining / Not Applicable">Dup</th>
-                <th style={{ padding:"8px 10px", textAlign:"center", color:"#fde68a", fontWeight:700, fontSize:10, minWidth:40,  borderRight:"1px solid rgba(255,255,255,0.1)" }} title="Open Review Feedback">Fbk</th>
-                <th style={{ padding:"8px 10px", textAlign:"center", color:"#93c5fd", fontWeight:700, fontSize:10, minWidth:50,  borderRight:"1px solid rgba(255,255,255,0.1)" }} title="Manual (Not Tech Enabled)">Man</th>
-                <th style={{ padding:"8px 10px", textAlign:"center", color:"#e2e8f0", fontWeight:700, fontSize:10, minWidth:100 }}>Review Comments</th>
+                <th style={{ padding:"8px 10px", textAlign:"left",   color:"#fff",    fontWeight:700, fontSize:10, width:scenColW["expand"]||36,  minWidth:36,  borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative" }}>{_rh("expand",36)}</th>
+                <th style={{ padding:"8px 6px",  textAlign:"center", color:"#fda4af", fontWeight:700, fontSize:10, width:scenColW["del"]||75,    minWidth:55,  borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative" }}>To Be Deleted{_rh("del",75)}</th>
+                <th style={{ padding:"8px 6px",  textAlign:"center", color:"#fbbf24", fontWeight:700, fontSize:10, width:scenColW["dup"]||75,    minWidth:55,  borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative" }}>Dup / Data Mining / NA{_rh("dup",75)}</th>
+                <th style={{ padding:"8px 6px",  textAlign:"center", color:"#fde68a", fontWeight:700, fontSize:10, width:scenColW["openFb"]||75, minWidth:55,  borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative" }}>Open Feedback{_rh("openFb",75)}</th>
+                <th style={{ padding:"8px 10px", textAlign:"left",   color:"#fff",    fontWeight:700, fontSize:10, width:scenColW["id"]||90,     minWidth:70,  borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative" }}>ID{_rh("id",90)}</th>
+                <th style={{ padding:"8px 10px", textAlign:"left",   color:"#a8d8ff", fontWeight:700, fontSize:10, width:scenColW["scen"]||220,  minWidth:160, borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative" }}>Scenario{_rh("scen",220)}</th>
+                <th style={{ padding:"8px 10px", textAlign:"left",   color:"#a8d8ff", fontWeight:700, fontSize:10, width:scenColW["sp"]||130,    minWidth:100, borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative" }}>Sub Process{_rh("sp",130)}</th>
+                <th style={{ padding:"8px 10px", textAlign:"left",   color:"#a8d8ff", fontWeight:700, fontSize:10, width:scenColW["det"]||180,   minWidth:120, borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative" }}>Additional Details{_rh("det",180)}</th>
+                <th style={{ padding:"8px 10px", textAlign:"left",   color:"#a8d8ff", fontWeight:700, fontSize:10, width:scenColW["pers"]||120,  minWidth:70,  borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative" }}>Persona{_rh("pers",120)}</th>
+                <th style={{ padding:"8px 10px", textAlign:"center", color:"#a8d8ff", fontWeight:700, fontSize:10, width:scenColW["est"]||65,    minWidth:55,  borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative" }}>Est. Cases{_rh("est",65)}</th>
+                <th style={{ padding:"8px 10px", textAlign:"left",   color:"#a8d8ff", fontWeight:700, fontSize:10, width:scenColW["sit"]||100,   minWidth:80,  borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative" }}>Target SIT{_rh("sit",100)}</th>
+                <th style={{ padding:"8px 10px", textAlign:"center", color:"#fcd34d", fontWeight:700, fontSize:10, width:scenColW["sd"]||90,     minWidth:70,  borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative" }}>SD Review{_rh("sd",90)}</th>
+                <th style={{ padding:"8px 10px", textAlign:"center", color:"#fcd34d", fontWeight:700, fontSize:10, width:scenColW["pmtsd"]||90,  minWidth:70,  borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative" }}>PMT SD{_rh("pmtsd",90)}</th>
+                <th style={{ padding:"8px 10px", textAlign:"center", color:"#fcd34d", fontWeight:700, fontSize:10, width:scenColW["dt"]||70,     minWidth:55,  borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative" }}>DT{_rh("dt",70)}</th>
+                <th style={{ padding:"8px 10px", textAlign:"center", color:"#c4f1c4", fontWeight:700, fontSize:10, width:scenColW["da"]||90,     minWidth:70,  borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative" }}>D&A{_rh("da",90)}</th>
+                <th style={{ padding:"8px 10px", textAlign:"center", color:"#c4f1c4", fontWeight:700, fontSize:10, width:scenColW["tagUs"]||80,  minWidth:65,  borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative" }}>Tagged US{_rh("tagUs",80)}</th>
+                <th style={{ padding:"8px 10px", textAlign:"center", color:"#93c5fd", fontWeight:700, fontSize:10, width:scenColW["man"]||55,    minWidth:45,  borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative" }} title="Manual (Not Tech Enabled)">Man{_rh("man",55)}</th>
+                <th style={{ padding:"8px 10px", textAlign:"center", color:"#e2e8f0", fontWeight:700, fontSize:10, width:scenColW["rev"]||110,   minWidth:90,  position:"relative" }}>Review Comments{_rh("rev",110)}</th>
               </tr>
             </thead>
             <tbody>
@@ -5855,36 +5874,36 @@ function TestScenariosTab({ data, wp, req }) {
                   <React.Fragment key={scenId}>
                     <tr style={{ background:rowBg, borderBottom:isOpen?`1px solid #93c5fd`:flagBorder, verticalAlign:"top", cursor:"pointer" }}
                       onClick={() => _toggleScen(scenId)}>
-                      <td style={{ padding:"8px 10px", textAlign:"center", color:isOpen?C.navyLight:C.muted, fontWeight:700 }}>{isOpen?"▾":"▸"}</td>
-                      <td style={{ padding:"8px 10px", fontWeight:700, color:C.navyLight, whiteSpace:"nowrap", borderRight:`1px solid ${C.border}` }}>{String(r[K.id]||"—")}</td>
-                      <td style={{ padding:"8px 10px", color:C.text, wordBreak:"break-word", borderRight:`1px solid ${C.border}` }}>{String(r[K.name]||"—")}</td>
-                      <td style={{ padding:"8px 10px", color:C.muted, whiteSpace:"nowrap", borderRight:`1px solid ${C.border}` }}>{String(r[K.subprocess]||"—")}</td>
-                      <td style={{ padding:"8px 10px", color:C.text, wordBreak:"break-word", maxWidth:220, borderRight:`1px solid ${C.border}` }}>{String(r[K.additionalDetails]||"—")}</td>
-                      <td style={{ padding:"8px 10px", color:C.muted, whiteSpace:"nowrap", borderRight:`1px solid ${C.border}` }}>{String(r[K.persona]||"—")}</td>
-                      <td style={{ padding:"8px 10px", textAlign:"center", fontWeight:700, color:C.text, borderRight:`1px solid ${C.border}` }}>{r[K.estCases]||"—"}</td>
-                      <td style={{ padding:"8px 10px", color:C.muted, whiteSpace:"nowrap", borderRight:`1px solid ${C.border}` }}>{String(r[K.sitPlan]||"—")}</td>
-                      <td style={{ padding:"8px 10px", textAlign:"center", borderRight:`1px solid ${C.border}` }}>{_statusBadge(r[K.sdStatus])}</td>
-                      <td style={{ padding:"8px 10px", textAlign:"center", borderRight:`1px solid ${C.border}` }}>{_statusBadge(r[K.pmtStatus])}</td>
-                      <td style={{ padding:"8px 10px", textAlign:"center", borderRight:`1px solid ${C.border}` }}>{_statusBadge(r[K.dtStatus])}</td>
-                      <td style={{ padding:"8px 10px", textAlign:"center", borderRight:`1px solid ${C.border}` }}>{_statusBadge(r[K.daStatus])}</td>
-                      <td style={{ padding:"8px 10px", textAlign:"center", borderRight:`1px solid ${C.border}` }} onClick={e=>e.stopPropagation()}>
+                      <td style={{ padding:"8px 10px", textAlign:"center", color:isOpen?C.navyLight:C.muted, fontWeight:700, width:scenColW["expand"]||36 }}>{isOpen?"▾":"▸"}</td>
+                      <td style={{ padding:"8px 6px", textAlign:"center", borderRight:`1px solid ${C.border}`, width:scenColW["del"]||75 }}>
+                        {isDel ? <span style={{ background:"#fee2e2", color:"#b91c1c", borderRadius:3, padding:"1px 5px", fontSize:10, fontWeight:700 }}>✓</span> : <span style={{ color:C.muted }}>—</span>}
+                      </td>
+                      <td style={{ padding:"8px 6px", textAlign:"center", borderRight:`1px solid ${C.border}`, width:scenColW["dup"]||75 }}>
+                        {isDup ? <span style={{ background:"#fde8cc", color:"#92400e", borderRadius:3, padding:"1px 5px", fontSize:10, fontWeight:700 }}>✓</span> : <span style={{ color:C.muted }}>—</span>}
+                      </td>
+                      <td style={{ padding:"8px 6px", textAlign:"center", borderRight:`1px solid ${C.border}`, width:scenColW["openFb"]||75 }}>
+                        {isOpenFb ? <span style={{ background:"#fef9c3", color:"#854d0e", borderRadius:3, padding:"1px 5px", fontSize:10, fontWeight:700 }}>✓</span> : <span style={{ color:C.muted }}>—</span>}
+                      </td>
+                      <td style={{ padding:"8px 10px", fontWeight:700, color:C.navyLight, whiteSpace:"nowrap", borderRight:`1px solid ${C.border}`, width:scenColW["id"]||90 }}>{String(r[K.id]||"—")}</td>
+                      <td style={{ padding:"8px 10px", color:C.text, wordBreak:"break-word", borderRight:`1px solid ${C.border}`, width:scenColW["scen"]||220 }}>{String(r[K.name]||"—")}</td>
+                      <td style={{ padding:"8px 10px", color:C.muted, whiteSpace:"nowrap", borderRight:`1px solid ${C.border}`, width:scenColW["sp"]||130 }}>{String(r[K.subprocess]||"—")}</td>
+                      <td style={{ padding:"8px 10px", color:C.text, wordBreak:"break-word", borderRight:`1px solid ${C.border}`, width:scenColW["det"]||180 }}>{String(r[K.additionalDetails]||"—")}</td>
+                      <td style={{ padding:"8px 10px", color:C.muted, wordBreak:"break-word", maxWidth:scenColW["pers"]||120, borderRight:`1px solid ${C.border}`, width:scenColW["pers"]||120 }}>{String(r[K.persona]||"—")}</td>
+                      <td style={{ padding:"8px 10px", textAlign:"center", fontWeight:700, color:C.text, borderRight:`1px solid ${C.border}`, width:scenColW["est"]||65 }}>{r[K.estCases]||"—"}</td>
+                      <td style={{ padding:"8px 10px", color:C.muted, whiteSpace:"nowrap", borderRight:`1px solid ${C.border}`, width:scenColW["sit"]||100 }}>{String(r[K.sitPlan]||"—")}</td>
+                      <td style={{ padding:"8px 10px", textAlign:"center", borderRight:`1px solid ${C.border}`, width:scenColW["sd"]||90 }}>{_statusBadge(r[K.sdStatus])}</td>
+                      <td style={{ padding:"8px 10px", textAlign:"center", borderRight:`1px solid ${C.border}`, width:scenColW["pmtsd"]||90 }}>{_statusBadge(r[K.pmtStatus])}</td>
+                      <td style={{ padding:"8px 10px", textAlign:"center", borderRight:`1px solid ${C.border}`, width:scenColW["dt"]||70 }}>{_statusBadge(r[K.dtStatus])}</td>
+                      <td style={{ padding:"8px 10px", textAlign:"center", borderRight:`1px solid ${C.border}`, width:scenColW["da"]||90 }}>{_statusBadge(r[K.daStatus])}</td>
+                      <td style={{ padding:"8px 10px", textAlign:"center", borderRight:`1px solid ${C.border}`, width:scenColW["tagUs"]||80 }} onClick={e=>e.stopPropagation()}>
                         {tagIds.length > 0
                           ? <span onClick={()=>_toggleScen(scenId)} style={{ background:"#eff6ff", color:"#1d4ed8", borderRadius:4, padding:"2px 8px", fontSize:10, fontWeight:700, cursor:"pointer" }}>{tagIds.length}</span>
                           : <span style={{ color:C.muted }}>—</span>}
                       </td>
-                      <td style={{ padding:"8px 10px", textAlign:"center", borderRight:`1px solid ${C.border}` }}>
-                        {isDel ? <span style={{ background:"#fee2e2", color:"#b91c1c", borderRadius:3, padding:"1px 5px", fontSize:10, fontWeight:700 }}>✓</span> : <span style={{ color:C.muted }}>—</span>}
-                      </td>
-                      <td style={{ padding:"8px 10px", textAlign:"center", borderRight:`1px solid ${C.border}` }}>
-                        {isDup ? <span style={{ background:"#fde8cc", color:"#92400e", borderRadius:3, padding:"1px 5px", fontSize:10, fontWeight:700 }}>✓</span> : <span style={{ color:C.muted }}>—</span>}
-                      </td>
-                      <td style={{ padding:"8px 10px", textAlign:"center", borderRight:`1px solid ${C.border}` }}>
-                        {isOpenFb ? <span style={{ background:"#fef9c3", color:"#854d0e", borderRadius:3, padding:"1px 5px", fontSize:10, fontWeight:700 }}>✓</span> : <span style={{ color:C.muted }}>—</span>}
-                      </td>
-                      <td style={{ padding:"8px 10px", textAlign:"center", borderRight:`1px solid ${C.border}` }}>
+                      <td style={{ padding:"8px 10px", textAlign:"center", borderRight:`1px solid ${C.border}`, width:scenColW["man"]||55 }}>
                         {isManual ? <span style={{ background:"#dbeafe", color:"#1e40af", borderRadius:3, padding:"1px 5px", fontSize:10, fontWeight:700 }}>✓</span> : <span style={{ color:C.muted }}>—</span>}
                       </td>
-                      <td style={{ padding:"8px 10px", textAlign:"center" }} onClick={e=>e.stopPropagation()}>
+                      <td style={{ padding:"8px 10px", textAlign:"center", width:scenColW["rev"]||110 }} onClick={e=>e.stopPropagation()}>
                         <span onClick={()=>setScenReviewRow(r)}
                           style={{ color:C.navyLight, fontSize:10, fontWeight:700, cursor:"pointer", textDecoration:"underline dotted", whiteSpace:"nowrap" }}>
                           Details ↗
