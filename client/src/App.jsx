@@ -4731,31 +4731,34 @@ function TestScenariosTab({ data, wp, req }) {
     subprocessMap[sp].push(r);
   });
 
-  // Pre-build per-subprocess totals across ALL SITs (matches Smartsheet formula — no SIT filter)
-  const allSpDrafted = {}, allSpOpenFb = {};
+  // Pre-build ALL per-subprocess stats across ALL SITs — no SIT filter.
+  // Matches Smartsheet formulas:
+  //   Drafted:  COUNTIFS(SubProcess, sp, ToBeDeleted, <>1, DupDMNA, <>1)
+  //   Reviewed: COUNTIFS(SubProcess, sp, ToBeDeleted, <>1, DupDMNA, <>1, teamStatus, "4. Reviewed")
+  //   Pending:  COUNTIFS(SubProcess, sp, ToBeDeleted, <>1, DupDMNA, <>1, teamStatus, "1. Ready for Review" OR "3. Updated, Ready for Review")
+  const allSpDrafted = {}, allSpOpenFb = {}, allSpTeamStats = {};
   draftedRows.forEach(r => {
     const sp = String(r[K.subprocess] || "Unknown").trim();
     allSpDrafted[sp] = (allSpDrafted[sp] || 0) + 1;
     if (K.openFeedbackFlag && isTruthy(r[K.openFeedbackFlag]))
       allSpOpenFb[sp] = (allSpOpenFb[sp] || 0) + 1;
+    if (!allSpTeamStats[sp]) allSpTeamStats[sp] = {};
+    TEAMS.forEach(t => {
+      if (!allSpTeamStats[sp][t.id]) allSpTeamStats[sp][t.id] = { reviewed:0, pending:0, reviewerName:"", revRows:[], pendRows:[] };
+      const ts = allSpTeamStats[sp][t.id];
+      if (isReviewedFinal(r[t.statusKey])) { ts.reviewed++; ts.revRows.push(r); }
+      if (isPendingReview(r[t.statusKey])) { ts.pending++;  ts.pendRows.push(r); }
+      if (!ts.reviewerName) { const rv = String(r[t.reviewerKey]||"").trim(); if (rv) ts.reviewerName = rv; }
+    });
   });
 
-  const tableRows = Object.entries(subprocessMap).map(([sp, spRows]) => {
+  const tableRows = Object.entries(subprocessMap).map(([sp]) => {
     const reqRows = reqBySubprocess[sp] || [];
     const userStories         = reqRows.filter(r => !isReqExcluded(r)).length;
     const userStoriesRelevant = reqRows.filter(r => !isReqExcluded(r) && isTestScenarioReq(r)).length;
-    // Drafted = total across ALL SITs (no SIT filter) to match Smartsheet COUNTIFS formula
-    const drafted = allSpDrafted[sp] || 0;
-    // Open Feedback = dedicated boolean column (no SIT filter)
-    const openFeedbackCount = K.openFeedbackFlag
-      ? (allSpOpenFb[sp] || 0)
-      : spRows.filter(r => TEAMS.some(t => isOpenFeedback(r[t.statusKey]))).length;
-    const teamStats = Object.fromEntries(TEAMS.map(t => {
-      const reviewed = spRows.filter(r => isReviewedFinal(r[t.statusKey])).length;
-      const pending  = spRows.filter(r => isPendingReview(r[t.statusKey])).length;
-      const reviewerName = spRows.map(r => String(r[t.reviewerKey]||"").trim()).find(Boolean) || "";
-      return [t.id, { reviewed, pending, reviewerName }];
-    }));
+    const drafted         = allSpDrafted[sp] || 0;
+    const openFeedbackCount = K.openFeedbackFlag ? (allSpOpenFb[sp] || 0) : 0;
+    const teamStats = Object.fromEntries(TEAMS.map(t => [t.id, allSpTeamStats[sp]?.[t.id] || { reviewed:0, pending:0, reviewerName:"", revRows:[], pendRows:[] }]));
     return { sp, drafted, userStories, userStoriesRelevant, openFeedbackCount, teamStats };
   });
 
@@ -4971,8 +4974,9 @@ function TestScenariosTab({ data, wp, req }) {
           const pend = tableRows.reduce((s,r) => s+(r.teamStats[t.id]?.pending||0), 0);
           const pct      = totDrafted > 0 ? Math.round(rev/totDrafted*100) : 0;
           const pendPct  = totDrafted > 0 ? Math.round(pend/totDrafted*100) : 0;
-          const revRows  = sitRows.filter(r => isReviewedFinal(r[t.statusKey]));
-          const pendRows = sitRows.filter(r => isPendingReview(r[t.statusKey]));
+          // Use all-SIT rows so drill-down matches the displayed count
+          const revRows  = draftedRows.filter(r => isReviewedFinal(r[t.statusKey]));
+          const pendRows = draftedRows.filter(r => isPendingReview(r[t.statusKey]));
           return (
             <div key={t.id} style={{ background:C.white, border:`1px solid ${C.border}`, borderTop:`3px solid ${t.color}`, borderRadius:8, padding:"10px 12px" }}>
               <div style={{ fontSize:9, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.07em", marginBottom:6 }}>{t.label}</div>
@@ -5042,9 +5046,9 @@ function TestScenariosTab({ data, wp, req }) {
                   {TEAMS.flatMap(t => {
                     const ts = row.teamStats[t.id] || {};
                     const rev = ts.reviewed||0, pend = ts.pending||0;
-                    const spRows2  = subprocessMap[row.sp] || [];
-                    const revRows  = spRows2.filter(r => isReviewedFinal(r[t.statusKey]));
-                    const pendRows = spRows2.filter(r => isPendingReview(r[t.statusKey]));
+                    // Use pre-built rows from allSpTeamStats so drill-down matches the count
+                    const revRows  = ts.revRows  || [];
+                    const pendRows = ts.pendRows || [];
                     return [
                       <td key={t.id+"-s"} style={{ padding:"9px 8px", verticalAlign:"top" }}>
                         <div style={{ display:"flex", flexDirection:"column", gap:3 }}>
@@ -5079,8 +5083,9 @@ function TestScenariosTab({ data, wp, req }) {
                   {TEAMS.flatMap(t => {
                     const rev      = tableRows.reduce((s,r) => s+(r.teamStats[t.id]?.reviewed||0), 0);
                     const pend     = tableRows.reduce((s,r) => s+(r.teamStats[t.id]?.pending||0), 0);
-                    const revRows  = sitRows.filter(r => isReviewedFinal(r[t.statusKey]));
-                    const pendRows = sitRows.filter(r => isPendingReview(r[t.statusKey]));
+                    // Aggregate pre-built rows from all subprocesses shown in this SIT
+                    const revRows  = tableRows.flatMap(r => r.teamStats[t.id]?.revRows  || []);
+                    const pendRows = tableRows.flatMap(r => r.teamStats[t.id]?.pendRows || []);
                     return [
                       <td key={t.id+"-s"} style={{ padding:"9px 8px" }}>
                         <div style={{ display:"flex", flexDirection:"column", gap:3 }}>
