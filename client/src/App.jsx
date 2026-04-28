@@ -380,7 +380,7 @@ function parseTestScenarios(sheets) {
   const ks = Object.keys(rows[0]);
 
   const K = {
-    id:          ks.find(k => /scenario.?id/i.test(k)),
+    id:          ks.find(k => k === "ID") || ks.find(k => /scenario.?id/i.test(k)) || ks.find(k => /^id$/i.test(k)),
     name:        ks.find(k => k === "Scenarios") || ks.find(k => /^scenarios?$/i.test(k)),
     subprocess:  ks.find(k => k === "SubProcess") || ks.find(k => /sub.?process/i.test(k)),
     processStep: ks.find(k => /process.?step.?id/i.test(k)),
