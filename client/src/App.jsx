@@ -4668,6 +4668,7 @@ function TestScenariosTab({ data, wp, req }) {
   const [spModal,   setSpModal]   = useState(null);
   const [drillModal,    setDrillModal]    = useState(null);
   const [untaggedModal, setUntaggedModal] = useState(null);
+  const [taggedModal,   setTaggedModal]   = useState(null);
 
   if (!data) return <Empty label="Upload Test Scenarios file above to view this tab." />;
 
@@ -4738,6 +4739,18 @@ function TestScenariosTab({ data, wp, req }) {
     });
   }
 
+  // Reverse map: reqId → [scenarioId, ...] (used in Tagged US drill-down)
+  const scenariosByReqId = {};
+  if (K.storyIds && K.id) {
+    draftedRows.forEach(r => {
+      const scenId = String(r[K.id]||"").trim();
+      String(r[K.storyIds]||"").split(/\n|,|;/).map(s=>s.trim()).filter(Boolean).forEach(reqId => {
+        if (!scenariosByReqId[reqId]) scenariosByReqId[reqId] = [];
+        if (scenId) scenariosByReqId[reqId].push(scenId);
+      });
+    });
+  }
+
   const sitFilteredRows = activeSit === "ALL"
     ? draftedRows
     : draftedRows.filter(r => {
@@ -4758,6 +4771,8 @@ function TestScenariosTab({ data, wp, req }) {
     const userStoriesRelevant = reqRows.filter(r => !isReqExcluded(r) && isTestScenarioReq(r)).length;
     const untaggedUSRows = reqK?.reqId ? reqRows.filter(r => !isReqExcluded(r) && isTestScenarioReq(r) && !taggedReqIds.has(String(r[reqK.reqId]||"").trim())) : [];
     const untaggedUS = untaggedUSRows.length;
+    const taggedUSRows   = reqK?.reqId ? reqRows.filter(r => !isReqExcluded(r) && isTestScenarioReq(r) &&  taggedReqIds.has(String(r[reqK.reqId]||"").trim())) : [];
+    const taggedUS = taggedUSRows.length;
     const drafted         = spRows.length;
     const openFeedbackCount = K.openFeedbackFlag ? spRows.filter(r => isTruthy(r[K.openFeedbackFlag])).length : 0;
     const teamStats = Object.fromEntries(TEAMS.map(t => {
@@ -4769,7 +4784,7 @@ function TestScenariosTab({ data, wp, req }) {
       const reviewerName  = spRows.map(r => String(r[t.reviewerKey]||"").trim()).find(v => v) || "";
       return [t.id, { reviewed: revRows.length, pending: pendRows.length, notPushed: notPushedRows.length, reviewerName, revRows, pendRows, notPushedRows }];
     }));
-    return { sp, drafted, userStories, userStoriesRelevant, untaggedUS, untaggedUSRows, openFeedbackCount, teamStats };
+    return { sp, drafted, userStories, userStoriesRelevant, untaggedUS, untaggedUSRows, taggedUS, taggedUSRows, openFeedbackCount, teamStats };
   });
   const tableRows = selSp === "ALL" ? allTableRows : allTableRows.filter(r => r.sp === selSp);
 
@@ -4778,6 +4793,8 @@ function TestScenariosTab({ data, wp, req }) {
   const totRelevant     = tableRows.reduce((s,r) => s+r.userStoriesRelevant, 0);
   const totUntagged     = tableRows.reduce((s,r) => s+r.untaggedUS, 0);
   const totUntaggedRows = tableRows.flatMap(r => r.untaggedUSRows || []);
+  const totTagged       = tableRows.reduce((s,r) => s+r.taggedUS, 0);
+  const totTaggedRows   = tableRows.flatMap(r => r.taggedUSRows || []);
   const totOpenFeedback = tableRows.reduce((s,r) => s+r.openFeedbackCount, 0);
   const pctStr = (n,d) => d > 0 ? `${Math.round(n/d*100)}%` : "—";
 
@@ -4801,12 +4818,16 @@ function TestScenariosTab({ data, wp, req }) {
     const fully      = spRows.filter(r => REVIEW_TEAMS_5.every(t => isReviewedFinal(r[t.statusKey]) && !isTruthy(r[K.openFeedbackFlag]))).length;
     const untaggedUSRows = reqK?.reqId ? reqRows.filter(r => !isReqExcluded(r) && isTestScenarioReq(r) && !taggedReqIds.has(String(r[reqK.reqId]||"").trim())) : [];
     const untaggedUS = untaggedUSRows.length;
-    return { sp, userStories, userStoriesRelevant, untaggedUS, untaggedUSRows, drafted, totalTeamReviews, maxReviews, reviewPct, fully };
+    const taggedUSRows   = reqK?.reqId ? reqRows.filter(r => !isReqExcluded(r) && isTestScenarioReq(r) &&  taggedReqIds.has(String(r[reqK.reqId]||"").trim())) : [];
+    const taggedUS = taggedUSRows.length;
+    return { sp, userStories, userStoriesRelevant, untaggedUS, untaggedUSRows, taggedUS, taggedUSRows, drafted, totalTeamReviews, maxReviews, reviewPct, fully };
   });
   const omTotUS  = overallMetrics.reduce((s,r)=>s+r.userStories,0);
   const omTotRel = overallMetrics.reduce((s,r)=>s+r.userStoriesRelevant,0);
   const omTotUntag     = overallMetrics.reduce((s,r)=>s+r.untaggedUS,0);
   const omTotUntagRows = overallMetrics.flatMap(r=>r.untaggedUSRows||[]);
+  const omTotTagged    = overallMetrics.reduce((s,r)=>s+r.taggedUS,0);
+  const omTotTaggedRows= overallMetrics.flatMap(r=>r.taggedUSRows||[]);
   const omTotDr  = overallMetrics.reduce((s,r)=>s+r.drafted,0);
   const omTotTR  = overallMetrics.reduce((s,r)=>s+r.totalTeamReviews,0);
   const omTotMax = overallMetrics.reduce((s,r)=>s+r.maxReviews,0);
@@ -4822,59 +4843,148 @@ function TestScenariosTab({ data, wp, req }) {
     return <span style={{ background:bg, color:col, borderRadius:4, padding:"2px 6px", fontSize:10, fontWeight:600, whiteSpace:"nowrap" }}>{sv}</span>;
   };
 
-  const UntaggedUSModal = ({ title, rows:mRows, onClose }) => (
-    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center" }} onClick={onClose}>
-      <div style={{ background:C.white, borderRadius:10, width:"98%", maxWidth:1200, maxHeight:"90vh", display:"flex", flexDirection:"column", boxShadow:"0 24px 60px rgba(0,0,0,0.35)" }} onClick={e=>e.stopPropagation()}>
-        <div style={{ background:C.navy, padding:"12px 20px", borderRadius:"10px 10px 0 0", display:"flex", justifyContent:"space-between", alignItems:"center", flexShrink:0 }}>
-          <span style={{ color:"#fff", fontWeight:700, fontSize:13 }}>{title} <span style={{ opacity:.6, fontWeight:400 }}>({mRows.length} user stories)</span></span>
-          <button onClick={onClose} style={{ background:"rgba(255,255,255,0.15)", border:"none", color:"#fff", borderRadius:5, padding:"5px 14px", cursor:"pointer", fontSize:13, fontWeight:600 }}>✕</button>
-        </div>
-        <div style={{ overflowY:"auto", flex:1 }}>
-          <table style={{ width:"100%", borderCollapse:"collapse", fontSize:11 }}>
-            <thead style={{ position:"sticky", top:0, zIndex:2 }}>
-              <tr style={{ background:C.navy }}>
-                <th style={{ padding:"8px 12px", textAlign:"left", color:"#fff", fontWeight:700, fontSize:10, minWidth:80, borderRight:"1px solid rgba(255,255,255,0.12)" }}>Req ID</th>
-                <th style={{ padding:"8px 12px", textAlign:"left", color:"#a8d8ff", fontWeight:700, fontSize:10, minWidth:200, borderRight:"1px solid rgba(255,255,255,0.12)" }}>Business Requirement</th>
-                <th style={{ padding:"8px 12px", textAlign:"left", color:"#a8d8ff", fontWeight:700, fontSize:10, minWidth:220, borderRight:"1px solid rgba(255,255,255,0.12)" }}>User Story</th>
-                <th style={{ padding:"8px 12px", textAlign:"left", color:"#a8d8ff", fontWeight:700, fontSize:10, minWidth:220, borderRight:"1px solid rgba(255,255,255,0.12)" }}>Acceptance Criteria</th>
-                <th style={{ padding:"8px 12px", textAlign:"left", color:"#fcd34d", fontWeight:700, fontSize:10, minWidth:120, borderRight:"1px solid rgba(255,255,255,0.12)" }}>Review Status (D&A)</th>
-                <th style={{ padding:"8px 12px", textAlign:"left", color:"#c4f1c4", fontWeight:700, fontSize:10, minWidth:110 }}>Test Script Type</th>
-              </tr>
-            </thead>
-            <tbody>
-              {mRows.length === 0 && (
-                <tr><td colSpan={6} style={{ padding:24, textAlign:"center", color:C.muted }}>No untagged user stories</td></tr>
-              )}
-              {mRows.map((r, i) => {
-                const reqId   = String(r[reqK?.reqId]||"—");
-                const bizReq  = String(r[reqK?.bizReq]||"—");
-                const story   = String(r[reqK?.story]||"—");
-                const ac      = String(r[reqK?.acceptance]||"—");
-                const status  = String(r[reqK?.derivedStatus]||"—");
-                const tsType  = String(r[reqK?.testScriptType]||"—");
-                return (
-                  <tr key={i} style={{ background:i%2===0?C.white:"#f9fafb", borderBottom:`1px solid ${C.border}`, verticalAlign:"top" }}>
-                    <td style={{ padding:"8px 12px", fontWeight:700, color:C.navyLight, whiteSpace:"nowrap", borderRight:`1px solid ${C.border}` }}>{reqId}</td>
-                    <td style={{ padding:"8px 12px", color:C.text, wordBreak:"break-word", borderRight:`1px solid ${C.border}` }}>{bizReq}</td>
-                    <td style={{ padding:"8px 12px", color:C.text, wordBreak:"break-word", borderRight:`1px solid ${C.border}` }}>{story}</td>
-                    <td style={{ padding:"8px 12px", color:C.muted, wordBreak:"break-word", borderRight:`1px solid ${C.border}` }}>{ac}</td>
-                    <td style={{ padding:"8px 12px", borderRight:`1px solid ${C.border}` }}>
-                      {status !== "—" ? <span style={{ background:"#f1f5f9", color:"#475569", borderRadius:4, padding:"2px 7px", fontSize:10, fontWeight:600, whiteSpace:"nowrap" }}>{status}</span>
-                                      : <span style={{ color:C.muted }}>—</span>}
-                    </td>
-                    <td style={{ padding:"8px 12px" }}>
-                      {tsType !== "—" ? <span style={{ background:"#dcfce7", color:"#166534", borderRadius:4, padding:"2px 7px", fontSize:10, fontWeight:600, whiteSpace:"nowrap" }}>{tsType}</span>
-                                      : <span style={{ color:C.muted }}>—</span>}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+  // Shared drill-down modal for both Untagged US (mode="untagged") and Tagged US (mode="tagged")
+  const ReqDrillModal = ({ title, rows: mRows, mode, scenariosByReqId: sById, onClose }) => {
+    const [spFil,  setSpFil]  = useState("ALL");
+    const [expFil, setExpFil] = useState("ALL");
+    const [stFil,  setStFil]  = useState("ALL");
+
+    const isTagged = mode === "tagged";
+
+    const allSps  = Array.from(new Set(mRows.map(r => String(r[reqK?.component]||"").trim()).filter(Boolean))).sort();
+    const allExps = Array.from(new Set(mRows.map(r => String(r[reqK?.pmExperience]||"").trim()).filter(Boolean))).sort();
+    const allSts  = Array.from(new Set(mRows.map(r => String(r[reqK?.derivedStatus]||"").trim()).filter(Boolean))).sort();
+
+    const matchSp  = (r, v) => v === "ALL" ? true : String(r[reqK?.component]||"").trim() === v;
+    const matchExp = (r, v) => v === "ALL" ? true : String(r[reqK?.pmExperience]||"").trim() === v;
+    const matchSt  = (r, v) => v === "ALL" ? true : String(r[reqK?.derivedStatus]||"").trim() === v;
+
+    const filteredRows = mRows.filter(r => matchSp(r,spFil) && matchExp(r,expFil) && matchSt(r,stFil));
+
+    const spCounts  = allSps.map(v  => ({ val:v, count: mRows.filter(r => matchSp(r,v)    && matchExp(r,expFil) && matchSt(r,stFil)).length }));
+    const expCounts = allExps.map(v => ({ val:v, count: mRows.filter(r => matchSp(r,spFil) && matchExp(r,v)     && matchSt(r,stFil)).length }));
+    const stCounts  = allSts.map(v  => ({ val:v, count: mRows.filter(r => matchSp(r,spFil) && matchExp(r,expFil) && matchSt(r,v)).length }));
+
+    const fpill = (label, isActive, count, onClick) => (
+      <button key={label} onClick={onClick} disabled={count===0&&label!=="All"}
+        style={{ display:"flex", alignItems:"center", gap:4, padding:"3px 9px", borderRadius:20,
+          border:`2px solid ${isActive?C.navyLight:count>0?C.border:C.border}`,
+          background:isActive?C.navyLight:C.white, color:isActive?"#fff":count>0?C.text:C.muted,
+          cursor:count>0||label==="All"?"pointer":"default", fontSize:10, fontWeight:700,
+          opacity:count===0&&label!=="All"?0.4:1, transition:"all .12s" }}>
+        {label}
+        <span style={{ background:isActive?"rgba(255,255,255,0.25)":"#f1f5f9", color:isActive?"#fff":C.text,
+          borderRadius:10, padding:"1px 6px", fontSize:10, fontWeight:800, minWidth:18, textAlign:"center" }}>
+          {count}
+        </span>
+      </button>
+    );
+
+    return (
+      <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center" }} onClick={onClose}>
+        <div style={{ background:C.white, borderRadius:10, width:"99%", maxWidth:1500, maxHeight:"92vh", display:"flex", flexDirection:"column", boxShadow:"0 24px 60px rgba(0,0,0,0.35)" }} onClick={e=>e.stopPropagation()}>
+          <div style={{ background:C.navy, padding:"12px 20px", borderRadius:"10px 10px 0 0", display:"flex", justifyContent:"space-between", alignItems:"center", flexShrink:0 }}>
+            <span style={{ color:"#fff", fontWeight:700, fontSize:13 }}>{title} <span style={{ opacity:.6, fontWeight:400 }}>({filteredRows.length}{filteredRows.length!==mRows.length?` of ${mRows.length}`:""} user stories)</span></span>
+            <button onClick={onClose} style={{ background:"rgba(255,255,255,0.15)", border:"none", color:"#fff", borderRadius:5, padding:"5px 14px", cursor:"pointer", fontSize:13, fontWeight:600 }}>✕</button>
+          </div>
+          {/* Cross-filters */}
+          <div style={{ background:"#f8fafc", borderBottom:`1px solid ${C.border}`, padding:"10px 16px", flexShrink:0 }}>
+            <div style={{ fontSize:10, fontWeight:700, color:C.text, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:8 }}>
+              Filters <span style={{ fontSize:9, color:C.muted, fontWeight:400, textTransform:"none", marginLeft:6 }}>— selecting one filter adjusts the others</span>
+            </div>
+            {allSps.length > 0 && (
+              <div style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"wrap", marginBottom:6 }}>
+                <span style={{ fontSize:10, color:"#374151", fontWeight:700, minWidth:80 }}>Sub Process</span>
+                {fpill("All", spFil==="ALL", mRows.filter(r=>matchExp(r,expFil)&&matchSt(r,stFil)).length, ()=>setSpFil("ALL"))}
+                {spCounts.map(({val,count})=>fpill(val, spFil===val, count, ()=>setSpFil(spFil===val?"ALL":val)))}
+              </div>
+            )}
+            {allExps.length > 0 && (
+              <div style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"wrap", marginBottom:6 }}>
+                <span style={{ fontSize:10, color:"#374151", fontWeight:700, minWidth:80 }}>Experience</span>
+                {fpill("All", expFil==="ALL", mRows.filter(r=>matchSp(r,spFil)&&matchSt(r,stFil)).length, ()=>setExpFil("ALL"))}
+                {expCounts.map(({val,count})=>fpill(val, expFil===val, count, ()=>setExpFil(expFil===val?"ALL":val)))}
+              </div>
+            )}
+            {allSts.length > 0 && (
+              <div style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
+                <span style={{ fontSize:10, color:"#374151", fontWeight:700, minWidth:80 }}>Signed Off</span>
+                {fpill("All", stFil==="ALL", mRows.filter(r=>matchSp(r,spFil)&&matchExp(r,expFil)).length, ()=>setStFil("ALL"))}
+                {stCounts.map(({val,count})=>fpill(val, stFil===val, count, ()=>setStFil(stFil===val?"ALL":val)))}
+              </div>
+            )}
+          </div>
+          <div style={{ overflowY:"auto", overflowX:"auto", flex:1 }}>
+            <table style={{ width:"100%", borderCollapse:"collapse", fontSize:11 }}>
+              <thead style={{ position:"sticky", top:0, zIndex:2 }}>
+                <tr style={{ background:C.navy }}>
+                  <th style={{ padding:"8px 12px", textAlign:"left", color:"#fff",    fontWeight:700, fontSize:10, minWidth:80,  borderRight:"1px solid rgba(255,255,255,0.12)" }}>Req ID</th>
+                  <th style={{ padding:"8px 12px", textAlign:"left", color:"#a8d8ff", fontWeight:700, fontSize:10, minWidth:120, borderRight:"1px solid rgba(255,255,255,0.12)" }}>Sub Process</th>
+                  <th style={{ padding:"8px 12px", textAlign:"left", color:"#a8d8ff", fontWeight:700, fontSize:10, minWidth:120, borderRight:"1px solid rgba(255,255,255,0.12)" }}>Experience</th>
+                  <th style={{ padding:"8px 12px", textAlign:"left", color:"#a8d8ff", fontWeight:700, fontSize:10, minWidth:200, borderRight:"1px solid rgba(255,255,255,0.12)" }}>Business Requirement</th>
+                  <th style={{ padding:"8px 12px", textAlign:"left", color:"#a8d8ff", fontWeight:700, fontSize:10, minWidth:220, borderRight:"1px solid rgba(255,255,255,0.12)" }}>User Story</th>
+                  <th style={{ padding:"8px 12px", textAlign:"left", color:"#a8d8ff", fontWeight:700, fontSize:10, minWidth:220, borderRight:"1px solid rgba(255,255,255,0.12)" }}>Acceptance Criteria</th>
+                  {isTagged ? (<>
+                    <th style={{ padding:"8px 12px", textAlign:"left", color:"#c4f1c4", fontWeight:700, fontSize:10, minWidth:130, borderRight:"1px solid rgba(255,255,255,0.12)" }}>Test Script/Scenario</th>
+                    <th style={{ padding:"8px 12px", textAlign:"left", color:"#fcd34d", fontWeight:700, fontSize:10, minWidth:160 }}>Test Scenario IDs</th>
+                  </>) : (<>
+                    <th style={{ padding:"8px 12px", textAlign:"left", color:"#fcd34d", fontWeight:700, fontSize:10, minWidth:120, borderRight:"1px solid rgba(255,255,255,0.12)" }}>Review Status (D&A)</th>
+                    <th style={{ padding:"8px 12px", textAlign:"left", color:"#c4f1c4", fontWeight:700, fontSize:10, minWidth:110 }}>Test Script Type</th>
+                  </>)}
+                </tr>
+              </thead>
+              <tbody>
+                {filteredRows.length === 0 && (
+                  <tr><td colSpan={8} style={{ padding:24, textAlign:"center", color:C.muted }}>No user stories match filters</td></tr>
+                )}
+                {filteredRows.map((r, i) => {
+                  const reqId  = String(r[reqK?.reqId]||"—");
+                  const sp     = String(r[reqK?.component]||"—");
+                  const exp    = String(r[reqK?.pmExperience]||"—");
+                  const bizReq = String(r[reqK?.bizReq]||"—");
+                  const story  = String(r[reqK?.story]||"—");
+                  const ac     = String(r[reqK?.acceptance]||"—");
+                  const tsType = String(r[reqK?.testScriptType]||"—");
+                  const status = String(r[reqK?.derivedStatus]||"—");
+                  return (
+                    <tr key={i} style={{ background:i%2===0?C.white:"#f9fafb", borderBottom:`1px solid ${C.border}`, verticalAlign:"top" }}>
+                      <td style={{ padding:"8px 12px", fontWeight:700, color:C.navyLight, whiteSpace:"nowrap", borderRight:`1px solid ${C.border}` }}>{reqId}</td>
+                      <td style={{ padding:"8px 12px", color:C.muted, whiteSpace:"nowrap", borderRight:`1px solid ${C.border}` }}>{sp}</td>
+                      <td style={{ padding:"8px 12px", color:C.muted, whiteSpace:"nowrap", borderRight:`1px solid ${C.border}` }}>{exp}</td>
+                      <td style={{ padding:"8px 12px", color:C.text, wordBreak:"break-word", borderRight:`1px solid ${C.border}` }}>{bizReq}</td>
+                      <td style={{ padding:"8px 12px", color:C.text, wordBreak:"break-word", borderRight:`1px solid ${C.border}` }}>{story}</td>
+                      <td style={{ padding:"8px 12px", color:C.muted, wordBreak:"break-word", borderRight:`1px solid ${C.border}` }}>{ac}</td>
+                      {isTagged ? (<>
+                        <td style={{ padding:"8px 12px", borderRight:`1px solid ${C.border}` }}>
+                          {tsType!=="—" ? <span style={{ background:"#dcfce7", color:"#166534", borderRadius:4, padding:"2px 7px", fontSize:10, fontWeight:600, whiteSpace:"nowrap" }}>{tsType}</span> : <span style={{ color:C.muted }}>—</span>}
+                        </td>
+                        <td style={{ padding:"8px 12px" }}>
+                          {(() => {
+                            const ids = sById?.[reqId] || [];
+                            if (!ids.length) return <span style={{ color:C.muted }}>—</span>;
+                            return <span style={{ display:"flex", flexWrap:"wrap", gap:3 }}>
+                              {ids.map((id,j)=><span key={j} style={{ background:"#eff6ff", color:"#1d4ed8", borderRadius:4, padding:"2px 6px", fontSize:10, fontWeight:700, whiteSpace:"nowrap" }}>{id}</span>)}
+                            </span>;
+                          })()}
+                        </td>
+                      </>) : (<>
+                        <td style={{ padding:"8px 12px", borderRight:`1px solid ${C.border}` }}>
+                          {status!=="—" ? <span style={{ background:"#f1f5f9", color:"#475569", borderRadius:4, padding:"2px 7px", fontSize:10, fontWeight:600, whiteSpace:"nowrap" }}>{status}</span> : <span style={{ color:C.muted }}>—</span>}
+                        </td>
+                        <td style={{ padding:"8px 12px" }}>
+                          {tsType!=="—" ? <span style={{ background:"#dcfce7", color:"#166534", borderRadius:4, padding:"2px 7px", fontSize:10, fontWeight:600, whiteSpace:"nowrap" }}>{tsType}</span> : <span style={{ color:C.muted }}>—</span>}
+                        </td>
+                      </>)}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   const TeamDrillModal = ({ title, rows:mRows, teamId:tid, reqById:rById={}, reqK:rK, onClose }) => {
     const [colW, setColW] = useState({});
@@ -5182,6 +5292,7 @@ function TestScenariosTab({ data, wp, req }) {
                 <th style={{ padding:"8px 8px", textAlign:"center", color:"#a8d8ff", fontWeight:700, fontSize:10, borderRight:`1px solid rgba(255,255,255,0.1)`, minWidth:65 }}>User Stories</th>
                 <th style={{ padding:"8px 8px", textAlign:"center", color:"#a8d8ff", fontWeight:700, fontSize:10, borderRight:`1px solid rgba(255,255,255,0.1)`, minWidth:80 }}>Relevant for Scenarios</th>
                 <th style={{ padding:"8px 8px", textAlign:"center", color:"#fcd34d", fontWeight:700, fontSize:10, borderRight:`1px solid rgba(255,255,255,0.1)`, minWidth:75 }}>Untagged US</th>
+                <th style={{ padding:"8px 8px", textAlign:"center", color:"#c4f1c4", fontWeight:700, fontSize:10, borderRight:`1px solid rgba(255,255,255,0.1)`, minWidth:75 }}>Tagged US</th>
                 <th style={{ padding:"8px 8px", textAlign:"center", color:"#a8d8ff", fontWeight:700, fontSize:10, borderRight:`1px solid rgba(255,255,255,0.1)`, minWidth:60 }}>Drafted</th>
                 <th style={{ padding:"8px 8px", textAlign:"center", color:"#fcd34d", fontWeight:700, fontSize:10, borderRight:`1px solid rgba(255,255,255,0.15)`, minWidth:65 }}>Open Feedback</th>
                 {TEAMS.flatMap(t => [
@@ -5196,6 +5307,9 @@ function TestScenariosTab({ data, wp, req }) {
                 <td style={{ padding:"7px 8px", textAlign:"center", color:C.navyLight, fontWeight:700, fontSize:10 }}>{totRelevant||"—"}</td>
                 <td style={{ padding:"7px 8px", textAlign:"center", fontSize:10 }}>
                   {totUntagged>0 ? <span onClick={() => setUntaggedModal({ title:"All Sub Processes — Untagged User Stories", rows:totUntaggedRows })} style={{ background:"#fef3c7", color:"#92400e", borderRadius:4, padding:"1px 6px", fontSize:10, fontWeight:700, cursor:"pointer" }}>{totUntagged}</span> : <span style={{ color:C.muted }}>—</span>}
+                </td>
+                <td style={{ padding:"7px 8px", textAlign:"center", fontSize:10 }}>
+                  {totTagged>0 ? <span onClick={() => setTaggedModal({ title:"All Sub Processes — Tagged User Stories", rows:totTaggedRows })} style={{ background:"#dcfce7", color:"#166534", borderRadius:4, padding:"1px 6px", fontSize:10, fontWeight:700, cursor:"pointer" }}>{totTagged}</span> : <span style={{ color:C.muted }}>—</span>}
                 </td>
                 <td style={{ padding:"7px 8px", textAlign:"center", color:C.text, fontWeight:800, fontSize:10 }}>{totDrafted}</td>
                 <td style={{ padding:"7px 8px", textAlign:"center" }}>
@@ -5255,6 +5369,11 @@ function TestScenariosTab({ data, wp, req }) {
                   <td style={{ padding:"9px 8px", textAlign:"center" }}>
                     {row.untaggedUS > 0
                       ? <span onClick={e => { e.stopPropagation(); setUntaggedModal({ title:`${row.sp} — Untagged User Stories`, rows:row.untaggedUSRows||[] }); }} style={{ background:"#fef3c7", color:"#92400e", borderRadius:4, padding:"2px 8px", fontSize:10, fontWeight:700, cursor:"pointer" }}>{row.untaggedUS}</span>
+                      : <span style={{ color:C.muted }}>—</span>}
+                  </td>
+                  <td style={{ padding:"9px 8px", textAlign:"center" }}>
+                    {row.taggedUS > 0
+                      ? <span onClick={e => { e.stopPropagation(); setTaggedModal({ title:`${row.sp} — Tagged User Stories`, rows:row.taggedUSRows||[] }); }} style={{ background:"#dcfce7", color:"#166534", borderRadius:4, padding:"2px 8px", fontSize:10, fontWeight:700, cursor:"pointer" }}>{row.taggedUS}</span>
                       : <span style={{ color:C.muted }}>—</span>}
                   </td>
                   <td style={{ padding:"9px 8px", textAlign:"center", fontWeight:700, color:C.text }}>{row.drafted}</td>
@@ -5320,6 +5439,7 @@ function TestScenariosTab({ data, wp, req }) {
               <th style={{ padding:"8px 10px", textAlign:"center", color:"#a8d8ff", fontWeight:700, fontSize:10, borderRight:`1px solid rgba(255,255,255,0.1)`, minWidth:80 }}>User Stories</th>
               <th style={{ padding:"8px 10px", textAlign:"center", color:"#a8d8ff", fontWeight:700, fontSize:10, borderRight:`1px solid rgba(255,255,255,0.1)`, minWidth:100 }}>Relevant for Scenarios</th>
               <th style={{ padding:"8px 10px", textAlign:"center", color:"#fcd34d", fontWeight:700, fontSize:10, borderRight:`1px solid rgba(255,255,255,0.1)`, minWidth:75 }}>Untagged US</th>
+              <th style={{ padding:"8px 10px", textAlign:"center", color:"#c4f1c4", fontWeight:700, fontSize:10, borderRight:`1px solid rgba(255,255,255,0.1)`, minWidth:75 }}>Tagged US</th>
               <th style={{ padding:"8px 10px", textAlign:"center", color:"#a8d8ff", fontWeight:700, fontSize:10, borderRight:`1px solid rgba(255,255,255,0.1)`, minWidth:70 }}>Scenarios Drafted</th>
               <th style={{ padding:"8px 10px", textAlign:"center", color:"#c4f1c4", fontWeight:700, fontSize:10, borderRight:`1px solid rgba(255,255,255,0.1)`, minWidth:80 }}>Fully Reviewed</th>
               <th style={{ padding:"8px 10px", textAlign:"center", color:"#fde68a", fontWeight:700, fontSize:10, borderRight:`1px solid rgba(255,255,255,0.15)`, minWidth:120 }}>Review Completion</th>
@@ -5331,6 +5451,9 @@ function TestScenariosTab({ data, wp, req }) {
               <td style={{ padding:"7px 10px", textAlign:"center", color:C.navyLight, fontWeight:700, fontSize:10 }}>{omTotRel||"—"}</td>
               <td style={{ padding:"7px 10px", textAlign:"center" }}>
                 {omTotUntag>0 ? <span onClick={() => setUntaggedModal({ title:"All Sub Processes — Untagged User Stories", rows:omTotUntagRows })} style={{ background:"#fef3c7", color:"#92400e", borderRadius:4, padding:"1px 7px", fontSize:10, fontWeight:700, cursor:"pointer" }}>{omTotUntag}</span> : <span style={{ color:C.muted }}>—</span>}
+              </td>
+              <td style={{ padding:"7px 10px", textAlign:"center" }}>
+                {omTotTagged>0 ? <span onClick={() => setTaggedModal({ title:"All Sub Processes — Tagged User Stories", rows:omTotTaggedRows })} style={{ background:"#dcfce7", color:"#166534", borderRadius:4, padding:"1px 7px", fontSize:10, fontWeight:700, cursor:"pointer" }}>{omTotTagged}</span> : <span style={{ color:C.muted }}>—</span>}
               </td>
               <td style={{ padding:"7px 10px", textAlign:"center", color:C.text, fontWeight:800, fontSize:10 }}>{omTotDr}</td>
               <td style={{ padding:"7px 10px", textAlign:"center" }}>
@@ -5360,6 +5483,11 @@ function TestScenariosTab({ data, wp, req }) {
                   <td style={{ padding:"9px 10px", textAlign:"center" }}>
                     {row.untaggedUS > 0
                       ? <span onClick={() => setUntaggedModal({ title:`${row.sp} — Untagged User Stories`, rows:row.untaggedUSRows||[] })} style={{ background:"#fef3c7", color:"#92400e", borderRadius:4, padding:"2px 8px", fontSize:10, fontWeight:700, cursor:"pointer" }}>{row.untaggedUS}</span>
+                      : <span style={{ color:C.muted }}>—</span>}
+                  </td>
+                  <td style={{ padding:"9px 10px", textAlign:"center" }}>
+                    {row.taggedUS > 0
+                      ? <span onClick={() => setTaggedModal({ title:`${row.sp} — Tagged User Stories`, rows:row.taggedUSRows||[] })} style={{ background:"#dcfce7", color:"#166534", borderRadius:4, padding:"2px 8px", fontSize:10, fontWeight:700, cursor:"pointer" }}>{row.taggedUS}</span>
                       : <span style={{ color:C.muted }}>—</span>}
                   </td>
                   <td style={{ padding:"9px 10px", textAlign:"center", fontWeight:700, color:C.text }}>{row.drafted}</td>
@@ -5395,7 +5523,8 @@ function TestScenariosTab({ data, wp, req }) {
 
       {spModal        && <ScenarioModal   title={spModal.title}        rows={spModal.rows}        onClose={() => setSpModal(null)} />}
       {drillModal     && <TeamDrillModal  title={drillModal.title}     rows={drillModal.rows}     teamId={drillModal.teamId} reqById={reqById} reqK={reqK} onClose={() => setDrillModal(null)} />}
-      {untaggedModal  && <UntaggedUSModal title={untaggedModal.title}  rows={untaggedModal.rows}  onClose={() => setUntaggedModal(null)} />}
+      {untaggedModal  && <ReqDrillModal   title={untaggedModal.title}  rows={untaggedModal.rows}  mode="untagged" scenariosByReqId={scenariosByReqId} onClose={() => setUntaggedModal(null)} />}
+      {taggedModal    && <ReqDrillModal   title={taggedModal.title}    rows={taggedModal.rows}    mode="tagged"   scenariosByReqId={scenariosByReqId} onClose={() => setTaggedModal(null)} />}
     </div>
   );
 }
