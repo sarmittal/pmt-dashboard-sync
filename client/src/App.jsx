@@ -5901,31 +5901,33 @@ function TestScenariosTab({ data, wp, req }) {
                 const stId   = _scenFiltered.length;
                 const stEst  = _scenFiltered.reduce((s,r)=>s+(Number(r[K.estCases])||0), 0);
                 const stTag  = _scenFiltered.reduce((s,r)=>s+_splitUSIds(r[K.similarUSIds]).length, 0);
-                const stCell = (v, extra={}) => (
-                  <span style={{ background:"#1e3a5f", color:"#e2e8f0", borderRadius:4, padding:"2px 8px", fontSize:10, fontWeight:800, ...extra }}>{v}</span>
+                const bg = "#eef4ff";
+                const br = `1px solid ${C.border}`;
+                const num = (v, color=C.navyLight) => (
+                  <span style={{ color, fontWeight:800, fontSize:11 }}>{v}</span>
                 );
                 return (
-                  <tr style={{ background:"#0f172a", borderBottom:`2px solid ${C.navyLight}`, position:"sticky", top:41 }}>
-                    <td style={{ padding:"6px 8px", textAlign:"center", color:"#94a3b8", fontSize:9, fontWeight:700 }}>∑</td>
-                    <td style={{ padding:"6px 8px", textAlign:"center", borderRight:`1px solid #1e3a5f` }}>{stCell(stDel, {background:"#7f1d1d", color:"#fca5a5"})}</td>
-                    <td style={{ padding:"6px 8px", textAlign:"center", borderRight:`1px solid #1e3a5f` }}>{stCell(stDup, {background:"#78350f", color:"#fde68a"})}</td>
-                    <td style={{ padding:"6px 8px", textAlign:"center", borderRight:`1px solid #1e3a5f` }}>{stCell(stFb,  {background:"#713f12", color:"#fef08a"})}</td>
-                    <td style={{ padding:"6px 8px", textAlign:"center", borderRight:`1px solid #1e3a5f` }}>{stCell(stId)}</td>
-                    <td style={{ padding:"6px 8px", borderRight:`1px solid #1e3a5f` }} />
-                    <td style={{ padding:"6px 8px", borderRight:`1px solid #1e3a5f` }} />
-                    <td style={{ padding:"6px 8px", borderRight:`1px solid #1e3a5f` }} />
-                    <td style={{ padding:"6px 8px", borderRight:`1px solid #1e3a5f` }} />
-                    <td style={{ padding:"6px 8px", textAlign:"center", borderRight:`1px solid #1e3a5f` }}>{stCell(stEst, {background:"#1e3a5f", color:"#93c5fd"})}</td>
-                    <td style={{ padding:"6px 8px", borderRight:`1px solid #1e3a5f` }} />
-                    <td style={{ padding:"6px 8px", borderRight:`1px solid #1e3a5f` }} />
-                    <td style={{ padding:"6px 8px", borderRight:`1px solid #1e3a5f` }} />
-                    <td style={{ padding:"6px 8px", borderRight:`1px solid #1e3a5f` }} />
-                    <td style={{ padding:"6px 8px", borderRight:`1px solid #1e3a5f` }} />
-                    <td style={{ padding:"6px 8px", borderRight:`1px solid #1e3a5f` }} />
-                    <td style={{ padding:"6px 8px", borderRight:`1px solid #1e3a5f` }} />
-                    <td style={{ padding:"6px 8px", borderRight:`1px solid #1e3a5f` }} />
-                    <td style={{ padding:"6px 8px", textAlign:"center", borderRight:`1px solid #1e3a5f` }}>{stCell(stTag, {background:"#1e3a5f", color:"#a5b4fc"})}</td>
-                    <td style={{ padding:"6px 8px", textAlign:"center", borderRight:`1px solid #1e3a5f` }}>{stCell(stMan, {background:"#1e3a8a", color:"#bfdbfe"})}</td>
+                  <tr style={{ background:bg, borderBottom:`2px solid ${C.navyLight}` }}>
+                    <td style={{ padding:"6px 8px", textAlign:"center", color:C.navy, fontSize:9, fontWeight:800, letterSpacing:"0.05em", borderRight:br }}>∑</td>
+                    <td style={{ padding:"6px 8px", textAlign:"center", borderRight:br }}>{num(stDel, "#b91c1c")}</td>
+                    <td style={{ padding:"6px 8px", textAlign:"center", borderRight:br }}>{num(stDup, "#92400e")}</td>
+                    <td style={{ padding:"6px 8px", textAlign:"center", borderRight:br }}>{num(stFb,  "#854d0e")}</td>
+                    <td style={{ padding:"6px 8px", textAlign:"center", borderRight:br }}>{num(stId)}</td>
+                    <td style={{ padding:"6px 8px", borderRight:br }} />
+                    <td style={{ padding:"6px 8px", borderRight:br }} />
+                    <td style={{ padding:"6px 8px", borderRight:br }} />
+                    <td style={{ padding:"6px 8px", borderRight:br }} />
+                    <td style={{ padding:"6px 8px", textAlign:"center", borderRight:br }}>{num(stEst)}</td>
+                    <td style={{ padding:"6px 8px", borderRight:br }} />
+                    <td style={{ padding:"6px 8px", borderRight:br }} />
+                    <td style={{ padding:"6px 8px", borderRight:br }} />
+                    <td style={{ padding:"6px 8px", borderRight:br }} />
+                    <td style={{ padding:"6px 8px", borderRight:br }} />
+                    <td style={{ padding:"6px 8px", borderRight:br }} />
+                    <td style={{ padding:"6px 8px", borderRight:br }} />
+                    <td style={{ padding:"6px 8px", borderRight:br }} />
+                    <td style={{ padding:"6px 8px", textAlign:"center", borderRight:br }}>{num(stTag, "#1d4ed8")}</td>
+                    <td style={{ padding:"6px 8px", textAlign:"center", borderRight:br }}>{num(stMan, "#1e40af")}</td>
                     <td style={{ padding:"6px 8px" }} />
                   </tr>
                 );
