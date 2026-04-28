@@ -11,7 +11,10 @@
  * from ../client/dist so a single CF app handles both frontend and backend.
  */
 
-import "dotenv/config";
+import dotenv from "dotenv";
+import { resolve, dirname } from "path";
+import { fileURLToPath as _ftu } from "url";
+dotenv.config({ path: resolve(dirname(_ftu(import.meta.url)), "../.env") });
 import express from "express";
 import cors from "cors";
 import path from "path";
