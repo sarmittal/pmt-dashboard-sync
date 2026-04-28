@@ -4669,6 +4669,7 @@ function TestScenariosTab({ data, wp, req }) {
   const [drillModal,    setDrillModal]    = useState(null);
   const [untaggedModal, setUntaggedModal] = useState(null);
   const [taggedModal,   setTaggedModal]   = useState(null);
+  const [openFbModal,   setOpenFbModal]   = useState(null);
 
   if (!data) return <Empty label="Upload Test Scenarios file above to view this tab." />;
 
@@ -4773,8 +4774,9 @@ function TestScenariosTab({ data, wp, req }) {
     const untaggedUS = untaggedUSRows.length;
     const taggedUSRows   = reqK?.reqId ? reqRows.filter(r => !isReqExcluded(r) && isTestScenarioReq(r) &&  taggedReqIds.has(String(r[reqK.reqId]||"").trim())) : [];
     const taggedUS = taggedUSRows.length;
-    const drafted         = spRows.length;
-    const openFeedbackCount = K.openFeedbackFlag ? spRows.filter(r => isTruthy(r[K.openFeedbackFlag])).length : 0;
+    const drafted            = spRows.length;
+    const openFeedbackRows   = K.openFeedbackFlag ? spRows.filter(r => isTruthy(r[K.openFeedbackFlag])) : [];
+    const openFeedbackCount  = openFeedbackRows.length;
     const teamStats = Object.fromEntries(TEAMS.map(t => {
       const hasOpenFb = r => isTruthy(r[K.openFeedbackFlag]);
       const stVal     = r => String(r[t.statusKey]||"").trim();
@@ -4784,7 +4786,7 @@ function TestScenariosTab({ data, wp, req }) {
       const reviewerName  = spRows.map(r => String(r[t.reviewerKey]||"").trim()).find(v => v) || "";
       return [t.id, { reviewed: revRows.length, pending: pendRows.length, notPushed: notPushedRows.length, reviewerName, revRows, pendRows, notPushedRows }];
     }));
-    return { sp, drafted, userStories, userStoriesRelevant, untaggedUS, untaggedUSRows, taggedUS, taggedUSRows, openFeedbackCount, teamStats };
+    return { sp, drafted, userStories, userStoriesRelevant, untaggedUS, untaggedUSRows, taggedUS, taggedUSRows, openFeedbackCount, openFeedbackRows, teamStats };
   });
   const tableRows = selSp === "ALL" ? allTableRows : allTableRows.filter(r => r.sp === selSp);
 
@@ -4795,7 +4797,8 @@ function TestScenariosTab({ data, wp, req }) {
   const totUntaggedRows = tableRows.flatMap(r => r.untaggedUSRows || []);
   const totTagged       = tableRows.reduce((s,r) => s+r.taggedUS, 0);
   const totTaggedRows   = tableRows.flatMap(r => r.taggedUSRows || []);
-  const totOpenFeedback = tableRows.reduce((s,r) => s+r.openFeedbackCount, 0);
+  const totOpenFeedback     = tableRows.reduce((s,r) => s+r.openFeedbackCount, 0);
+  const totOpenFeedbackRows = tableRows.flatMap(r => r.openFeedbackRows || []);
   const pctStr = (n,d) => d > 0 ? `${Math.round(n/d*100)}%` : "—";
 
   // Overall Metrics: 5 core review teams, SIT-independent
@@ -4978,6 +4981,94 @@ function TestScenariosTab({ data, wp, req }) {
                     </tr>
                   );
                 })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const OpenFeedbackModal = ({ title, rows: mRows, onClose }) => {
+    const [spFilter, setSpFilter] = useState("ALL");
+
+    const allSps       = Array.from(new Set(mRows.map(r => String(r[K.subprocess]||"Unknown").trim()))).sort();
+    const filteredRows = spFilter === "ALL" ? mRows : mRows.filter(r => String(r[K.subprocess]||"Unknown").trim() === spFilter);
+
+    const multiVal = v => {
+      const parts = String(v||"").split(/\n|,|;/).map(s=>s.trim()).filter(Boolean);
+      if (!parts.length) return <span style={{color:C.muted}}>—</span>;
+      return <span style={{display:"flex",flexWrap:"wrap",gap:2}}>
+        {parts.map((p,i)=><span key={i} style={{background:"#f0f4f8",color:C.muted,borderRadius:3,padding:"1px 5px",fontSize:10,whiteSpace:"nowrap"}}>{p}</span>)}
+      </span>;
+    };
+
+    return (
+      <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center" }} onClick={onClose}>
+        <div style={{ background:C.white, borderRadius:10, width:"99%", maxWidth:1800, maxHeight:"92vh", display:"flex", flexDirection:"column", boxShadow:"0 24px 60px rgba(0,0,0,0.35)" }} onClick={e=>e.stopPropagation()}>
+          <div style={{ background:"#991b1b", padding:"12px 20px", borderRadius:"10px 10px 0 0", display:"flex", justifyContent:"space-between", alignItems:"center", flexShrink:0 }}>
+            <span style={{ color:"#fff", fontWeight:700, fontSize:13 }}>{title} <span style={{ opacity:.6, fontWeight:400 }}>({filteredRows.length}{filteredRows.length!==mRows.length?` of ${mRows.length}`:""} scenarios with open feedback)</span></span>
+            <button onClick={onClose} style={{ background:"rgba(255,255,255,0.15)", border:"none", color:"#fff", borderRadius:5, padding:"5px 14px", cursor:"pointer", fontSize:13, fontWeight:600 }}>✕</button>
+          </div>
+          {allSps.length > 1 && (
+            <div style={{ background:"#f8fafc", borderBottom:`1px solid ${C.border}`, padding:"8px 16px", flexShrink:0, display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
+              <span style={{ fontSize:10, color:"#374151", fontWeight:700, minWidth:70 }}>Sub Process</span>
+              {["ALL", ...allSps].map(sp => {
+                const isActive = spFilter === sp;
+                const count = sp === "ALL" ? mRows.length : mRows.filter(r => String(r[K.subprocess]||"Unknown").trim() === sp).length;
+                return (
+                  <button key={sp} onClick={() => setSpFilter(sp)}
+                    style={{ display:"flex", alignItems:"center", gap:4, padding:"3px 9px", borderRadius:20,
+                      border:`2px solid ${isActive?"#991b1b":C.border}`,
+                      background:isActive?"#991b1b":C.white, color:isActive?"#fff":C.text,
+                      cursor:"pointer", fontSize:10, fontWeight:700, transition:"all .12s" }}>
+                    {sp === "ALL" ? "All" : sp}
+                    <span style={{ background:isActive?"rgba(255,255,255,0.25)":"#f1f5f9", color:isActive?"#fff":C.text,
+                      borderRadius:10, padding:"1px 6px", fontSize:10, fontWeight:800, minWidth:18, textAlign:"center" }}>
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          <div style={{ overflowY:"auto", overflowX:"auto", flex:1 }}>
+            <table style={{ borderCollapse:"collapse", fontSize:11, tableLayout:"auto" }}>
+              <thead style={{ position:"sticky", top:0, zIndex:2 }}>
+                <tr>
+                  <th colSpan={4} style={{ padding:"4px 10px", textAlign:"center", background:C.navy, color:"rgba(255,255,255,0.5)", fontWeight:700, fontSize:9, textTransform:"uppercase", letterSpacing:"0.07em", borderRight:"1px solid rgba(255,255,255,0.25)", borderBottom:"1px solid rgba(255,255,255,0.12)" }}>Scenario Details</th>
+                  {TEAMS.map(t => (
+                    <th key={t.id} colSpan={3} style={{ padding:"4px 10px", textAlign:"center", background:t.color, color:"#fff", fontWeight:700, fontSize:9, textTransform:"uppercase", letterSpacing:"0.07em", borderRight:"1px solid rgba(255,255,255,0.3)", borderBottom:"1px solid rgba(255,255,255,0.2)" }}>{t.label}</th>
+                  ))}
+                </tr>
+                <tr style={{ background:C.navy }}>
+                  {["ID","Tag","Scenario","SubProcess"].map((h,i) => (
+                    <th key={h} style={{ padding:"8px 10px", textAlign:"left", color:"#fff", fontWeight:700, fontSize:10, whiteSpace:"nowrap", borderRight:i===3?"1px solid rgba(255,255,255,0.25)":"1px solid rgba(255,255,255,0.08)" }}>{h}</th>
+                  ))}
+                  {TEAMS.flatMap(t => [
+                    <th key={t.id+"-rv"} style={{ padding:"8px 10px", textAlign:"left", color:"rgba(255,255,255,0.8)", fontWeight:600, fontSize:10, minWidth:100, whiteSpace:"nowrap", borderRight:"1px solid rgba(255,255,255,0.08)" }}>Reviewer</th>,
+                    <th key={t.id+"-fb"} style={{ padding:"8px 10px", textAlign:"left", color:"rgba(255,255,255,0.8)", fontWeight:600, fontSize:10, minWidth:180, borderRight:"1px solid rgba(255,255,255,0.08)" }}>Feedback</th>,
+                    <th key={t.id+"-st"} style={{ padding:"8px 10px", textAlign:"left", color:"rgba(255,255,255,0.8)", fontWeight:600, fontSize:10, minWidth:110, whiteSpace:"nowrap", borderRight:"1px solid rgba(255,255,255,0.25)" }}>Status</th>,
+                  ])}
+                </tr>
+              </thead>
+              <tbody>
+                {filteredRows.length === 0 && (
+                  <tr><td colSpan={4+TEAMS.length*3} style={{ padding:24, textAlign:"center", color:C.muted }}>No scenarios</td></tr>
+                )}
+                {filteredRows.map((r, i) => (
+                  <tr key={i} style={{ background:i%2===0?C.white:"#f7f9fc", borderBottom:`1px solid ${C.border}`, verticalAlign:"top" }}>
+                    <td style={{ padding:"8px 10px", color:C.muted, fontWeight:600, whiteSpace:"nowrap", borderRight:`1px solid ${C.border}` }}>{String(r[K.id]||"—")}</td>
+                    <td style={{ padding:"8px 10px", borderRight:`1px solid ${C.border}` }}>{multiVal(r[K.tag])}</td>
+                    <td style={{ padding:"8px 10px", color:C.text, wordBreak:"break-word", maxWidth:240, borderRight:`1px solid ${C.border}` }}>{String(r[K.name]||"—")}</td>
+                    <td style={{ padding:"8px 10px", color:C.muted, whiteSpace:"nowrap", borderRight:"1px solid #94a3b8" }}>{String(r[K.subprocess]||"—")}</td>
+                    {TEAMS.flatMap(t => [
+                      <td key={t.id+"-rv"} style={{ padding:"8px 10px", fontWeight:600, whiteSpace:"nowrap", borderRight:`1px solid ${C.border}` }}>{String(r[t.reviewerKey]||"—")}</td>,
+                      <td key={t.id+"-fb"} style={{ padding:"8px 10px", color:C.muted, wordBreak:"break-word", maxWidth:200, borderRight:`1px solid ${C.border}` }}>{String(r[t.feedbackKey]||"—")}</td>,
+                      <td key={t.id+"-st"} style={{ padding:"8px 10px", borderRight:"1px solid #94a3b8" }}>{stPill(r, t)}</td>,
+                    ])}
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
@@ -5299,7 +5390,7 @@ function TestScenariosTab({ data, wp, req }) {
                 </td>
                 <td style={{ padding:"7px 8px", textAlign:"center", color:C.text, fontWeight:800, fontSize:10 }}>{totDrafted}</td>
                 <td style={{ padding:"7px 8px", textAlign:"center" }}>
-                  {totOpenFeedback>0 ? <span style={{ background:"#fee2e2", color:"#991b1b", borderRadius:4, padding:"1px 6px", fontSize:10, fontWeight:700 }}>{totOpenFeedback}</span> : <span style={{ color:C.muted }}>—</span>}
+                  {totOpenFeedback>0 ? <span onClick={() => setOpenFbModal({ title:"All Sub Processes — Open Feedback", rows:totOpenFeedbackRows })} style={{ background:"#fee2e2", color:"#991b1b", borderRadius:4, padding:"1px 6px", fontSize:10, fontWeight:700, cursor:"pointer" }}>{totOpenFeedback}</span> : <span style={{ color:C.muted }}>—</span>}
                 </td>
                 {TEAMS.flatMap(t => {
                   const rev  = tableRows.reduce((s,r) => s+(r.teamStats[t.id]?.reviewed||0), 0);
@@ -5365,7 +5456,7 @@ function TestScenariosTab({ data, wp, req }) {
                   <td style={{ padding:"9px 8px", textAlign:"center", fontWeight:700, color:C.text }}>{row.drafted}</td>
                   <td style={{ padding:"9px 8px", textAlign:"center" }}>
                     {row.openFeedbackCount > 0
-                      ? <span style={{ background:"#fee2e2", color:"#991b1b", borderRadius:4, padding:"2px 8px", fontSize:10, fontWeight:700 }}>{row.openFeedbackCount}</span>
+                      ? <span onClick={e => { e.stopPropagation(); setOpenFbModal({ title:`${row.sp} — Open Feedback`, rows:row.openFeedbackRows||[] }); }} style={{ background:"#fee2e2", color:"#991b1b", borderRadius:4, padding:"2px 8px", fontSize:10, fontWeight:700, cursor:"pointer" }}>{row.openFeedbackCount}</span>
                       : <span style={{ color:C.muted }}>—</span>}
                   </td>
                   {TEAMS.flatMap(t => {
@@ -5549,8 +5640,9 @@ function TestScenariosTab({ data, wp, req }) {
 
       {spModal        && <ScenarioModal   title={spModal.title}        rows={spModal.rows}        onClose={() => setSpModal(null)} />}
       {drillModal     && <TeamDrillModal  title={drillModal.title}     rows={drillModal.rows}     teamId={drillModal.teamId} reqById={reqById} reqK={reqK} onClose={() => setDrillModal(null)} />}
-      {untaggedModal  && <ReqDrillModal   title={untaggedModal.title}  rows={untaggedModal.rows}  mode="untagged" scenariosByReqId={scenariosByReqId} onClose={() => setUntaggedModal(null)} />}
-      {taggedModal    && <ReqDrillModal   title={taggedModal.title}    rows={taggedModal.rows}    mode="tagged"   scenariosByReqId={scenariosByReqId} onClose={() => setTaggedModal(null)} />}
+      {untaggedModal  && <ReqDrillModal      title={untaggedModal.title}  rows={untaggedModal.rows}  mode="untagged" scenariosByReqId={scenariosByReqId} onClose={() => setUntaggedModal(null)} />}
+      {taggedModal    && <ReqDrillModal      title={taggedModal.title}    rows={taggedModal.rows}    mode="tagged"   scenariosByReqId={scenariosByReqId} onClose={() => setTaggedModal(null)} />}
+      {openFbModal    && <OpenFeedbackModal  title={openFbModal.title}    rows={openFbModal.rows}    onClose={() => setOpenFbModal(null)} />}
     </div>
   );
 }
