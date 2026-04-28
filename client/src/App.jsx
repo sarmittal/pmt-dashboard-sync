@@ -411,6 +411,7 @@ function parseTestScenarios(sheets) {
     toBeDeleted:      ks.find(k => k === "To be deleted") || ks.find(k => /to.?be.?deleted/i.test(k)),
     dupDataMiningNA:  ks.find(k => k === "Duplicate, Data Mining and Not Applicable") || ks.find(k => /duplicate.*data.?mining|dup.*data.*mining/i.test(k)),
     openFeedbackFlag: ks.find(k => k === "Scenarios with Open Review feedback") || ks.find(k => /scenarios.*open.*review|open.*review.*feedback/i.test(k)),
+    manualNotTech:    ks.find(k => k === "Manual (Not Tech Enabled)") || ks.find(k => /manual.*not.?tech/i.test(k)),
     // Common scenario detail columns
     additionalDetails:    ks.find(k => k === "Additional Details") || ks.find(k => /additional.?details/i.test(k)),
     applicableBusiness:   ks.find(k => k === "Applicable Business") || ks.find(k => /applicable.?business/i.test(k)),
@@ -4685,6 +4686,8 @@ function TestScenariosTab({ data, wp, req }) {
   const [scenSpF,       setScenSpF]       = useState("ALL");
   const [scenPersonaF,  setScenPersonaF]  = useState("ALL");
   const [scenSitF,      setScenSitF]      = useState("ALL");
+  const [scenFlagF,     setScenFlagF]     = useState(new Set());
+  const [scenReviewRow, setScenReviewRow] = useState(null);
   const [untaggedModal,  setUntaggedModal]  = useState(null);
   const [taggedModal,    setTaggedModal]    = useState(null);
   const [relevantModal,      setRelevantModal]      = useState(null);
@@ -5694,47 +5697,67 @@ function TestScenariosTab({ data, wp, req }) {
   );
 
   // ── Scenarios sub-tab ────────────────────────────────────────────────────
-  const _splitUSIds = v => Array.from(new Set(String(v||"").split(/[\n,;]/).map(s=>s.trim()).filter(Boolean)));
-  const _taggedCount = r => _splitUSIds(r[K.similarUSIds]).length;
+  const _splitUSIds  = v => Array.from(new Set(String(v||"").split(/[\n,;]/).map(s=>s.trim()).filter(Boolean)));
 
   const _allScenSps      = Array.from(new Set(draftedRows.map(r=>String(r[K.subprocess]||"").trim()).filter(Boolean))).sort();
   const _allScenPersonas = Array.from(new Set(draftedRows.map(r=>String(r[K.persona]||"").trim()).filter(Boolean))).sort();
   const _allScenSits     = Array.from(new Set(draftedRows.map(r=>String(r[K.sitPlan]||"").trim()).filter(Boolean))).sort();
 
+  const _flagMatch = r => scenFlagF.size === 0 || Array.from(scenFlagF).some(f =>
+    f==="del"    ? isTruthy(r[K.toBeDeleted])    :
+    f==="dup"    ? isTruthy(r[K.dupDataMiningNA]) :
+    f==="openFb" ? isTruthy(r[K.openFeedbackFlag]):
+    f==="manual" ? isTruthy(r[K.manualNotTech])   : false
+  );
   const _scenFiltered = draftedRows.filter(r =>
     (scenSpF      === "ALL" || String(r[K.subprocess]||"").trim() === scenSpF) &&
     (scenPersonaF === "ALL" || String(r[K.persona]||"").trim()    === scenPersonaF) &&
-    (scenSitF     === "ALL" || String(r[K.sitPlan]||"").trim()    === scenSitF)
+    (scenSitF     === "ALL" || String(r[K.sitPlan]||"").trim()    === scenSitF) &&
+    _flagMatch(r)
   );
 
-  const _toggleScen = id => setScenExpanded(prev => { const n=new Set(prev); n.has(id)?n.delete(id):n.add(id); return n; });
-  const _toggleReq  = (scenId, reqId) => setScenActiveReq(prev => ({
-    ...prev, [scenId]: prev[scenId]===reqId ? null : reqId
-  }));
+  const _toggleScen  = id => setScenExpanded(prev => { const n=new Set(prev); n.has(id)?n.delete(id):n.add(id); return n; });
+  const _toggleReq   = (scenId, reqId) => setScenActiveReq(prev => ({ ...prev, [scenId]: prev[scenId]===reqId ? null : reqId }));
+  const _toggleFlag  = f => setScenFlagF(prev => { const n=new Set(prev); n.has(f)?n.delete(f):n.add(f); return n; });
 
   const _statusBadge = v => {
     const s = String(v||"").replace(/^\d+\.\s*/,"").trim();
     if (!s || s==="None" || s==="nan") return <span style={{ color:C.muted }}>—</span>;
     const sl = s.toLowerCase();
     const [bg,color,border] = sl.includes("reviewed, request") ? ["#fef3c7","#92400e","#fcd34d"]
-      : sl.includes("reviewed")        ? ["#dcfce7","#166534","#86efac"]
+      : sl.includes("reviewed")         ? ["#dcfce7","#166534","#86efac"]
       : sl.includes("ready for review") || sl.includes("updated, ready") ? ["#dbeafe","#1e40af","#93c5fd"]
-      : sl.includes("not applicable")  ? ["#f1f5f9","#64748b","#cbd5e1"]
+      : sl.includes("not applicable")   ? ["#f1f5f9","#64748b","#cbd5e1"]
       : ["#f8fafc","#475569","#e2e8f0"];
     return <span style={{ background:bg, color, border:`1px solid ${border}`, borderRadius:4, padding:"2px 6px", fontSize:10, fontWeight:600, whiteSpace:"nowrap" }}>{s.length>20?s.slice(0,19)+"…":s}</span>;
   };
 
-  const _fpill = (label, isActive, count, onClick) => (
+  const _flagDot = (active, color) => active
+    ? <span style={{ display:"inline-block", width:10, height:10, borderRadius:"50%", background:color, flexShrink:0 }} />
+    : null;
+
+  const _fpill = (label, isActive, count, onClick, borderCol) => (
     <button key={label} onClick={onClick}
       style={{ display:"flex", alignItems:"center", gap:4, padding:"3px 9px", borderRadius:20,
-        border:`2px solid ${isActive?C.navyLight:C.border}`,
-        background:isActive?C.navyLight:C.white, color:isActive?"#fff":C.text,
+        border:`2px solid ${isActive?(borderCol||C.navyLight):C.border}`,
+        background:isActive?(borderCol||C.navyLight):C.white, color:isActive?"#fff":C.text,
         cursor:"pointer", fontSize:10, fontWeight:700, transition:"all .12s" }}>
       {label}
       <span style={{ background:isActive?"rgba(255,255,255,0.25)":"#f1f5f9", color:isActive?"#fff":C.text,
         borderRadius:10, padding:"1px 6px", fontSize:10, fontWeight:800 }}>{count}</span>
     </button>
   );
+
+  // Review comments popup
+  const REVIEW_TEAMS_ALL = [
+    { label:"Functional",     statusKey:K.funcStatus,  reviewerKey:K.funcReviewer,  feedbackKey:K.funcFeedback,  dueDateKey:K.funcDueDate  },
+    { label:"Technical",      statusKey:K.techStatus,  reviewerKey:K.techReviewer,  feedbackKey:K.techFeedback,  dueDateKey:K.techDueDate  },
+    { label:"Consulting SD",  statusKey:K.sdStatus,    reviewerKey:K.sdReviewer,    feedbackKey:K.sdFeedback,    dueDateKey:K.sdDueDate    },
+    { label:"PMT SD",         statusKey:K.pmtStatus,   reviewerKey:K.pmtReviewer,   feedbackKey:K.pmtFeedback,   dueDateKey:K.pmtDueDate   },
+    { label:"DT",             statusKey:K.dtStatus,    reviewerKey:K.dtReviewer,    feedbackKey:K.dtFeedback,    dueDateKey:K.dtDueDate    },
+    { label:"D&A",            statusKey:K.daStatus,    reviewerKey:K.daReviewer,    feedbackKey:K.daFeedback,    dueDateKey:K.daDueDate    },
+    { label:"PM",             statusKey:K.pmStatus,    reviewerKey:K.pmReviewer,    feedbackKey:K.pmFeedback,    dueDateKey:K.pmDueDate    },
+  ].filter(t => t.statusKey);
 
   const scenariosSubTab = (
     <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
@@ -5744,24 +5767,46 @@ function TestScenariosTab({ data, wp, req }) {
         {_allScenSps.length > 0 && (
           <div style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
             <span style={{ fontSize:10, fontWeight:700, color:"#374151", minWidth:90 }}>Sub Process</span>
-            {_fpill("All", scenSpF==="ALL", draftedRows.filter(r=>(scenPersonaF==="ALL"||String(r[K.persona]||"").trim()===scenPersonaF)&&(scenSitF==="ALL"||String(r[K.sitPlan]||"").trim()===scenSitF)).length, ()=>setScenSpF("ALL"))}
-            {_allScenSps.map(v => _fpill(v, scenSpF===v, draftedRows.filter(r=>String(r[K.subprocess]||"").trim()===v&&(scenPersonaF==="ALL"||String(r[K.persona]||"").trim()===scenPersonaF)&&(scenSitF==="ALL"||String(r[K.sitPlan]||"").trim()===scenSitF)).length, ()=>setScenSpF(scenSpF===v?"ALL":v)))}
+            {_fpill("All", scenSpF==="ALL", draftedRows.filter(r=>(scenPersonaF==="ALL"||String(r[K.persona]||"").trim()===scenPersonaF)&&(scenSitF==="ALL"||String(r[K.sitPlan]||"").trim()===scenSitF)&&_flagMatch(r)).length, ()=>setScenSpF("ALL"))}
+            {_allScenSps.map(v => _fpill(v, scenSpF===v, draftedRows.filter(r=>String(r[K.subprocess]||"").trim()===v&&(scenPersonaF==="ALL"||String(r[K.persona]||"").trim()===scenPersonaF)&&(scenSitF==="ALL"||String(r[K.sitPlan]||"").trim()===scenSitF)&&_flagMatch(r)).length, ()=>setScenSpF(scenSpF===v?"ALL":v)))}
           </div>
         )}
         {_allScenPersonas.length > 0 && (
           <div style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
             <span style={{ fontSize:10, fontWeight:700, color:"#374151", minWidth:90 }}>Persona</span>
-            {_fpill("All", scenPersonaF==="ALL", draftedRows.filter(r=>(scenSpF==="ALL"||String(r[K.subprocess]||"").trim()===scenSpF)&&(scenSitF==="ALL"||String(r[K.sitPlan]||"").trim()===scenSitF)).length, ()=>setScenPersonaF("ALL"))}
-            {_allScenPersonas.map(v => _fpill(v, scenPersonaF===v, draftedRows.filter(r=>String(r[K.persona]||"").trim()===v&&(scenSpF==="ALL"||String(r[K.subprocess]||"").trim()===scenSpF)&&(scenSitF==="ALL"||String(r[K.sitPlan]||"").trim()===scenSitF)).length, ()=>setScenPersonaF(scenPersonaF===v?"ALL":v)))}
+            {_fpill("All", scenPersonaF==="ALL", draftedRows.filter(r=>(scenSpF==="ALL"||String(r[K.subprocess]||"").trim()===scenSpF)&&(scenSitF==="ALL"||String(r[K.sitPlan]||"").trim()===scenSitF)&&_flagMatch(r)).length, ()=>setScenPersonaF("ALL"))}
+            {_allScenPersonas.map(v => _fpill(v, scenPersonaF===v, draftedRows.filter(r=>String(r[K.persona]||"").trim()===v&&(scenSpF==="ALL"||String(r[K.subprocess]||"").trim()===scenSpF)&&(scenSitF==="ALL"||String(r[K.sitPlan]||"").trim()===scenSitF)&&_flagMatch(r)).length, ()=>setScenPersonaF(scenPersonaF===v?"ALL":v)))}
           </div>
         )}
         {_allScenSits.length > 0 && (
           <div style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
             <span style={{ fontSize:10, fontWeight:700, color:"#374151", minWidth:90 }}>Target SIT</span>
-            {_fpill("All", scenSitF==="ALL", draftedRows.filter(r=>(scenSpF==="ALL"||String(r[K.subprocess]||"").trim()===scenSpF)&&(scenPersonaF==="ALL"||String(r[K.persona]||"").trim()===scenPersonaF)).length, ()=>setScenSitF("ALL"))}
-            {_allScenSits.map(v => _fpill(v, scenSitF===v, draftedRows.filter(r=>String(r[K.sitPlan]||"").trim()===v&&(scenSpF==="ALL"||String(r[K.subprocess]||"").trim()===scenSpF)&&(scenPersonaF==="ALL"||String(r[K.persona]||"").trim()===scenPersonaF)).length, ()=>setScenSitF(scenSitF===v?"ALL":v)))}
+            {_fpill("All", scenSitF==="ALL", draftedRows.filter(r=>(scenSpF==="ALL"||String(r[K.subprocess]||"").trim()===scenSpF)&&(scenPersonaF==="ALL"||String(r[K.persona]||"").trim()===scenPersonaF)&&_flagMatch(r)).length, ()=>setScenSitF("ALL"))}
+            {_allScenSits.map(v => _fpill(v, scenSitF===v, draftedRows.filter(r=>String(r[K.sitPlan]||"").trim()===v&&(scenSpF==="ALL"||String(r[K.subprocess]||"").trim()===scenSpF)&&(scenPersonaF==="ALL"||String(r[K.persona]||"").trim()===scenPersonaF)&&_flagMatch(r)).length, ()=>setScenSitF(scenSitF===v?"ALL":v)))}
           </div>
         )}
+        {/* Flag filters */}
+        <div style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"wrap", paddingTop:4, borderTop:`1px dashed ${C.border}` }}>
+          <span style={{ fontSize:10, fontWeight:700, color:"#374151", minWidth:90 }}>Flags</span>
+          {[
+            { f:"del",    label:"To Be Deleted",     color:"#b91c1c", bg:"#fee2e2", key:K.toBeDeleted    },
+            { f:"dup",    label:"Duplicate / NA",     color:"#92400e", bg:"#fde8cc", key:K.dupDataMiningNA},
+            { f:"openFb", label:"Open Feedback",      color:"#92400e", bg:"#fefce8", key:K.openFeedbackFlag},
+            { f:"manual", label:"Manual (Not Tech)",  color:"#1e40af", bg:"#dbeafe", key:K.manualNotTech  },
+          ].filter(x=>x.key).map(({f,label,color,bg,key}) => {
+            const active = scenFlagF.has(f);
+            const cnt = draftedRows.filter(r=>isTruthy(r[key])).length;
+            return (
+              <button key={f} onClick={()=>_toggleFlag(f)}
+                style={{ display:"flex", alignItems:"center", gap:4, padding:"3px 9px", borderRadius:20,
+                  border:`2px solid ${active?color:"#d1d5db"}`, background:active?bg:C.white,
+                  color:active?color:C.text, cursor:"pointer", fontSize:10, fontWeight:700, transition:"all .12s" }}>
+                {label}
+                <span style={{ background:active?color+"30":"#f1f5f9", color:active?color:C.muted, borderRadius:10, padding:"1px 6px", fontSize:10, fontWeight:800 }}>{cnt}</span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* Table */}
@@ -5770,35 +5815,45 @@ function TestScenariosTab({ data, wp, req }) {
           <table style={{ width:"100%", borderCollapse:"collapse", fontSize:11 }}>
             <thead style={{ position:"sticky", top:0, zIndex:2 }}>
               <tr style={{ background:C.navy }}>
-                <th style={{ padding:"8px 10px", textAlign:"left", color:"#fff", fontWeight:700, fontSize:10, minWidth:36, borderRight:"1px solid rgba(255,255,255,0.1)" }}></th>
-                <th style={{ padding:"8px 10px", textAlign:"left", color:"#fff", fontWeight:700, fontSize:10, minWidth:80, borderRight:"1px solid rgba(255,255,255,0.1)" }}>ID</th>
-                <th style={{ padding:"8px 10px", textAlign:"left", color:"#a8d8ff", fontWeight:700, fontSize:10, minWidth:220, borderRight:"1px solid rgba(255,255,255,0.1)" }}>Scenario</th>
-                <th style={{ padding:"8px 10px", textAlign:"left", color:"#a8d8ff", fontWeight:700, fontSize:10, minWidth:130, borderRight:"1px solid rgba(255,255,255,0.1)" }}>Sub Process</th>
-                <th style={{ padding:"8px 10px", textAlign:"left", color:"#a8d8ff", fontWeight:700, fontSize:10, minWidth:180, borderRight:"1px solid rgba(255,255,255,0.1)" }}>Additional Details</th>
-                <th style={{ padding:"8px 10px", textAlign:"left", color:"#a8d8ff", fontWeight:700, fontSize:10, minWidth:100, borderRight:"1px solid rgba(255,255,255,0.1)" }}>Persona</th>
-                <th style={{ padding:"8px 10px", textAlign:"center", color:"#a8d8ff", fontWeight:700, fontSize:10, minWidth:60, borderRight:"1px solid rgba(255,255,255,0.1)" }}>Est. Cases</th>
-                <th style={{ padding:"8px 10px", textAlign:"left", color:"#a8d8ff", fontWeight:700, fontSize:10, minWidth:100, borderRight:"1px solid rgba(255,255,255,0.1)" }}>Target SIT</th>
-                <th style={{ padding:"8px 10px", textAlign:"center", color:"#fcd34d", fontWeight:700, fontSize:10, minWidth:90, borderRight:"1px solid rgba(255,255,255,0.1)" }}>SD Review</th>
-                <th style={{ padding:"8px 10px", textAlign:"center", color:"#fcd34d", fontWeight:700, fontSize:10, minWidth:90, borderRight:"1px solid rgba(255,255,255,0.1)" }}>PMT SD</th>
-                <th style={{ padding:"8px 10px", textAlign:"center", color:"#fcd34d", fontWeight:700, fontSize:10, minWidth:90, borderRight:"1px solid rgba(255,255,255,0.1)" }}>DT</th>
-                <th style={{ padding:"8px 10px", textAlign:"center", color:"#c4f1c4", fontWeight:700, fontSize:10, minWidth:90, borderRight:"1px solid rgba(255,255,255,0.1)" }}>D&A</th>
-                <th style={{ padding:"8px 10px", textAlign:"center", color:"#c4f1c4", fontWeight:700, fontSize:10, minWidth:80 }}>Tagged US</th>
+                <th style={{ padding:"8px 10px", textAlign:"left",   color:"#fff",    fontWeight:700, fontSize:10, minWidth:36,  borderRight:"1px solid rgba(255,255,255,0.1)" }}></th>
+                <th style={{ padding:"8px 10px", textAlign:"left",   color:"#fff",    fontWeight:700, fontSize:10, minWidth:80,  borderRight:"1px solid rgba(255,255,255,0.1)" }}>ID</th>
+                <th style={{ padding:"8px 10px", textAlign:"left",   color:"#a8d8ff", fontWeight:700, fontSize:10, minWidth:220, borderRight:"1px solid rgba(255,255,255,0.1)" }}>Scenario</th>
+                <th style={{ padding:"8px 10px", textAlign:"left",   color:"#a8d8ff", fontWeight:700, fontSize:10, minWidth:130, borderRight:"1px solid rgba(255,255,255,0.1)" }}>Sub Process</th>
+                <th style={{ padding:"8px 10px", textAlign:"left",   color:"#a8d8ff", fontWeight:700, fontSize:10, minWidth:180, borderRight:"1px solid rgba(255,255,255,0.1)" }}>Additional Details</th>
+                <th style={{ padding:"8px 10px", textAlign:"left",   color:"#a8d8ff", fontWeight:700, fontSize:10, minWidth:100, borderRight:"1px solid rgba(255,255,255,0.1)" }}>Persona</th>
+                <th style={{ padding:"8px 10px", textAlign:"center", color:"#a8d8ff", fontWeight:700, fontSize:10, minWidth:60,  borderRight:"1px solid rgba(255,255,255,0.1)" }}>Est. Cases</th>
+                <th style={{ padding:"8px 10px", textAlign:"left",   color:"#a8d8ff", fontWeight:700, fontSize:10, minWidth:100, borderRight:"1px solid rgba(255,255,255,0.1)" }}>Target SIT</th>
+                <th style={{ padding:"8px 10px", textAlign:"center", color:"#fcd34d", fontWeight:700, fontSize:10, minWidth:90,  borderRight:"1px solid rgba(255,255,255,0.1)" }}>SD Review</th>
+                <th style={{ padding:"8px 10px", textAlign:"center", color:"#fcd34d", fontWeight:700, fontSize:10, minWidth:90,  borderRight:"1px solid rgba(255,255,255,0.1)" }}>PMT SD</th>
+                <th style={{ padding:"8px 10px", textAlign:"center", color:"#fcd34d", fontWeight:700, fontSize:10, minWidth:70,  borderRight:"1px solid rgba(255,255,255,0.1)" }}>DT</th>
+                <th style={{ padding:"8px 10px", textAlign:"center", color:"#c4f1c4", fontWeight:700, fontSize:10, minWidth:90,  borderRight:"1px solid rgba(255,255,255,0.1)" }}>D&A</th>
+                <th style={{ padding:"8px 10px", textAlign:"center", color:"#c4f1c4", fontWeight:700, fontSize:10, minWidth:80,  borderRight:"1px solid rgba(255,255,255,0.1)" }}>Tagged US</th>
+                <th style={{ padding:"8px 10px", textAlign:"center", color:"#fda4af", fontWeight:700, fontSize:10, minWidth:40,  borderRight:"1px solid rgba(255,255,255,0.1)" }} title="To Be Deleted">Del</th>
+                <th style={{ padding:"8px 10px", textAlign:"center", color:"#fbbf24", fontWeight:700, fontSize:10, minWidth:40,  borderRight:"1px solid rgba(255,255,255,0.1)" }} title="Duplicate / Data Mining / Not Applicable">Dup</th>
+                <th style={{ padding:"8px 10px", textAlign:"center", color:"#fde68a", fontWeight:700, fontSize:10, minWidth:40,  borderRight:"1px solid rgba(255,255,255,0.1)" }} title="Open Review Feedback">Fbk</th>
+                <th style={{ padding:"8px 10px", textAlign:"center", color:"#93c5fd", fontWeight:700, fontSize:10, minWidth:50,  borderRight:"1px solid rgba(255,255,255,0.1)" }} title="Manual (Not Tech Enabled)">Man</th>
+                <th style={{ padding:"8px 10px", textAlign:"center", color:"#e2e8f0", fontWeight:700, fontSize:10, minWidth:100 }}>Review Comments</th>
               </tr>
             </thead>
             <tbody>
               {_scenFiltered.length === 0 && (
-                <tr><td colSpan={13} style={{ padding:24, textAlign:"center", color:C.muted }}>No scenarios match selected filters</td></tr>
+                <tr><td colSpan={18} style={{ padding:24, textAlign:"center", color:C.muted }}>No scenarios match selected filters</td></tr>
               )}
               {_scenFiltered.map((r, i) => {
-                const scenId  = String(r[K.id]||i);
-                const isOpen  = scenExpanded.has(scenId);
-                const tagIds  = _splitUSIds(r[K.similarUSIds]);
+                const scenId      = String(r[K.id]||i);
+                const isOpen      = scenExpanded.has(scenId);
+                const tagIds      = _splitUSIds(r[K.similarUSIds]);
                 const activeReqId = scenActiveReq[scenId] || null;
-                const reqRow  = activeReqId ? reqById[activeReqId] : null;
-                const rowBg   = i%2===0 ? C.white : "#f9fafb";
+                const reqRow      = activeReqId ? reqById[activeReqId] : null;
+                const isDel    = isTruthy(r[K.toBeDeleted]);
+                const isDup    = isTruthy(r[K.dupDataMiningNA]);
+                const isOpenFb = isTruthy(r[K.openFeedbackFlag]);
+                const isManual = isTruthy(r[K.manualNotTech]);
+                const rowBg = isDel ? "#fef2f2" : isDup ? "#fef6ec" : isOpenFb ? "#fefce8" : i%2===0 ? C.white : "#f9fafb";
+                const flagBorder = isDel ? "2px solid #fca5a5" : isDup ? "2px solid #fcd34d" : isOpenFb ? "2px solid #fef08a" : `1px solid ${C.border}`;
                 return (
                   <React.Fragment key={scenId}>
-                    <tr style={{ background:rowBg, borderBottom:isOpen?`1px solid #93c5fd`:`1px solid ${C.border}`, verticalAlign:"top", cursor:"pointer" }}
+                    <tr style={{ background:rowBg, borderBottom:isOpen?`1px solid #93c5fd`:flagBorder, verticalAlign:"top", cursor:"pointer" }}
                       onClick={() => _toggleScen(scenId)}>
                       <td style={{ padding:"8px 10px", textAlign:"center", color:isOpen?C.navyLight:C.muted, fontWeight:700 }}>{isOpen?"▾":"▸"}</td>
                       <td style={{ padding:"8px 10px", fontWeight:700, color:C.navyLight, whiteSpace:"nowrap", borderRight:`1px solid ${C.border}` }}>{String(r[K.id]||"—")}</td>
@@ -5812,15 +5867,33 @@ function TestScenariosTab({ data, wp, req }) {
                       <td style={{ padding:"8px 10px", textAlign:"center", borderRight:`1px solid ${C.border}` }}>{_statusBadge(r[K.pmtStatus])}</td>
                       <td style={{ padding:"8px 10px", textAlign:"center", borderRight:`1px solid ${C.border}` }}>{_statusBadge(r[K.dtStatus])}</td>
                       <td style={{ padding:"8px 10px", textAlign:"center", borderRight:`1px solid ${C.border}` }}>{_statusBadge(r[K.daStatus])}</td>
-                      <td style={{ padding:"8px 10px", textAlign:"center" }} onClick={e=>e.stopPropagation()}>
+                      <td style={{ padding:"8px 10px", textAlign:"center", borderRight:`1px solid ${C.border}` }} onClick={e=>e.stopPropagation()}>
                         {tagIds.length > 0
                           ? <span onClick={()=>_toggleScen(scenId)} style={{ background:"#eff6ff", color:"#1d4ed8", borderRadius:4, padding:"2px 8px", fontSize:10, fontWeight:700, cursor:"pointer" }}>{tagIds.length}</span>
                           : <span style={{ color:C.muted }}>—</span>}
                       </td>
+                      <td style={{ padding:"8px 10px", textAlign:"center", borderRight:`1px solid ${C.border}` }}>
+                        {isDel ? <span style={{ background:"#fee2e2", color:"#b91c1c", borderRadius:3, padding:"1px 5px", fontSize:10, fontWeight:700 }}>✓</span> : <span style={{ color:C.muted }}>—</span>}
+                      </td>
+                      <td style={{ padding:"8px 10px", textAlign:"center", borderRight:`1px solid ${C.border}` }}>
+                        {isDup ? <span style={{ background:"#fde8cc", color:"#92400e", borderRadius:3, padding:"1px 5px", fontSize:10, fontWeight:700 }}>✓</span> : <span style={{ color:C.muted }}>—</span>}
+                      </td>
+                      <td style={{ padding:"8px 10px", textAlign:"center", borderRight:`1px solid ${C.border}` }}>
+                        {isOpenFb ? <span style={{ background:"#fef9c3", color:"#854d0e", borderRadius:3, padding:"1px 5px", fontSize:10, fontWeight:700 }}>✓</span> : <span style={{ color:C.muted }}>—</span>}
+                      </td>
+                      <td style={{ padding:"8px 10px", textAlign:"center", borderRight:`1px solid ${C.border}` }}>
+                        {isManual ? <span style={{ background:"#dbeafe", color:"#1e40af", borderRadius:3, padding:"1px 5px", fontSize:10, fontWeight:700 }}>✓</span> : <span style={{ color:C.muted }}>—</span>}
+                      </td>
+                      <td style={{ padding:"8px 10px", textAlign:"center" }} onClick={e=>e.stopPropagation()}>
+                        <span onClick={()=>setScenReviewRow(r)}
+                          style={{ color:C.navyLight, fontSize:10, fontWeight:700, cursor:"pointer", textDecoration:"underline dotted", whiteSpace:"nowrap" }}>
+                          Details ↗
+                        </span>
+                      </td>
                     </tr>
                     {isOpen && (
                       <tr style={{ background:"#f0f6ff", borderBottom:`2px solid #93c5fd` }}>
-                        <td colSpan={13} style={{ padding:"12px 16px 14px 52px" }}>
+                        <td colSpan={18} style={{ padding:"12px 16px 14px 52px" }}>
                           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:16, marginBottom: tagIds.length ? 14 : 0 }}>
                             <div>
                               <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:4 }}>Applicable Experience</div>
@@ -5889,6 +5962,63 @@ function TestScenariosTab({ data, wp, req }) {
           Showing {_scenFiltered.length} of {draftedRows.length} scenarios
         </div>
       </Card>
+
+      {/* Review Comments popup modal */}
+      {scenReviewRow && (() => {
+        const rr = scenReviewRow;
+        return (
+          <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center" }} onClick={()=>setScenReviewRow(null)}>
+            <div style={{ background:C.white, borderRadius:10, width:"92%", maxWidth:1100, maxHeight:"88vh", display:"flex", flexDirection:"column", boxShadow:"0 24px 60px rgba(0,0,0,0.35)" }} onClick={e=>e.stopPropagation()}>
+              <div style={{ background:C.navy, padding:"12px 18px", borderRadius:"10px 10px 0 0", display:"flex", justifyContent:"space-between", alignItems:"center", flexShrink:0 }}>
+                <div>
+                  <span style={{ color:"#fff", fontWeight:700, fontSize:13 }}>Review Comments — {String(rr[K.id]||"—")}</span>
+                  <span style={{ color:"rgba(255,255,255,0.6)", fontSize:11, marginLeft:10 }}>{String(rr[K.name]||"").slice(0,60)}{(rr[K.name]||"").length>60?"…":""}</span>
+                </div>
+                <button onClick={()=>setScenReviewRow(null)} style={{ background:"rgba(255,255,255,0.15)", border:"none", color:"#fff", borderRadius:5, padding:"5px 14px", cursor:"pointer", fontSize:13, fontWeight:600 }}>✕</button>
+              </div>
+              <div style={{ overflowY:"auto", flex:1, padding:16 }}>
+                <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))", gap:12 }}>
+                  {REVIEW_TEAMS_ALL.map(t => {
+                    const status   = String(rr[t.statusKey]||"").replace(/^\d+\.\s*/,"").trim();
+                    const reviewer = String(rr[t.reviewerKey]||"").trim();
+                    const feedback = String(rr[t.feedbackKey]||"").trim();
+                    const dueDate  = String(rr[t.dueDateKey]||"").trim();
+                    const sl = status.toLowerCase();
+                    const [sbg,scol,sbrd] = sl.includes("reviewed, request") ? ["#fef3c7","#92400e","#fcd34d"]
+                      : sl.includes("reviewed")         ? ["#dcfce7","#166534","#86efac"]
+                      : sl.includes("ready for review") || sl.includes("updated, ready") ? ["#dbeafe","#1e40af","#93c5fd"]
+                      : sl.includes("not applicable")   ? ["#f1f5f9","#64748b","#cbd5e1"]
+                      : ["#f8fafc","#475569","#e2e8f0"];
+                    return (
+                      <div key={t.label} style={{ border:`1px solid ${C.border}`, borderRadius:7, padding:"10px 12px", background:C.white }}>
+                        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
+                          <span style={{ fontWeight:700, fontSize:12, color:C.text }}>{t.label}</span>
+                          {status
+                            ? <span style={{ background:sbg, color:scol, border:`1px solid ${sbrd}`, borderRadius:4, padding:"2px 8px", fontSize:10, fontWeight:600 }}>{status.length>22?status.slice(0,21)+"…":status}</span>
+                            : <span style={{ color:C.muted, fontSize:10 }}>No status</span>}
+                        </div>
+                        <div style={{ display:"grid", gridTemplateColumns:"auto 1fr", gap:"4px 8px", fontSize:11 }}>
+                          {reviewer && <><span style={{ color:C.muted, fontWeight:600 }}>Reviewer</span><span style={{ color:C.text }}>{reviewer}</span></>}
+                          {dueDate  && <><span style={{ color:C.muted, fontWeight:600 }}>Due Date</span><span style={{ color:C.text }}>{dueDate}</span></>}
+                        </div>
+                        {feedback && (
+                          <div style={{ marginTop:8, paddingTop:8, borderTop:`1px dashed ${C.border}` }}>
+                            <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.05em", marginBottom:3 }}>Feedback</div>
+                            <div style={{ fontSize:11, color:C.text, lineHeight:1.55, whiteSpace:"pre-wrap" }}>{feedback}</div>
+                          </div>
+                        )}
+                        {!reviewer && !dueDate && !feedback && (
+                          <div style={{ fontSize:11, color:C.muted, fontStyle:"italic", marginTop:4 }}>No details recorded</div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 
