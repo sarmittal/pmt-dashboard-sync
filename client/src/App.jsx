@@ -4661,7 +4661,9 @@ function ComponentCardsTab({ wp, raid, req, openModal }) {
 
 // ─── TEST SCENARIOS TAB ──────────────────────────────────────────────────────
 function TestScenariosTab({ data, wp, req }) {
-  const [selSit,    setSelSit]    = useState(null);
+  const [selSit,    setSelSit]    = useState("ALL");
+  const [selSp,     setSelSp]     = useState("ALL");
+  const [subTab,    setSubTab]    = useState("review");
   const [spModal,   setSpModal]   = useState(null);
   const [drillModal, setDrillModal] = useState(null);
 
@@ -4707,7 +4709,7 @@ function TestScenariosTab({ data, wp, req }) {
     })
   )).sort((a,b) => (parseInt(a.replace(/\D/g,""))||99) - (parseInt(b.replace(/\D/g,""))||99));
 
-  const activeSit = selSit && allSits.includes(selSit) ? selSit : (allSits[0] || "");
+  const activeSit = selSit === "ALL" ? "ALL" : (allSits.includes(selSit) ? selSit : (allSits[0] || "ALL"));
 
   const reqBySubprocess = {};
   const reqK = req?.keys;
@@ -4726,16 +4728,19 @@ function TestScenariosTab({ data, wp, req }) {
     req.items.forEach(r => { const id = String(r[reqK.reqId]||"").trim(); if (id) reqById[id] = r; });
   }
 
-  const sitRows = draftedRows.filter(r => {
-    const v = String(r[K.sitPlan] || "").trim();
-    return v.split(/\n|,/).map(s => s.trim()).some(s => s === activeSit);
-  });
+  const sitFilteredRows = activeSit === "ALL"
+    ? draftedRows
+    : draftedRows.filter(r => {
+        const v = String(r[K.sitPlan] || "").trim();
+        return v.split(/\n|,/).map(s => s.trim()).some(s => s === activeSit);
+      });
   const subprocessMap = {};
-  sitRows.forEach(r => {
+  sitFilteredRows.forEach(r => {
     const sp = String(r[K.subprocess] || "Unknown").trim();
     if (!subprocessMap[sp]) subprocessMap[sp] = [];
     subprocessMap[sp].push(r);
   });
+  const allSpsForFilter = Object.keys(subprocessMap).sort();
 
   // Pre-build ALL per-subprocess stats across ALL SITs — no SIT filter.
   // Matches Smartsheet formulas:
@@ -4761,7 +4766,7 @@ function TestScenariosTab({ data, wp, req }) {
     });
   });
 
-  const tableRows = Object.entries(subprocessMap).map(([sp]) => {
+  const allTableRows = Object.entries(subprocessMap).map(([sp]) => {
     const reqRows = reqBySubprocess[sp] || [];
     const userStories         = reqRows.filter(r => !isReqExcluded(r)).length;
     const userStoriesRelevant = reqRows.filter(r => !isReqExcluded(r) && isTestScenarioReq(r)).length;
@@ -4770,12 +4775,41 @@ function TestScenariosTab({ data, wp, req }) {
     const teamStats = Object.fromEntries(TEAMS.map(t => [t.id, allSpTeamStats[sp]?.[t.id] || { reviewed:0, pending:0, notPushed:0, reviewerName:"", revRows:[], pendRows:[], notPushedRows:[] }]));
     return { sp, drafted, userStories, userStoriesRelevant, openFeedbackCount, teamStats };
   });
+  const tableRows = selSp === "ALL" ? allTableRows : allTableRows.filter(r => r.sp === selSp);
 
   const totDrafted      = tableRows.reduce((s,r) => s+r.drafted, 0);
   const totUserStories  = tableRows.reduce((s,r) => s+r.userStories, 0);
   const totRelevant     = tableRows.reduce((s,r) => s+r.userStoriesRelevant, 0);
   const totOpenFeedback = tableRows.reduce((s,r) => s+r.openFeedbackCount, 0);
   const pctStr = (n,d) => d > 0 ? `${Math.round(n/d*100)}%` : "—";
+
+  // Overall Metrics: 5 core review teams, SIT-independent
+  const REVIEW_TEAMS_5 = TEAMS.filter(t => ["sd","pmsd","dt","da","pmt"].includes(t.id));
+  const allSubprocesses = Array.from(new Set(draftedRows.map(r => String(r[K.subprocess]||"Unknown").trim()))).sort();
+  const overallMetrics = allSubprocesses.map(sp => {
+    const spRows  = draftedRows.filter(r => String(r[K.subprocess]||"Unknown").trim() === sp);
+    const reqRows = reqBySubprocess[sp] || [];
+    const userStories         = reqRows.filter(r => !isReqExcluded(r)).length;
+    const userStoriesRelevant = reqRows.filter(r => !isReqExcluded(r) && isTestScenarioReq(r)).length;
+    const drafted = spRows.length;
+    let totalTeamReviews = 0;
+    spRows.forEach(r => {
+      REVIEW_TEAMS_5.forEach(t => {
+        if (isReviewedFinal(r[t.statusKey]) && !isTruthy(r[K.openFeedbackFlag])) totalTeamReviews++;
+      });
+    });
+    const maxReviews = drafted * REVIEW_TEAMS_5.length;
+    const reviewPct  = maxReviews > 0 ? Math.round(totalTeamReviews / maxReviews * 100) : 0;
+    const fully      = spRows.filter(r => REVIEW_TEAMS_5.every(t => isReviewedFinal(r[t.statusKey]) && !isTruthy(r[K.openFeedbackFlag]))).length;
+    return { sp, userStories, userStoriesRelevant, drafted, totalTeamReviews, maxReviews, reviewPct, fully };
+  });
+  const omTotUS  = overallMetrics.reduce((s,r)=>s+r.userStories,0);
+  const omTotRel = overallMetrics.reduce((s,r)=>s+r.userStoriesRelevant,0);
+  const omTotDr  = overallMetrics.reduce((s,r)=>s+r.drafted,0);
+  const omTotTR  = overallMetrics.reduce((s,r)=>s+r.totalTeamReviews,0);
+  const omTotMax = overallMetrics.reduce((s,r)=>s+r.maxReviews,0);
+  const omTotPct = omTotMax > 0 ? Math.round(omTotTR/omTotMax*100) : 0;
+  const omTotFull= overallMetrics.reduce((s,r)=>s+r.fully,0);
 
   const stPill = (r, t) => {
     const sv = cleanSt(r[t.statusKey]);
@@ -4971,28 +5005,44 @@ function TestScenariosTab({ data, wp, req }) {
     </div>
   );
 
-  return (
-    <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+  const subTabBar = (
+    <div style={{ display:"flex", gap:0, borderBottom:`2px solid ${C.border}`, marginBottom:4 }}>
+      {[{id:"review",label:"Review Status"},{id:"metrics",label:"Overall Metrics"}].map(st => (
+        <button key={st.id} onClick={() => setSubTab(st.id)}
+          style={{ padding:"9px 22px", background:"none", border:"none", cursor:"pointer", fontSize:13, fontWeight:subTab===st.id?700:500,
+            color:subTab===st.id?C.navy:C.muted,
+            borderBottom:`3px solid ${subTab===st.id?C.navyLight:"transparent"}`,
+            transition:"all .12s" }}>
+          {st.label}
+        </button>
+      ))}
+    </div>
+  );
 
-      {allSits.length > 0 && (
-        <div style={{ display:"flex", gap:6, flexWrap:"wrap", borderBottom:`2px solid ${C.border}`, paddingBottom:10 }}>
-          {allSits.map(sit => (
-            <button key={sit} onClick={() => setSelSit(sit)}
-              style={{ padding:"6px 18px", border:`2px solid ${sit===activeSit?C.navyLight:C.border}`,
-                background:sit===activeSit?C.navyLight:"#fff", color:sit===activeSit?"#fff":C.text,
-                borderRadius:6, fontWeight:700, fontSize:12, cursor:"pointer", transition:"all .12s" }}>
-              {sit}
-            </button>
-          ))}
+  const reviewSubTab = (
+    <>
+      {/* Filter bar */}
+      <div style={{ display:"flex", gap:16, alignItems:"center", flexWrap:"wrap", padding:"8px 0" }}>
+        <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+          <span style={{ fontSize:11, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.05em" }}>SIT</span>
+          <select value={activeSit} onChange={e => { setSelSit(e.target.value); setSelSp("ALL"); }}
+            style={{ padding:"5px 10px", border:`1px solid ${C.border}`, borderRadius:6, fontSize:12, background:"#fff", color:C.text, cursor:"pointer" }}>
+            <option value="ALL">All SITs</option>
+            {allSits.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
         </div>
-      )}
-
-      <div style={{ textAlign:"center" }}>
-        <div style={{ display:"inline-block", background:C.navy, color:"#fff", fontWeight:800, fontSize:15, borderRadius:8, padding:"8px 28px" }}>
-          Test Scenario Review — {activeSit}
+        <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+          <span style={{ fontSize:11, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.05em" }}>Sub Process</span>
+          <select value={selSp} onChange={e => setSelSp(e.target.value)}
+            style={{ padding:"5px 10px", border:`1px solid ${C.border}`, borderRadius:6, fontSize:12, background:"#fff", color:C.text, cursor:"pointer", maxWidth:260 }}>
+            <option value="ALL">All Sub Processes</option>
+            {allSpsForFilter.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
         </div>
+        <span style={{ fontSize:11, color:C.muted, marginLeft:"auto" }}>{tableRows.length} sub-processes · {totDrafted} scenarios</span>
       </div>
 
+      {/* KPI cards */}
       <div style={{ display:"grid", gridTemplateColumns:`repeat(${Math.min(TEAMS.length,7)},1fr)`, gap:8 }}>
         {TEAMS.map(t => {
           const rev      = tableRows.reduce((s,r) => s+(r.teamStats[t.id]?.reviewed||0), 0);
@@ -5001,26 +5051,27 @@ function TestScenariosTab({ data, wp, req }) {
           const pct      = totDrafted > 0 ? Math.round(rev/totDrafted*100) : 0;
           const pendPct  = totDrafted > 0 ? Math.round(pend/totDrafted*100) : 0;
           const npPct    = totDrafted > 0 ? Math.round(notPush/totDrafted*100) : 0;
-          const revRows      = draftedRows.filter(r => isReviewedFinal(r[t.statusKey]) && !isTruthy(r[K.openFeedbackFlag]));
-          const pendRows     = draftedRows.filter(r => isPendingReview(r[t.statusKey]) && !isTruthy(r[K.openFeedbackFlag]));
-          const notPushRows  = draftedRows.filter(r => !String(r[t.statusKey]||"").trim() && !isTruthy(r[K.openFeedbackFlag]));
+          const sitLabel = activeSit === "ALL" ? "All SITs" : activeSit;
+          const revRows      = tableRows.flatMap(r => r.teamStats[t.id]?.revRows       || []);
+          const pendRows     = tableRows.flatMap(r => r.teamStats[t.id]?.pendRows      || []);
+          const notPushRows  = tableRows.flatMap(r => r.teamStats[t.id]?.notPushedRows || []);
           return (
             <div key={t.id} style={{ background:C.white, border:`1px solid ${C.border}`, borderTop:`3px solid ${t.color}`, borderRadius:8, padding:"10px 12px" }}>
               <div style={{ fontSize:9, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.07em", marginBottom:6 }}>{t.label}</div>
               <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
-                <span onClick={() => revRows.length && setDrillModal({ title:`${t.label} — Reviewed · ${activeSit}`, rows:revRows, teamId:t.id })}
+                <span onClick={() => revRows.length && setDrillModal({ title:`${t.label} — Reviewed · ${sitLabel}`, rows:revRows, teamId:t.id })}
                   style={{ background:"#dcfce7", color:"#166534", borderRadius:5, padding:"3px 9px", fontSize:11, fontWeight:700,
                     width:"fit-content", cursor:revRows.length?"pointer":"default", border:"1px solid #bbf7d0",
                     boxShadow:revRows.length?"0 1px 3px rgba(22,101,52,0.15)":undefined }}>
                   ✓ {rev} reviewed ({pct}%)
                 </span>
-                <span onClick={() => pendRows.length && setDrillModal({ title:`${t.label} — Pending Review · ${activeSit}`, rows:pendRows, teamId:t.id })}
+                <span onClick={() => pendRows.length && setDrillModal({ title:`${t.label} — Pending · ${sitLabel}`, rows:pendRows, teamId:t.id })}
                   style={{ background:"#fef3c7", color:"#92400e", borderRadius:5, padding:"3px 9px", fontSize:11, fontWeight:700,
                     width:"fit-content", cursor:pendRows.length?"pointer":"default", border:"1px solid #fcd34d",
                     boxShadow:pendRows.length?"0 1px 3px rgba(146,64,14,0.15)":undefined, opacity:pend===0?0.45:1 }}>
                   ⏳ {pend} pending ({pendPct}%)
                 </span>
-                <span onClick={() => notPushRows.length && setDrillModal({ title:`${t.label} — Not Yet Pushed · ${activeSit}`, rows:notPushRows, teamId:t.id })}
+                <span onClick={() => notPushRows.length && setDrillModal({ title:`${t.label} — Not Yet Pushed · ${sitLabel}`, rows:notPushRows, teamId:t.id })}
                   style={{ background:"#f1f5f9", color:"#475569", borderRadius:5, padding:"3px 9px", fontSize:11, fontWeight:700,
                     width:"fit-content", cursor:notPushRows.length?"pointer":"default", border:"1px solid #cbd5e1",
                     opacity:notPush===0?0.45:1 }}>
@@ -5032,16 +5083,13 @@ function TestScenariosTab({ data, wp, req }) {
         })}
       </div>
 
+      {/* Review status table with subtotal row pinned below header */}
       <Card style={{ padding:0 }}>
-        <div style={{ padding:"12px 16px 8px", borderBottom:`1px solid ${C.border}`, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-          <span style={{ fontWeight:700, fontSize:13, color:C.navy }}>Scenario Review Status — {activeSit}</span>
-          <span style={{ fontSize:11, color:C.muted }}>{tableRows.length} sub-processes · {totDrafted} scenarios</span>
-        </div>
         <div style={{ overflowX:"auto" }}>
           <table style={{ width:"100%", borderCollapse:"collapse", fontSize:11 }}>
             <thead>
               <tr style={{ background:C.navy }}>
-                <th style={{ padding:"8px 12px", textAlign:"left", color:"#fff", fontWeight:700, fontSize:10, minWidth:170, position:"sticky", left:0, background:C.navy, borderRight:`1px solid rgba(255,255,255,0.15)`, zIndex:1 }}>SubProcess / Component</th>
+                <th style={{ padding:"8px 12px", textAlign:"left", color:"#fff", fontWeight:700, fontSize:10, minWidth:170, position:"sticky", left:0, background:C.navy, borderRight:`1px solid rgba(255,255,255,0.15)`, zIndex:2 }}>SubProcess / Component</th>
                 <th style={{ padding:"8px 8px", textAlign:"center", color:"#a8d8ff", fontWeight:700, fontSize:10, borderRight:`1px solid rgba(255,255,255,0.1)`, minWidth:65 }}>User Stories</th>
                 <th style={{ padding:"8px 8px", textAlign:"center", color:"#a8d8ff", fontWeight:700, fontSize:10, borderRight:`1px solid rgba(255,255,255,0.1)`, minWidth:80 }}>Relevant for Scenarios</th>
                 <th style={{ padding:"8px 8px", textAlign:"center", color:"#a8d8ff", fontWeight:700, fontSize:10, borderRight:`1px solid rgba(255,255,255,0.1)`, minWidth:60 }}>Drafted</th>
@@ -5051,15 +5099,56 @@ function TestScenariosTab({ data, wp, req }) {
                   <th key={t.id+"-r"} style={{ padding:"8px 8px", textAlign:"left", color:"rgba(196,241,196,0.7)", fontWeight:600, fontSize:9, borderRight:`1px solid rgba(255,255,255,0.15)`, minWidth:85 }}>Reviewer</th>,
                 ])}
               </tr>
+              {/* Subtotal row pinned below column headers */}
+              <tr style={{ background:"#1e3a5f", borderBottom:`2px solid ${C.navyLight}` }}>
+                <td style={{ padding:"7px 12px", color:"#fbbf24", fontWeight:800, fontSize:10, position:"sticky", left:0, background:"#1e3a5f", borderRight:`1px solid rgba(255,255,255,0.15)`, zIndex:2, textTransform:"uppercase", letterSpacing:"0.06em" }}>SUBTOTAL</td>
+                <td style={{ padding:"7px 8px", textAlign:"center", color:"#93c5fd", fontWeight:700, fontSize:10 }}>{totUserStories||"—"}</td>
+                <td style={{ padding:"7px 8px", textAlign:"center", color:"#93c5fd", fontWeight:700, fontSize:10 }}>{totRelevant||"—"}</td>
+                <td style={{ padding:"7px 8px", textAlign:"center", color:"#fff", fontWeight:800, fontSize:10 }}>{totDrafted}</td>
+                <td style={{ padding:"7px 8px", textAlign:"center" }}>
+                  {totOpenFeedback>0 ? <span style={{ background:"#7f1d1d", color:"#fca5a5", borderRadius:4, padding:"1px 6px", fontSize:10, fontWeight:700 }}>{totOpenFeedback}</span> : <span style={{ color:"rgba(255,255,255,0.3)" }}>—</span>}
+                </td>
+                {TEAMS.flatMap(t => {
+                  const rev  = tableRows.reduce((s,r) => s+(r.teamStats[t.id]?.reviewed||0), 0);
+                  const pend = tableRows.reduce((s,r) => s+(r.teamStats[t.id]?.pending||0), 0);
+                  const np   = tableRows.reduce((s,r) => s+(r.teamStats[t.id]?.notPushed||0), 0);
+                  const sitLabel = activeSit === "ALL" ? "All SITs" : activeSit;
+                  const revRows     = tableRows.flatMap(r => r.teamStats[t.id]?.revRows       || []);
+                  const pendRows    = tableRows.flatMap(r => r.teamStats[t.id]?.pendRows      || []);
+                  const npRows      = tableRows.flatMap(r => r.teamStats[t.id]?.notPushedRows || []);
+                  return [
+                    <td key={t.id+"-s"} style={{ padding:"7px 8px", borderRight:`1px solid rgba(255,255,255,0.08)` }}>
+                      <div style={{ display:"flex", flexDirection:"column", gap:2 }}>
+                        <span onClick={() => revRows.length && setDrillModal({ title:`${t.label} — All Reviewed · ${sitLabel}`, rows:revRows, teamId:t.id })}
+                          style={{ background:"rgba(34,197,94,0.2)", color:"#86efac", border:"1px solid rgba(34,197,94,0.3)", borderRadius:4,
+                            padding:"1px 6px", fontSize:10, fontWeight:700, whiteSpace:"nowrap", cursor:revRows.length?"pointer":"default" }}>
+                          ✓ {rev} ({pctStr(rev,totDrafted)})
+                        </span>
+                        <span onClick={() => pendRows.length && setDrillModal({ title:`${t.label} — All Pending · ${sitLabel}`, rows:pendRows, teamId:t.id })}
+                          style={{ background:"rgba(234,179,8,0.2)", color:"#fde68a", border:"1px solid rgba(234,179,8,0.3)", borderRadius:4,
+                            padding:"1px 6px", fontSize:10, fontWeight:700, whiteSpace:"nowrap", cursor:pendRows.length?"pointer":"default", opacity:pend===0?0.4:1 }}>
+                          ⏳ {pend} ({pctStr(pend,totDrafted)})
+                        </span>
+                        <span onClick={() => npRows.length && setDrillModal({ title:`${t.label} — All Not Pushed · ${sitLabel}`, rows:npRows, teamId:t.id })}
+                          style={{ background:"rgba(148,163,184,0.15)", color:"#cbd5e1", border:"1px solid rgba(148,163,184,0.2)", borderRadius:4,
+                            padding:"1px 6px", fontSize:10, fontWeight:700, whiteSpace:"nowrap", cursor:npRows.length?"pointer":"default", opacity:np===0?0.35:1 }}>
+                          ○ {np}
+                        </span>
+                      </div>
+                    </td>,
+                    <td key={t.id+"-r"} style={{ padding:"7px 8px", borderRight:`1px solid rgba(255,255,255,0.15)` }} />,
+                  ];
+                })}
+              </tr>
             </thead>
             <tbody>
               {tableRows.length === 0 && (
-                <tr><td colSpan={5+TEAMS.length*2} style={{ padding:24, textAlign:"center", color:C.muted }}>No scenarios found for {activeSit}</td></tr>
+                <tr><td colSpan={5+TEAMS.length*2} style={{ padding:24, textAlign:"center", color:C.muted }}>No scenarios match the current filters</td></tr>
               )}
               {tableRows.map((row, i) => (
                 <tr key={row.sp}
                   style={{ background:i%2===0?C.white:"#f7f9fc", borderBottom:`1px solid ${C.border}`, cursor:"pointer", verticalAlign:"top" }}
-                  onClick={() => setSpModal({ title:row.sp, rows:subprocessMap[row.sp]||[] })}
+                  onClick={() => setSpModal({ title:row.sp, rows:sitFilteredRows.filter(r => String(r[K.subprocess]||"Unknown").trim() === row.sp) })}
                   onMouseEnter={e => e.currentTarget.style.background="#eef4ff"}
                   onMouseLeave={e => e.currentTarget.style.background=i%2===0?C.white:"#f7f9fc"}>
                   <td style={{ padding:"9px 12px", fontWeight:600, color:C.text, position:"sticky", left:0, background:"inherit", borderRight:`1px solid ${C.border}` }}>
@@ -5110,54 +5199,90 @@ function TestScenariosTab({ data, wp, req }) {
                   })}
                 </tr>
               ))}
-              {tableRows.length > 0 && (
-                <tr style={{ background:"#eef4ff", borderTop:`2px solid ${C.navyLight}`, fontWeight:700 }}>
-                  <td style={{ padding:"9px 12px", color:C.navy, fontWeight:800, position:"sticky", left:0, background:"#eef4ff", borderRight:`1px solid ${C.border}` }}>TOTAL</td>
-                  <td style={{ padding:"9px 8px", textAlign:"center", color:C.navyLight, fontWeight:800 }}>{totUserStories||"—"}</td>
-                  <td style={{ padding:"9px 8px", textAlign:"center", color:C.navyLight, fontWeight:800 }}>{totRelevant||"—"}</td>
-                  <td style={{ padding:"9px 8px", textAlign:"center", fontWeight:800 }}>{totDrafted}</td>
-                  <td style={{ padding:"9px 8px", textAlign:"center" }}>
-                    {totOpenFeedback>0 ? <span style={{ background:"#fee2e2", color:"#991b1b", borderRadius:4, padding:"2px 8px", fontSize:10, fontWeight:700 }}>{totOpenFeedback}</span> : "—"}
-                  </td>
-                  {TEAMS.flatMap(t => {
-                    const rev     = tableRows.reduce((s,r) => s+(r.teamStats[t.id]?.reviewed||0), 0);
-                    const pend    = tableRows.reduce((s,r) => s+(r.teamStats[t.id]?.pending||0), 0);
-                    const np      = tableRows.reduce((s,r) => s+(r.teamStats[t.id]?.notPushed||0), 0);
-                    const revRows      = tableRows.flatMap(r => r.teamStats[t.id]?.revRows       || []);
-                    const pendRows     = tableRows.flatMap(r => r.teamStats[t.id]?.pendRows      || []);
-                    const notPushRows  = tableRows.flatMap(r => r.teamStats[t.id]?.notPushedRows || []);
-                    return [
-                      <td key={t.id+"-s"} style={{ padding:"9px 8px" }}>
-                        <div style={{ display:"flex", flexDirection:"column", gap:3 }}>
-                          <span onClick={() => revRows.length && setDrillModal({ title:`${t.label} — All Reviewed · ${activeSit}`, rows:revRows, teamId:t.id })}
-                            style={{ background:"#dcfce7", color:"#166534", border:"1px solid #bbf7d0", borderRadius:5,
-                              padding:"2px 8px", fontSize:10, fontWeight:800, whiteSpace:"nowrap",
-                              cursor:revRows.length?"pointer":"default" }}>
-                            ✓ {rev} ({pctStr(rev,totDrafted)})
-                          </span>
-                          <span onClick={() => pendRows.length && setDrillModal({ title:`${t.label} — All Pending · ${activeSit}`, rows:pendRows, teamId:t.id })}
-                            style={{ background:"#fef3c7", color:"#92400e", border:"1px solid #fcd34d", borderRadius:5,
-                              padding:"2px 8px", fontSize:10, fontWeight:700, whiteSpace:"nowrap",
-                              cursor:pendRows.length?"pointer":"default", opacity:pend===0?0.4:1 }}>
-                            ⏳ {pend} ({pctStr(pend,totDrafted)})
-                          </span>
-                          <span onClick={() => notPushRows.length && setDrillModal({ title:`${t.label} — All Not Yet Pushed · ${activeSit}`, rows:notPushRows, teamId:t.id })}
-                            style={{ background:"#f1f5f9", color:"#475569", border:"1px solid #cbd5e1", borderRadius:5,
-                              padding:"2px 8px", fontSize:10, fontWeight:700, whiteSpace:"nowrap",
-                              cursor:notPushRows.length?"pointer":"default", opacity:np===0?0.35:1 }}>
-                            ○ {np}
-                          </span>
-                        </div>
-                      </td>,
-                      <td key={t.id+"-r"} style={{ padding:"9px 8px" }} />,
-                    ];
-                  })}
-                </tr>
-              )}
             </tbody>
           </table>
         </div>
       </Card>
+    </>
+  );
+
+  const metricsSubTab = (
+    <Card style={{ padding:0 }}>
+      <div style={{ padding:"12px 16px 8px", borderBottom:`1px solid ${C.border}`, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+        <span style={{ fontWeight:700, fontSize:13, color:C.navy }}>Overall Metrics — All SITs</span>
+        <span style={{ fontSize:11, color:C.muted }}>Review % = scenarios reviewed by all 5 core teams (SD Consulting, PM SD, DT, D&A, PM Talent)</span>
+      </div>
+      <div style={{ overflowX:"auto" }}>
+        <table style={{ width:"100%", borderCollapse:"collapse", fontSize:11 }}>
+          <thead>
+            <tr style={{ background:C.navy }}>
+              <th style={{ padding:"8px 14px", textAlign:"left", color:"#fff", fontWeight:700, fontSize:10, minWidth:200, position:"sticky", left:0, background:C.navy, borderRight:`1px solid rgba(255,255,255,0.15)`, zIndex:2 }}>SubProcess / Component</th>
+              <th style={{ padding:"8px 10px", textAlign:"center", color:"#a8d8ff", fontWeight:700, fontSize:10, borderRight:`1px solid rgba(255,255,255,0.1)`, minWidth:80 }}>User Stories</th>
+              <th style={{ padding:"8px 10px", textAlign:"center", color:"#a8d8ff", fontWeight:700, fontSize:10, borderRight:`1px solid rgba(255,255,255,0.1)`, minWidth:100 }}>Relevant for Scenarios</th>
+              <th style={{ padding:"8px 10px", textAlign:"center", color:"#a8d8ff", fontWeight:700, fontSize:10, borderRight:`1px solid rgba(255,255,255,0.1)`, minWidth:70 }}>Scenarios Drafted</th>
+              <th style={{ padding:"8px 10px", textAlign:"center", color:"#c4f1c4", fontWeight:700, fontSize:10, borderRight:`1px solid rgba(255,255,255,0.1)`, minWidth:80 }}>Fully Reviewed</th>
+              <th style={{ padding:"8px 10px", textAlign:"center", color:"#fde68a", fontWeight:700, fontSize:10, borderRight:`1px solid rgba(255,255,255,0.15)`, minWidth:120 }}>Review Completion</th>
+            </tr>
+            {/* Subtotal row */}
+            <tr style={{ background:"#1e3a5f", borderBottom:`2px solid ${C.navyLight}` }}>
+              <td style={{ padding:"7px 14px", color:"#fbbf24", fontWeight:800, fontSize:10, position:"sticky", left:0, background:"#1e3a5f", borderRight:`1px solid rgba(255,255,255,0.15)`, zIndex:2, textTransform:"uppercase", letterSpacing:"0.06em" }}>SUBTOTAL</td>
+              <td style={{ padding:"7px 10px", textAlign:"center", color:"#93c5fd", fontWeight:700, fontSize:10 }}>{omTotUS||"—"}</td>
+              <td style={{ padding:"7px 10px", textAlign:"center", color:"#93c5fd", fontWeight:700, fontSize:10 }}>{omTotRel||"—"}</td>
+              <td style={{ padding:"7px 10px", textAlign:"center", color:"#fff", fontWeight:800, fontSize:10 }}>{omTotDr}</td>
+              <td style={{ padding:"7px 10px", textAlign:"center" }}>
+                <span style={{ background:"rgba(34,197,94,0.2)", color:"#86efac", borderRadius:4, padding:"1px 7px", fontSize:10, fontWeight:700 }}>{omTotFull}</span>
+              </td>
+              <td style={{ padding:"7px 10px", textAlign:"center" }}>
+                {(() => { const bg=omTotPct>=80?"rgba(34,197,94,0.25)":omTotPct>=50?"rgba(234,179,8,0.25)":"rgba(239,68,68,0.25)"; const col=omTotPct>=80?"#86efac":omTotPct>=50?"#fde68a":"#fca5a5";
+                  return <span style={{ background:bg, color:col, borderRadius:4, padding:"2px 10px", fontSize:11, fontWeight:800 }}>{omTotPct}% ({omTotTR}/{omTotMax})</span>; })()}
+              </td>
+            </tr>
+          </thead>
+          <tbody>
+            {overallMetrics.map((row, i) => {
+              const pctBg  = row.reviewPct>=80?"#dcfce7":row.reviewPct>=50?"#fef9c3":"#fee2e2";
+              const pctCol = row.reviewPct>=80?"#166534":row.reviewPct>=50?"#854d0e":"#991b1b";
+              const barW   = `${row.reviewPct}%`;
+              return (
+                <tr key={row.sp} style={{ background:i%2===0?C.white:"#f7f9fc", borderBottom:`1px solid ${C.border}`, verticalAlign:"middle" }}>
+                  <td style={{ padding:"9px 14px", fontWeight:600, color:C.text, position:"sticky", left:0, background:"inherit", borderRight:`1px solid ${C.border}` }}>
+                    <span style={{ display:"flex", alignItems:"center", gap:6 }}>
+                      <span style={{ width:3, height:14, background:C.navyLight, borderRadius:2, flexShrink:0 }} />
+                      {row.sp}
+                    </span>
+                  </td>
+                  <td style={{ padding:"9px 10px", textAlign:"center", color:C.navyLight, fontWeight:700 }}>{row.userStories||"—"}</td>
+                  <td style={{ padding:"9px 10px", textAlign:"center", color:C.navyLight, fontWeight:700 }}>{row.userStoriesRelevant||"—"}</td>
+                  <td style={{ padding:"9px 10px", textAlign:"center", fontWeight:700, color:C.text }}>{row.drafted}</td>
+                  <td style={{ padding:"9px 10px", textAlign:"center" }}>
+                    {row.fully > 0
+                      ? <span style={{ background:"#dcfce7", color:"#166534", borderRadius:4, padding:"2px 8px", fontSize:10, fontWeight:700 }}>{row.fully}</span>
+                      : <span style={{ color:C.muted }}>—</span>}
+                  </td>
+                  <td style={{ padding:"9px 10px" }}>
+                    <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                      <div style={{ flex:1, height:8, background:"#e2e8f0", borderRadius:4, overflow:"hidden", minWidth:60 }}>
+                        <div style={{ width:barW, height:"100%", background:row.reviewPct>=80?"#22c55e":row.reviewPct>=50?"#eab308":"#ef4444", borderRadius:4, transition:"width .3s" }} />
+                      </div>
+                      <span style={{ background:pctBg, color:pctCol, borderRadius:4, padding:"2px 7px", fontSize:10, fontWeight:700, whiteSpace:"nowrap" }}>
+                        {row.reviewPct}% ({row.totalTeamReviews}/{row.maxReviews})
+                      </span>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </Card>
+  );
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+      {subTabBar}
+      {subTab === "review"  && reviewSubTab}
+      {subTab === "metrics" && metricsSubTab}
 
       {spModal    && <ScenarioModal   title={spModal.title}    rows={spModal.rows}    onClose={() => setSpModal(null)} />}
       {drillModal && <TeamDrillModal  title={drillModal.title} rows={drillModal.rows} teamId={drillModal.teamId} reqById={reqById} reqK={reqK} onClose={() => setDrillModal(null)} />}
