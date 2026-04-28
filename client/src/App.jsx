@@ -4690,7 +4690,7 @@ function TestScenariosTab({ data, wp, req }) {
   const [scenSpF,       setScenSpF]       = useState("ALL");
   const [scenPersonaF,  setScenPersonaF]  = useState("ALL");
   const [scenSitF,      setScenSitF]      = useState("ALL");
-  const [scenFlagF,     setScenFlagF]     = useState({});   // { [flagKey]: "include"|"exclude" }
+  const [scenFlagF,     setScenFlagF]     = useState({ del:"ALL", dup:"ALL", openFb:"ALL", manual:"ALL" });
   const [scenReviewRow, setScenReviewRow] = useState(null);
   const [scenColW,      setScenColW]      = useState({});
   const [untaggedModal,  setUntaggedModal]  = useState(null);
@@ -5716,9 +5716,11 @@ function TestScenariosTab({ data, wp, req }) {
     f==="dup"    ? isTruthy(r[K.dupDataMiningNA])  :
     f==="openFb" ? isTruthy(r[K.openFeedbackFlag]) :
     f==="manual" ? isTruthy(r[K.manualNotTech])    : false;
-  const _flagMatch = r => Object.entries(scenFlagF).every(([f, mode]) =>
-    mode === "include" ? _flagVal(f, r) : !_flagVal(f, r)
-  );
+  const _flagMatch = r =>
+    (scenFlagF.del    ==="ALL" || (scenFlagF.del    ==="YES") === _flagVal("del",    r)) &&
+    (scenFlagF.dup    ==="ALL" || (scenFlagF.dup    ==="YES") === _flagVal("dup",    r)) &&
+    (scenFlagF.openFb ==="ALL" || (scenFlagF.openFb ==="YES") === _flagVal("openFb", r)) &&
+    (scenFlagF.manual ==="ALL" || (scenFlagF.manual ==="YES") === _flagVal("manual", r));
   const _scenFiltered = _allScenRows.filter(r =>
     (scenSpF      === "ALL" || String(r[K.subprocess]||"").trim() === scenSpF) &&
     (scenPersonaF === "ALL" || String(r[K.persona]||"").trim()    === scenPersonaF) &&
@@ -5743,12 +5745,7 @@ function TestScenariosTab({ data, wp, req }) {
 
   const _toggleScen  = id => setScenExpanded(prev => { const n=new Set(prev); n.has(id)?n.delete(id):n.add(id); return n; });
   const _toggleReq   = (scenId, reqId) => setScenActiveReq(prev => ({ ...prev, [scenId]: prev[scenId]===reqId ? null : reqId }));
-  const _toggleFlag = f => setScenFlagF(prev => {
-    const cur = prev[f];
-    const next = cur === undefined ? "include" : cur === "include" ? "exclude" : undefined;
-    if (next === undefined) { const {[f]:_, ...rest} = prev; return rest; }
-    return { ...prev, [f]: next };
-  });
+  const _setFlag = (f, val) => setScenFlagF(prev => ({ ...prev, [f]: val }));
 
   const _statusBadge = v => {
     const s = String(v||"").replace(/^\d+\.\s*/,"").trim();
@@ -5817,44 +5814,43 @@ function TestScenariosTab({ data, wp, req }) {
           </div>
         )}
         {/* Flag filters */}
-        <div style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"wrap", paddingTop:4, borderTop:`1px dashed ${C.border}` }}>
-          <span style={{ fontSize:10, fontWeight:700, color:"#374151", minWidth:90 }}>Flags</span>
+        <div style={{ display:"flex", flexDirection:"column", gap:6, paddingTop:4, borderTop:`1px dashed ${C.border}` }}>
           {[
-            { f:"del",    label:"To Be Deleted",    color:"#b91c1c", exColor:"#6b7280", bg:"#fee2e2", exBg:"#f3f4f6", key:K.toBeDeleted     },
-            { f:"dup",    label:"Dup / Data Mining", color:"#92400e", exColor:"#6b7280", bg:"#fde8cc", exBg:"#f3f4f6", key:K.dupDataMiningNA },
-            { f:"openFb", label:"Open Feedback",     color:"#854d0e", exColor:"#6b7280", bg:"#fefce8", exBg:"#f3f4f6", key:K.openFeedbackFlag},
-            { f:"manual", label:"Manual (Not Tech)", color:"#1e40af", exColor:"#6b7280", bg:"#dbeafe", exBg:"#f3f4f6", key:K.manualNotTech   },
-          ].filter(x=>x.key).map(({f,label,color,exColor,bg,exBg,key}) => {
-            const mode = scenFlagF[f];   // undefined | "include" | "exclude"
-            const cnt  = _allScenRows.filter(r=>isTruthy(r[key])).length;
-            const isInclude = mode === "include";
-            const isExclude = mode === "exclude";
-            const btnColor  = isInclude ? color : isExclude ? exColor : C.text;
-            const btnBg     = isInclude ? bg    : isExclude ? exBg    : C.white;
-            const btnBorder = isInclude ? color : isExclude ? "#9ca3af" : "#d1d5db";
-            const prefix    = isInclude ? "✓ " : isExclude ? "✕ " : "";
-            const hint      = isInclude ? "showing only flagged" : isExclude ? "excluding flagged" : "click to filter";
+            { f:"del",    label:"To Be Deleted",              color:"#b91c1c", bg:"#fee2e2", key:K.toBeDeleted     },
+            { f:"dup",    label:"Dup / Data Mining / NA",     color:"#92400e", bg:"#fde8cc", key:K.dupDataMiningNA },
+            { f:"openFb", label:"Open Feedback",              color:"#854d0e", bg:"#fefce8", key:K.openFeedbackFlag},
+            { f:"manual", label:"Manual (Not Tech Enabled)",  color:"#1e40af", bg:"#dbeafe", key:K.manualNotTech   },
+          ].filter(x=>x.key).map(({f,label,color,bg,key}) => {
+            const val = scenFlagF[f] || "ALL";
+            const yesCnt = _allScenRows.filter(r=>isTruthy(r[key])).length;
+            const noCnt  = _allScenRows.length - yesCnt;
             return (
-              <button key={f} onClick={()=>_toggleFlag(f)} title={hint}
-                style={{ display:"flex", alignItems:"center", gap:4, padding:"3px 9px", borderRadius:20,
-                  border:`2px solid ${btnBorder}`, background:btnBg,
-                  color:btnColor, cursor:"pointer", fontSize:10, fontWeight:700, transition:"all .12s",
-                  textDecoration: isExclude ? "line-through" : "none", opacity: isExclude ? 0.85 : 1 }}>
-                {prefix}{label}
-                <span style={{ background:isInclude?color+"25":isExclude?"#e5e7eb":"#f1f5f9",
-                  color:isInclude?color:isExclude?"#6b7280":C.muted,
-                  borderRadius:10, padding:"1px 6px", fontSize:10, fontWeight:800,
-                  textDecoration:"none" }}>{cnt}</span>
-              </button>
+              <div key={f} style={{ display:"flex", alignItems:"center", gap:8 }}>
+                <span style={{ fontSize:10, fontWeight:700, color:"#374151", minWidth:175, flexShrink:0 }}>{label}</span>
+                <div style={{ display:"flex", borderRadius:6, border:`1px solid #d1d5db`, overflow:"hidden", flexShrink:0 }}>
+                  {[
+                    { v:"ALL", text:"All" },
+                    { v:"YES", text:`Yes (${yesCnt})` },
+                    { v:"NO",  text:`No (${noCnt})`  },
+                  ].map(({v,text}) => {
+                    const active = val === v;
+                    const activeBg = v==="YES" ? bg    : v==="NO" ? "#f0fdf4" : "#e0e7ff";
+                    const activeCol= v==="YES" ? color : v==="NO" ? "#166534" : "#3730a3";
+                    return (
+                      <button key={v} onClick={()=>_setFlag(f,v)}
+                        style={{ padding:"3px 10px", border:"none", borderRight:`1px solid #d1d5db`,
+                          background: active ? activeBg : C.white,
+                          color: active ? activeCol : C.muted,
+                          fontWeight: active ? 700 : 500, fontSize:10, cursor:"pointer",
+                          transition:"all .1s" }}>
+                        {text}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             );
           })}
-          {Object.keys(scenFlagF).length > 0 && (
-            <button onClick={()=>setScenFlagF({})}
-              style={{ padding:"3px 9px", borderRadius:20, border:"1px solid #d1d5db", background:C.white,
-                color:C.muted, cursor:"pointer", fontSize:10, fontWeight:600 }}>
-              Clear flags
-            </button>
-          )}
         </div>
       </div>
 
