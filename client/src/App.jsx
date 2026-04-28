@@ -434,6 +434,10 @@ function parseTestScenarios(sheets) {
     funcDueDate:  ks.find(k => k === "Due Date (Functional)")     || ks.find(k => /due.?date.*functional/i.test(k)),
     techFeedback: ks.find(k => k === "Feedback (Technical)")      || ks.find(k => /feedback.*technical/i.test(k)),
     techDueDate:  ks.find(k => k === "Due Date (Technical)")      || ks.find(k => /due.?date.*technical/i.test(k)),
+    // Req Repository Owner (formerly "Carolina's") review fields
+    ownerReviewCompleted: ks.find(k => /carolina.*review.*completed|req.*repo.*owner.*completed/i.test(k)) || ks.find(k => /review.*completed.*carolina/i.test(k)),
+    ownerFeedback:        ks.find(k => /carolina.*feedback|req.*repo.*owner.*feedback/i.test(k)) || ks.find(k => /feedback.*carolina/i.test(k)),
+    ownerDueDate:         ks.find(k => /due.?date.*carolina|carolina.*due.?date/i.test(k)),
     tag:          ks.find(k => k === "Tag") || ks.find(k => k === "Tags") || ks.find(k => /^tags?$/i.test(k)),
   };
 
@@ -5769,14 +5773,15 @@ function TestScenariosTab({ data, wp, req }) {
 
   // Review comments popup
   const REVIEW_TEAMS_ALL = [
-    { label:"Functional",     statusKey:K.funcStatus,  reviewerKey:K.funcReviewer,  feedbackKey:K.funcFeedback,  dueDateKey:K.funcDueDate  },
-    { label:"Technical",      statusKey:K.techStatus,  reviewerKey:K.techReviewer,  feedbackKey:K.techFeedback,  dueDateKey:K.techDueDate  },
-    { label:"Consulting SD",  statusKey:K.sdStatus,    reviewerKey:K.sdReviewer,    feedbackKey:K.sdFeedback,    dueDateKey:K.sdDueDate    },
-    { label:"PMT SD",         statusKey:K.pmtStatus,   reviewerKey:K.pmtReviewer,   feedbackKey:K.pmtFeedback,   dueDateKey:K.pmtDueDate   },
-    { label:"DT",             statusKey:K.dtStatus,    reviewerKey:K.dtReviewer,    feedbackKey:K.dtFeedback,    dueDateKey:K.dtDueDate    },
-    { label:"D&A",            statusKey:K.daStatus,    reviewerKey:K.daReviewer,    feedbackKey:K.daFeedback,    dueDateKey:K.daDueDate    },
-    { label:"PM",             statusKey:K.pmStatus,    reviewerKey:K.pmReviewer,    feedbackKey:K.pmFeedback,    dueDateKey:K.pmDueDate    },
-  ].filter(t => t.statusKey);
+    { label:"Functional",           statusKey:K.funcStatus,             reviewerKey:K.funcReviewer,  feedbackKey:K.funcFeedback,  dueDateKey:K.funcDueDate  },
+    { label:"Technical",            statusKey:K.techStatus,             reviewerKey:K.techReviewer,  feedbackKey:K.techFeedback,  dueDateKey:K.techDueDate  },
+    { label:"Consulting SD",        statusKey:K.sdStatus,               reviewerKey:K.sdReviewer,    feedbackKey:K.sdFeedback,    dueDateKey:K.sdDueDate    },
+    { label:"PMT SD",               statusKey:K.pmtStatus,              reviewerKey:K.pmtReviewer,   feedbackKey:K.pmtFeedback,   dueDateKey:K.pmtDueDate   },
+    { label:"DT",                   statusKey:K.dtStatus,               reviewerKey:K.dtReviewer,    feedbackKey:K.dtFeedback,    dueDateKey:K.dtDueDate    },
+    { label:"D&A",                  statusKey:K.daStatus,               reviewerKey:K.daReviewer,    feedbackKey:K.daFeedback,    dueDateKey:K.daDueDate    },
+    { label:"PM",                   statusKey:K.pmStatus,               reviewerKey:K.pmReviewer,    feedbackKey:K.pmFeedback,    dueDateKey:K.pmDueDate    },
+    { label:"Req Repository Owner", statusKey:K.ownerReviewCompleted,   reviewerKey:undefined,       feedbackKey:K.ownerFeedback, dueDateKey:K.ownerDueDate },
+  ].filter(t => t.statusKey || t.feedbackKey || t.dueDateKey);
 
   const scenariosSubTab = (
     <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
@@ -5845,7 +5850,7 @@ function TestScenariosTab({ data, wp, req }) {
                 <th style={{ padding:"8px 10px", textAlign:"left",   color:"#a8d8ff", fontWeight:700, fontSize:10, width:scenColW["pers"]||120,  minWidth:70,  borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative" }}>Persona{_rh("pers",120)}</th>
                 <th style={{ padding:"8px 10px", textAlign:"center", color:"#a8d8ff", fontWeight:700, fontSize:10, width:scenColW["est"]||65,    minWidth:55,  borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative" }}>Est. Cases{_rh("est",65)}</th>
                 <th style={{ padding:"8px 10px", textAlign:"left",   color:"#a8d8ff", fontWeight:700, fontSize:10, width:scenColW["sit"]||100,   minWidth:80,  borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative" }}>Target SIT{_rh("sit",100)}</th>
-                <th style={{ padding:"8px 10px", textAlign:"center", color:"#fcd34d", fontWeight:700, fontSize:10, width:scenColW["sd"]||90,     minWidth:70,  borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative" }}>SD Review{_rh("sd",90)}</th>
+                <th style={{ padding:"8px 10px", textAlign:"center", color:"#fcd34d", fontWeight:700, fontSize:10, width:scenColW["sd"]||110,    minWidth:80,  borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative" }}>Consulting SD Review{_rh("sd",110)}</th>
                 <th style={{ padding:"8px 10px", textAlign:"center", color:"#fcd34d", fontWeight:700, fontSize:10, width:scenColW["pmtsd"]||90,  minWidth:70,  borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative" }}>PMT SD{_rh("pmtsd",90)}</th>
                 <th style={{ padding:"8px 10px", textAlign:"center", color:"#fcd34d", fontWeight:700, fontSize:10, width:scenColW["dt"]||70,     minWidth:55,  borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative" }}>DT{_rh("dt",70)}</th>
                 <th style={{ padding:"8px 10px", textAlign:"center", color:"#c4f1c4", fontWeight:700, fontSize:10, width:scenColW["da"]||90,     minWidth:70,  borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative" }}>D&A{_rh("da",90)}</th>
