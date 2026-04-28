@@ -274,11 +274,11 @@ function parseRequirements(sheets) {
 
   console.log("[PMT] Req key mapping:", K);
 
-  // Exclude rows where User Story Review Status (D&A) is blank, "5. Deprecated" or "6. Deferred"
+  // Exclude rows where User Story Review Status (D&A) is "5. Deprecated" or "6. Deferred"
+  // Blank status rows are valid (not yet reviewed) and must be counted
   const EXCLUDED = ["5. deprecated", "6. deferred", "deferred"];
   const isExcluded = r => {
     const v = String(r[K.derivedStatus] || "").toLowerCase().trim();
-    if (!v || v === "nan" || v === "null" || v === "undefined") return true;
     return EXCLUDED.some(e => v.includes(e));
   };
   const activeRows = rows.filter(r => !isExcluded(r));
