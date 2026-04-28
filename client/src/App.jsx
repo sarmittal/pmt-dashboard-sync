@@ -1355,6 +1355,7 @@ function ExecutiveSummaryTab({ wp, raid, req, cap, openModal }) {
   const [wpGroupModal, setWpGroupModal] = useState(null); // { title, wsRows } — workstream summary modal
   const [wpDrillModal, setWpDrillModal] = useState(null); // { title, rows }   — WorkplanDrillModal
   const [raidModal,    setRaidModal]    = useState(null); // { title, rows }   — RaidKpiModal
+  const [storyModal,   setStoryModal]   = useState(null); // { title, rows }   — StoryDrillModal
   const [modalColConfig, setModalColConfig] = useState({
     raidId:    { label:"RAID ID",               visible:true,  width:90  },
     status:    { label:"Status",                visible:true,  width:90  },
@@ -1456,6 +1457,12 @@ function ExecutiveSummaryTab({ wp, raid, req, cap, openModal }) {
 
   // ── Section 3: Sprint numbers ─────────────────────────────────────────────
   const sprintRows = req ? req.sprintOrder.map(sp => ({ name:sp, ...(req.bySprint[sp]||{complete:0,partial:0,inProgress:0,notStarted:0,blocked:0,total:0,rows:[]}) })) : [];
+
+  // Bucket helper for sprint build drill-down (mirrors parseRequirements.getStatusBucket)
+  const _stb = s => { const v=String(s||"").toLowerCase().trim(); if(!v||v==="nan")return null; if(v.includes("block"))return"blocked"; if(v.includes("progress"))return"inProgress"; if(v.includes("partial"))return"partial"; if(v.includes("complete")&&!v.includes("partial"))return"complete"; if(v.includes("n/a")||v==="na")return"na"; return"notStarted"; };
+  const _BRANK = { blocked:5, inProgress:4, partial:3, notStarted:2, complete:1, na:0 };
+  const _rowBucket = r => { const rk=req?.keys; const fb=_stb(r[rk?.funcBuildStatus]); const tb=_stb(r[rk?.techBuildStatus]); if(fb&&tb)return (_BRANK[fb]||0)>=(_BRANK[tb]||0)?fb:tb; return fb||tb||"notStarted"; };
+  const _spBucket  = (sp, bkt) => (sp.rows||[]).filter(r => _rowBucket(r)===bkt);
 
   // ── Section 4: Impact Build RAIDs metric card ────────────────────────────
   const tagKey = K?.tag;
@@ -1612,21 +1619,22 @@ function ExecutiveSummaryTab({ wp, raid, req, cap, openModal }) {
                 </tr>
               </thead>
               <tbody>
-                {sprintRows.map((sp, i) => (
-                  <tr key={sp.name}
-                    onClick={() => sp.rows?.length && openModal(`Sprint: ${sp.name}`, sp.rows)}
-                    onMouseEnter={e => { if(sp.rows?.length) e.currentTarget.style.background="#eef4ff"; }}
-                    onMouseLeave={e => e.currentTarget.style.background = i%2===0?C.white:"#f8fafc"}
-                    style={{ background:i%2===0?C.white:"#f8fafc", borderBottom:`1px solid ${C.border}`, cursor:sp.rows?.length?"pointer":"default" }}>
-                    <td style={{ padding:"8px 12px", fontWeight:600, color:C.text }}>{sp.name}</td>
-                    <td style={{ padding:"8px 12px", textAlign:"center", fontWeight:700, color:C.text }}>{sp.total||"—"}</td>
-                    <td style={{ padding:"8px 12px", textAlign:"center", fontWeight:700, color:"#1d4ed8" }}>{sp.complete||"—"}</td>
-                    <td style={{ padding:"8px 12px", textAlign:"center", fontWeight:700, color:"#15803d" }}>{sp.inProgress||"—"}</td>
-                    <td style={{ padding:"8px 12px", textAlign:"center", fontWeight:700, color:"#b91c1c" }}>{sp.blocked||"—"}</td>
-                    <td style={{ padding:"8px 12px", textAlign:"center", fontWeight:700, color:"#475569" }}>{sp.notStarted||"—"}</td>
-                    <td style={{ padding:"8px 12px", textAlign:"center", fontWeight:700, color:"#0369a1" }}>{sp.partial||"—"}</td>
-                  </tr>
-                ))}
+                {sprintRows.map((sp, i) => {
+                  const mkCell = (count, bkt, color) => count > 0
+                    ? <span onClick={e=>{e.stopPropagation();setStoryModal({title:`Sprint: ${sp.name}${bkt?` — ${bkt}`:""}`, rows:bkt?_spBucket(sp,bkt):sp.rows});}} style={{ fontWeight:700, color, cursor:"pointer", textDecoration:"underline dotted" }}>{count}</span>
+                    : <span style={{ color:C.muted }}>—</span>;
+                  return (
+                    <tr key={sp.name} style={{ background:i%2===0?C.white:"#f8fafc", borderBottom:`1px solid ${C.border}` }}>
+                      <td style={{ padding:"8px 12px", fontWeight:600, color:C.text }}>{sp.name}</td>
+                      <td style={{ padding:"8px 12px", textAlign:"center" }}>{mkCell(sp.total,     null,       C.text)}</td>
+                      <td style={{ padding:"8px 12px", textAlign:"center" }}>{mkCell(sp.complete,  "complete",  "#1d4ed8")}</td>
+                      <td style={{ padding:"8px 12px", textAlign:"center" }}>{mkCell(sp.inProgress,"inProgress","#15803d")}</td>
+                      <td style={{ padding:"8px 12px", textAlign:"center" }}>{mkCell(sp.blocked,   "blocked",   "#b91c1c")}</td>
+                      <td style={{ padding:"8px 12px", textAlign:"center" }}>{mkCell(sp.notStarted,"notStarted","#475569")}</td>
+                      <td style={{ padding:"8px 12px", textAlign:"center" }}>{mkCell(sp.partial,   "partial",   "#0369a1")}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </Card>
@@ -1645,7 +1653,8 @@ function ExecutiveSummaryTab({ wp, raid, req, cap, openModal }) {
           }}
         />
       )}
-      {wpDrillModal && <WorkplanDrillModal title={wpDrillModal.title} rows={wpDrillModal.rows} initialFilter={wpDrillModal.initialFilter} onClose={() => setWpDrillModal(null)} />}
+      {wpDrillModal  && <WorkplanDrillModal title={wpDrillModal.title}  rows={wpDrillModal.rows}  initialFilter={wpDrillModal.initialFilter} onClose={() => setWpDrillModal(null)} />}
+      {storyModal    && <StoryDrillModal   title={storyModal.title}    rows={storyModal.rows}    reqKeys={req?.keys} onClose={() => setStoryModal(null)} />}
       {raidModal && (() => {
         const resolvedTeamKey = K?.team || "Primary Team (Owner)";
         const allModalTeams = Array.from(new Set(raidModal.rows.map(r => String(r[resolvedTeamKey]||"").trim()).filter(Boolean))).sort();
@@ -4870,16 +4879,18 @@ function TestScenariosTab({ data, wp, req }) {
     const allSps  = Array.from(new Set(mRows.map(r => String(r[reqK?.component]||"").trim()).filter(Boolean))).sort();
     const allExps = Array.from(new Set(mRows.map(r => String(r[reqK?.pmExperience]||"").trim()).filter(Boolean))).sort();
     const allSts  = Array.from(new Set(mRows.map(r => String(r[reqK?.derivedStatus]||"").trim()).filter(Boolean))).sort();
+    const hasBlankSt = mRows.some(r => !String(r[reqK?.derivedStatus]||"").trim());
 
     const matchSp  = (r, v) => v === "ALL" ? true : String(r[reqK?.component]||"").trim() === v;
     const matchExp = (r, v) => v === "ALL" ? true : String(r[reqK?.pmExperience]||"").trim() === v;
-    const matchSt  = (r, v) => v === "ALL" ? true : String(r[reqK?.derivedStatus]||"").trim() === v;
+    const matchSt  = (r, v) => v === "ALL" ? true : v === "(Blank)" ? !String(r[reqK?.derivedStatus]||"").trim() : String(r[reqK?.derivedStatus]||"").trim() === v;
 
     const filteredRows = mRows.filter(r => matchSp(r,spFil) && matchExp(r,expFil) && matchSt(r,stFil));
 
-    const spCounts  = allSps.map(v  => ({ val:v, count: mRows.filter(r => matchSp(r,v)    && matchExp(r,expFil) && matchSt(r,stFil)).length }));
-    const expCounts = allExps.map(v => ({ val:v, count: mRows.filter(r => matchSp(r,spFil) && matchExp(r,v)     && matchSt(r,stFil)).length }));
-    const stCounts  = allSts.map(v  => ({ val:v, count: mRows.filter(r => matchSp(r,spFil) && matchExp(r,expFil) && matchSt(r,v)).length }));
+    const spCounts     = allSps.map(v => ({ val:v, count: mRows.filter(r => matchSp(r,v)    && matchExp(r,expFil) && matchSt(r,stFil)).length }));
+    const expCounts    = allExps.map(v => ({ val:v, count: mRows.filter(r => matchSp(r,spFil) && matchExp(r,v)    && matchSt(r,stFil)).length }));
+    const stCounts     = allSts.map(v  => ({ val:v, count: mRows.filter(r => matchSp(r,spFil) && matchExp(r,expFil) && matchSt(r,v)).length }));
+    const blankStCount = hasBlankSt ? mRows.filter(r => matchSp(r,spFil) && matchExp(r,expFil) && !String(r[reqK?.derivedStatus]||"").trim()).length : 0;
 
     const fpill = (label, isActive, count, onClick) => (
       <button key={label} onClick={onClick} disabled={count===0&&label!=="All"}
@@ -4922,11 +4933,12 @@ function TestScenariosTab({ data, wp, req }) {
                 {expCounts.map(({val,count})=>fpill(val, expFil===val, count, ()=>setExpFil(expFil===val?"ALL":val)))}
               </div>
             )}
-            {allSts.length > 0 && (
+            {(allSts.length > 0 || hasBlankSt) && (
               <div style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
                 <span style={{ fontSize:10, color:"#374151", fontWeight:700, minWidth:80 }}>Review Status (D&A)</span>
                 {fpill("All", stFil==="ALL", mRows.filter(r=>matchSp(r,spFil)&&matchExp(r,expFil)).length, ()=>setStFil("ALL"))}
                 {stCounts.map(({val,count})=>fpill(val, stFil===val, count, ()=>setStFil(stFil===val?"ALL":val)))}
+                {hasBlankSt && fpill("(Blank)", stFil==="(Blank)", blankStCount, ()=>setStFil(stFil==="(Blank)"?"ALL":"(Blank)"))}
               </div>
             )}
           </div>
