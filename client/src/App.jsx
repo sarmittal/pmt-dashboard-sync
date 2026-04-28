@@ -270,6 +270,19 @@ function parseRequirements(sheets) {
                   || ks.find(k => /build.?mgmt.?comment/i.test(k))
                   || ks.find(k => /build.?comment/i.test(k)),
     testScriptType:  ks.find(k => k === "Test Script/Test Scenario") || ks.find(k => /test.?script.*scenario|test.?scenario/i.test(k)),
+    tags:            ks.find(k => k === "Tags") || ks.find(k => k === "Tag") || ks.find(k => /^tags?$/i.test(k)),
+    // Build approach fields
+    sf:              ks.find(k => k === "SF")                                    || ks.find(k => /^sf$/i.test(k)),
+    sfPov:           ks.find(k => k === "SF Design POV")                         || ks.find(k => /sf.?design.?pov/i.test(k)),
+    sfWorkbook:      ks.find(k => k === "SF Configuration Workbook Reference")   || ks.find(k => /sf.*workbook|sf.*configuration/i.test(k)),
+    btp:             ks.find(k => k === "BTP")                                   || ks.find(k => /^btp$/i.test(k)),
+    btpPov:          ks.find(k => k === "BTP Design POV")                        || ks.find(k => /btp.?design.?pov/i.test(k)),
+    ci:              ks.find(k => k === "CI")                                    || ks.find(k => /^ci$/i.test(k)),
+    ciPov:           ks.find(k => k === "CI/API POV")                            || ks.find(k => /ci.*api.*pov|ci.?pov/i.test(k)),
+    ai:              ks.find(k => k === "AI")                                    || ks.find(k => /^ai$/i.test(k)),
+    aiPov:           ks.find(k => k === "AI POV")                               || ks.find(k => /^ai.?pov$/i.test(k)),
+    techSpec:        ks.find(k => k === "Tech lean Spec Reference")              || ks.find(k => /tech.*lean.*spec|tech.*spec.*ref/i.test(k)),
+    snowPov:         ks.find(k => k === "SNOW POV")                              || ks.find(k => /snow.?pov/i.test(k)),
   };
 
   console.log("[PMT] Req key mapping:", K);
@@ -2599,232 +2612,331 @@ function ReqTraceabilityTab({ req, test }) {
   const reqK = req?.keys;
   const tK   = test?.keys;
 
-  const [spFilter,  setSpFilter]  = useState("ALL");
-  const [spFilter2, setSpFilter2] = useState("ALL"); // test scenario sub-process
-  const [sprFilter, setSprFilter] = useState("ALL");
-  const [covFilter, setCovFilter] = useState("ALL"); // ALL | yes | no
+  const [expFilter, setExpFilter] = useState("ALL"); // PM Experience
+  const [spFilter,  setSpFilter]  = useState("ALL"); // Sub Process
   const [search,    setSearch]    = useState("");
-  const [expanded,  setExpanded]  = useState(new Set());
+  const [expanded,  setExpanded]  = useState(new Set()); // expanded req rows
+  const [expandedSc,setExpandedSc]= useState(new Set()); // expanded scenario bubbles
 
   if (!req) return <Empty label="Upload Requirements file to view Req Traceability." />;
 
-  const reqRows  = req.items   || [];
-  const testRows = test?.activeRows || test?.allRows || [];
+  const isTruthy = v => v === true || v === 1 || String(v).trim() === "1";
   const splitIds = v => Array.from(new Set(String(v||"").split(/[\n,;]/).map(s=>s.trim()).filter(Boolean)));
 
-  // Build reverse lookup: reqId → test scenario rows
+  const reqRows  = req.items || [];
+  const testRows = test?.activeRows || test?.allRows || [];
+
+  // Active test scenarios: exclude flagged (deleted / dup / open feedback)
+  const activeTestRows = testRows.filter(r =>
+    !isTruthy(r[tK?.toBeDeleted]) &&
+    !isTruthy(r[tK?.dupDataMiningNA]) &&
+    !isTruthy(r[tK?.openFeedbackFlag])
+  );
+
+  // Reverse lookup: reqId → active test scenario rows (via similarUSIds column)
   const scensByReqId = {};
-  testRows.forEach(r => {
+  activeTestRows.forEach(r => {
     splitIds(r[tK?.similarUSIds]).forEach(id => {
       if (!scensByReqId[id]) scensByReqId[id] = [];
-      scensByReqId[id].push(r);
+      if (!scensByReqId[id].includes(r)) scensByReqId[id].push(r);
     });
   });
 
-  // Helpers
-  const _toggle = id => setExpanded(p => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  // Exclude PM Experience "3 - Leadership" / "6 - E&P"
+  const EXCL_EXP = ["3 - leadership", "3-leadership", "6 - e&p", "6-e&p"];
+  const baseRows = reqRows.filter(r => {
+    const v = String(r[reqK?.pmExperience]||"").toLowerCase().trim();
+    return !EXCL_EXP.some(e => v.includes(e));
+  });
 
+  const allExps = Array.from(new Set(baseRows.map(r=>String(r[reqK?.pmExperience]||"").trim()).filter(Boolean))).sort();
+  const allSPs  = Array.from(new Set(baseRows.map(r=>String(r[reqK?.component]||"").trim()).filter(Boolean))).sort();
+
+  const filtered = baseRows.filter(r => {
+    const exp = String(r[reqK?.pmExperience]||"").trim();
+    const sp  = String(r[reqK?.component]||"").trim();
+    const id  = String(r[reqK?.reqId]||"").trim();
+    const q   = search.toLowerCase();
+    return (
+      (expFilter==="ALL"||exp===expFilter) &&
+      (spFilter ==="ALL"||sp===spFilter) &&
+      (!q||id.toLowerCase().includes(q)||String(r[reqK?.story]||"").toLowerCase().includes(q)||String(r[reqK?.bizReq]||"").toLowerCase().includes(q))
+    );
+  });
+
+  const _toggle   = id => setExpanded  (p => { const n=new Set(p); n.has(id)?n.delete(id):n.add(id); return n; });
+  const _toggleSc = id => setExpandedSc(p => { const n=new Set(p); n.has(id)?n.delete(id):n.add(id); return n; });
+
+  // Build status badge (worst of func + tech, mirrors component scorecard)
   const _buildBadge = (fv, tv) => {
-    const f = String(fv||"").toLowerCase(), t = String(tv||"").toLowerCase();
-    let b = "notStarted";
-    if ([f,t].some(v=>v.includes("block")))                               b = "blocked";
-    else if ([f,t].some(v=>v.includes("progress")||v.includes("in prog"))) b = "inProgress";
-    else if ([f,t].some(v=>v.includes("partial")))                         b = "partial";
-    else if (f.includes("complet")||t.includes("complet"))                 b = "complete";
-    const S = { blocked:{bg:"#fee2e2",c:"#b91c1c",br:"#fca5a5",l:"Blocked"}, inProgress:{bg:"#fef3c7",c:"#92400e",br:"#fcd34d",l:"In Progress"}, partial:{bg:"#dbeafe",c:"#1e40af",br:"#93c5fd",l:"Partial"}, complete:{bg:"#dcfce7",c:"#166534",br:"#86efac",l:"Complete"}, notStarted:{bg:"#f1f5f9",c:"#64748b",br:"#cbd5e1",l:"Not Started"} };
-    const s = S[b];
+    const RANK = {blocked:5,inProgress:4,partial:3,notStarted:2,complete:1,na:0};
+    const toBucket = s => {
+      const v=String(s||"").toLowerCase();
+      if(!v||v==="nan") return null;
+      if(v.includes("block"))   return "blocked";
+      if(v.includes("progress"))return "inProgress";
+      if(v.includes("partial")) return "partial";
+      if(v.includes("complet")) return "complete";
+      if(v.includes("n/a")||v==="na") return "na";
+      return "notStarted";
+    };
+    const fb=toBucket(fv), tb=toBucket(tv);
+    const b = fb&&tb ? ((RANK[fb]||0)>=(RANK[tb]||0)?fb:tb) : fb||tb||"notStarted";
+    const S = {
+      blocked:    {bg:"#fee2e2",c:"#b91c1c",br:"#fca5a5",l:"Blocked"},
+      inProgress: {bg:"#fef3c7",c:"#92400e",br:"#fcd34d",l:"In Progress"},
+      partial:    {bg:"#dbeafe",c:"#1e40af",br:"#93c5fd",l:"Partial"},
+      complete:   {bg:"#dcfce7",c:"#166534",br:"#86efac",l:"Complete"},
+      notStarted: {bg:"#f1f5f9",c:"#64748b",br:"#cbd5e1",l:"Not Started"},
+      na:         {bg:"#f1f5f9",c:"#64748b",br:"#cbd5e1",l:"N/A"},
+    };
+    const s=S[b]||S.notStarted;
     return <span style={{background:s.bg,color:s.c,border:`1px solid ${s.br}`,borderRadius:4,padding:"2px 7px",fontSize:10,fontWeight:600,whiteSpace:"nowrap"}}>{s.l}</span>;
   };
 
-  const _reviewBadge = v => {
-    const s = String(v||"").replace(/^\d+\.\s*/,"").trim();
-    if (!s||s==="None"||s==="nan") return <span style={{color:C.muted,fontSize:10}}>—</span>;
-    const sl = s.toLowerCase();
-    const [bg,col,br] = sl.includes("reviewed, request")?["#fef3c7","#92400e","#fcd34d"]
-      : sl.includes("reviewed")?["#dcfce7","#166534","#86efac"]
-      : sl.includes("ready")?["#dbeafe","#1e40af","#93c5fd"]
-      : sl.includes("not applicable")?["#f1f5f9","#64748b","#cbd5e1"]
-      : ["#f8fafc","#475569","#e2e8f0"];
-    return <span style={{background:bg,color:col,border:`1px solid ${br}`,borderRadius:4,padding:"2px 6px",fontSize:10,fontWeight:600,whiteSpace:"nowrap"}}>{s.length>22?s.slice(0,21)+"…":s}</span>;
-  };
-
   const _pill = (label, active, count, onClick) => (
-    <button onClick={onClick} style={{
-      padding:"3px 10px", borderRadius:20, border:`1.5px solid ${active?C.navyLight:C.border}`,
-      background:active?C.navyLight:C.white, color:active?"#fff":C.text,
-      fontSize:10, fontWeight:active?700:400, cursor:"pointer", display:"flex", alignItems:"center", gap:4
+    <button key={label} onClick={onClick} style={{
+      padding:"3px 10px",borderRadius:20,border:`1.5px solid ${active?C.navyLight:C.border}`,
+      background:active?C.navyLight:C.white,color:active?"#fff":C.text,
+      fontSize:10,fontWeight:active?700:400,cursor:"pointer",display:"flex",alignItems:"center",gap:4
     }}>
       {label}{count!=null&&<span style={{background:active?"rgba(255,255,255,0.25)":"#f1f5f9",color:active?"#fff":C.muted,borderRadius:10,padding:"0 5px",fontSize:10,fontWeight:700}}>{count}</span>}
     </button>
   );
 
-  // Filter options
-  const allSPs     = Array.from(new Set(reqRows.map(r=>String(r[reqK?.component]||"").trim()).filter(Boolean))).sort();
-  const allSprints = Array.from(new Set(reqRows.map(r=>String(r[reqK?.sprint]||"").trim()).filter(Boolean))).sort();
+  const _fieldVal = v => { const s=String(v||"").trim(); return (!s||s==="nan"||s==="None")?"—":s; };
 
-  const filtered = reqRows.filter(r => {
-    const id    = String(r[reqK?.reqId]||"").trim();
-    const sp    = String(r[reqK?.component]||"").trim();
-    const spr   = String(r[reqK?.sprint]||"").trim();
-    const hasSc = (scensByReqId[id]?.length||0) > 0;
-    const q     = search.toLowerCase();
-    return (
-      (spFilter  ==="ALL"||sp===spFilter) &&
-      (sprFilter ==="ALL"||spr===sprFilter) &&
-      (covFilter ==="ALL"||(covFilter==="yes"?hasSc:!hasSc)) &&
-      (!q||id.toLowerCase().includes(q)||String(r[reqK?.story]||"").toLowerCase().includes(q))
-    );
-  });
-
+  // KPI counts
   const covCnt  = filtered.filter(r=>(scensByReqId[String(r[reqK?.reqId]||"")]?.length||0)>0).length;
   const gapCnt  = filtered.length - covCnt;
   const totScen = filtered.reduce((s,r)=>s+(scensByReqId[String(r[reqK?.reqId]||"")]?.length||0),0);
-  const covPct  = filtered.length ? Math.round(covCnt/filtered.length*100) : 0;
+  const totEst  = filtered.reduce((s,r)=>{
+    const sc=scensByReqId[String(r[reqK?.reqId]||"")]||[];
+    return s+sc.reduce((ss,t)=>ss+(parseFloat(t[tK?.estCases])||0),0);
+  },0);
+  const covPct = filtered.length ? Math.round(covCnt/filtered.length*100) : 0;
 
-  const TH = ({children, style={}}) => (
-    <th style={{padding:"8px 10px",fontWeight:700,fontSize:10,color:"#fff",background:C.navy,
+  const TH = ({children,style={}}) => (
+    <th style={{padding:"7px 8px",fontWeight:700,fontSize:10,color:"#fff",background:C.navy,
       textAlign:"left",borderRight:"1px solid rgba(255,255,255,0.1)",whiteSpace:"nowrap",...style}}>{children}</th>
   );
 
+  // Build approach field list
+  const BUILD_FIELDS = [
+    {label:"SF",                           key:"sf"},
+    {label:"SF Design POV",                key:"sfPov"},
+    {label:"SF Config Workbook Ref",       key:"sfWorkbook"},
+    {label:"BTP",                          key:"btp"},
+    {label:"BTP Design POV",               key:"btpPov"},
+    {label:"CI",                           key:"ci"},
+    {label:"CI / API POV",                 key:"ciPov"},
+    {label:"AI",                           key:"ai"},
+    {label:"AI POV",                       key:"aiPov"},
+    {label:"Tech lean Spec Reference",     key:"techSpec"},
+    {label:"SNOW POV",                     key:"snowPov"},
+  ];
+
   return (
-    <div style={{display:"flex",flexDirection:"column",gap:16}}>
+    <div style={{display:"flex",flexDirection:"column",gap:14}}>
 
       {/* KPI row */}
       <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12}}>
         <KpiCard label="Total Requirements"   value={filtered.length} color={C.navyLight} />
-        <KpiCard label="Scenarios Linked"     value={covCnt}   color={C.complete}  sub={`${covPct}% coverage`} subColor={covPct>=80?C.complete:covPct>=50?"#d97706":C.delayed} />
-        <KpiCard label="No Scenarios (Gap)"   value={gapCnt}   color={gapCnt>0?C.delayed:C.complete} onClick={gapCnt?()=>setCovFilter(covFilter==="no"?"ALL":"no"):null} />
-        <KpiCard label="Total Test Scenarios" value={totScen}  color={C.navyLight} sub={test?"":"Upload Test Scenarios file"} />
+        <KpiCard label="Scenarios Linked"     value={covCnt}  color={C.complete}
+          sub={`${covPct}% coverage`} subColor={covPct>=80?C.complete:covPct>=50?"#d97706":C.delayed} />
+        <KpiCard label="No Scenarios (Gap)"   value={gapCnt}  color={gapCnt>0?C.delayed:C.complete} />
+        <KpiCard label="Est. Test Cases"      value={totEst}  color={C.navyLight}
+          sub={test?"":"Upload Test Scenarios file"} />
       </div>
 
       {/* Filter bar */}
       <div style={{background:"#f8fafc",border:`1px solid ${C.border}`,borderRadius:8,padding:"10px 14px",display:"flex",flexDirection:"column",gap:8}}>
         <input value={search} onChange={e=>setSearch(e.target.value)}
-          placeholder="Search by Req ID or User Story…"
+          placeholder="Search by Req ID, Business Requirement or User Story…"
           style={{padding:"6px 10px",border:`1px solid ${C.border}`,borderRadius:6,fontSize:12,width:"100%",boxSizing:"border-box",outline:"none"}} />
+        {allExps.length>0&&(
+          <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+            <span style={{fontSize:10,fontWeight:700,color:C.text,minWidth:90}}>Experience</span>
+            {_pill("All",expFilter==="ALL",baseRows.length,()=>setExpFilter("ALL"))}
+            {allExps.map(v=>_pill(v,expFilter===v,baseRows.filter(r=>String(r[reqK?.pmExperience]||"").trim()===v).length,()=>setExpFilter(expFilter===v?"ALL":v)))}
+          </div>
+        )}
         {allSPs.length>0&&(
           <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
             <span style={{fontSize:10,fontWeight:700,color:C.text,minWidth:90}}>Sub Process</span>
-            {_pill("All",spFilter==="ALL",reqRows.length,()=>setSpFilter("ALL"))}
-            {allSPs.map(v=>_pill(v,spFilter===v,reqRows.filter(r=>String(r[reqK?.component]||"").trim()===v).length,()=>setSpFilter(spFilter===v?"ALL":v)))}
+            {_pill("All",spFilter==="ALL",baseRows.length,()=>setSpFilter("ALL"))}
+            {allSPs.map(v=>_pill(v,spFilter===v,baseRows.filter(r=>String(r[reqK?.component]||"").trim()===v).length,()=>setSpFilter(spFilter===v?"ALL":v)))}
           </div>
         )}
-        {allSprints.length>0&&(
-          <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
-            <span style={{fontSize:10,fontWeight:700,color:C.text,minWidth:90}}>Build Cycle</span>
-            {_pill("All",sprFilter==="ALL",null,()=>setSprFilter("ALL"))}
-            {allSprints.map(v=>_pill(v,sprFilter===v,reqRows.filter(r=>String(r[reqK?.sprint]||"").trim()===v).length,()=>setSprFilter(sprFilter===v?"ALL":v)))}
-          </div>
-        )}
-        <div style={{display:"flex",alignItems:"center",gap:6,paddingTop:4,borderTop:`1px dashed ${C.border}`}}>
-          <span style={{fontSize:10,fontWeight:700,color:C.text,minWidth:90}}>Coverage</span>
-          {_pill("All",covFilter==="ALL",null,()=>setCovFilter("ALL"))}
-          {_pill(`Has Scenarios (${covCnt})`,covFilter==="yes",null,()=>setCovFilter(covFilter==="yes"?"ALL":"yes"))}
-          {_pill(`No Scenarios (${gapCnt})`,covFilter==="no",null,()=>setCovFilter(covFilter==="no"?"ALL":"no"))}
-        </div>
       </div>
 
-      {/* Traceability table */}
+      {/* Table */}
       <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden",boxShadow:"0 1px 3px rgba(0,0,0,0.06)"}}>
         <div style={{overflowX:"auto"}}>
-          <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:11,tableLayout:"fixed"}}>
+            <colgroup>
+              <col style={{width:32}}/>
+              <col style={{width:80}}/>
+              <col style={{width:72}}/>
+              <col style={{width:90}}/>
+              <col style={{width:180}}/>
+              <col style={{width:180}}/>
+              <col style={{width:160}}/>
+              <col style={{width:64}}/>
+              <col style={{width:96}}/>
+              <col style={{width:100}}/>
+              <col style={{width:64}}/>
+              <col style={{width:72}}/>
+              <col style={{width:90}}/>
+              <col style={{width:90}}/>
+            </colgroup>
             <thead style={{position:"sticky",top:0,zIndex:2}}>
               <tr>
-                <TH style={{width:36,minWidth:36}}></TH>
-                <TH style={{width:80}}>Req ID</TH>
-                <TH style={{minWidth:160}}>User Story</TH>
-                <TH style={{minWidth:180}}>Acceptance Criteria</TH>
-                <TH style={{minWidth:110}}>Build Approach</TH>
-                <TH style={{width:110,textAlign:"center"}}>Build Status</TH>
-                <TH style={{width:120,textAlign:"center"}}>Review Status (D&A)</TH>
-                <TH style={{width:90,textAlign:"center"}}>Test Scenarios</TH>
-                <TH style={{width:90,textAlign:"center",borderRight:"none"}}>Test Scripts</TH>
+                <TH></TH>
+                <TH>Req ID</TH>
+                <TH>Experience</TH>
+                <TH>Sub Process</TH>
+                <TH>Business Requirement</TH>
+                <TH>User Story</TH>
+                <TH>Acceptance Criteria</TH>
+                <TH>Tags</TH>
+                <TH style={{textAlign:"center"}}>Build Status</TH>
+                <TH>Test Script / Scenario</TH>
+                <TH style={{textAlign:"center"}}>Scen Count</TH>
+                <TH style={{textAlign:"center"}}>Est. Cases</TH>
+                <TH style={{textAlign:"center"}}>Rationalized Cases</TH>
+                <TH style={{textAlign:"center",borderRight:"none"}}>Test Script Link</TH>
               </tr>
             </thead>
             <tbody>
               {filtered.length===0&&(
-                <tr><td colSpan={9} style={{padding:24,textAlign:"center",color:C.muted}}>No requirements match selected filters.</td></tr>
+                <tr><td colSpan={14} style={{padding:24,textAlign:"center",color:C.muted}}>No requirements match selected filters.</td></tr>
               )}
               {filtered.map((r,i)=>{
                 const id    = String(r[reqK?.reqId]||"").trim()||String(i);
                 const scens = scensByReqId[id]||[];
+                const estSum= scens.reduce((s,t)=>s+(parseFloat(t[tK?.estCases])||0),0);
                 const isOpen= expanded.has(id);
                 const gap   = scens.length===0;
                 const rowBg = gap?"#fffbeb":i%2===0?C.white:"#f9fafb";
+                const td = (children, style={}) => (
+                  <td style={{padding:"7px 8px",verticalAlign:"top",borderRight:`1px solid ${C.border}`,overflow:"hidden",textOverflow:"ellipsis",...style}}>{children}</td>
+                );
                 return (
                   <React.Fragment key={id}>
-                    <tr style={{background:rowBg,borderBottom:isOpen?`2px solid #93c5fd`:`1px solid ${C.border}`,verticalAlign:"top",cursor:"pointer"}}
+                    <tr style={{background:rowBg,borderBottom:isOpen?`2px solid #93c5fd`:`1px solid ${C.border}`,cursor:"pointer"}}
                       onClick={()=>_toggle(id)}>
-                      <td style={{padding:"8px 10px",textAlign:"center",color:isOpen?C.navyLight:C.muted,fontWeight:700}}>{isOpen?"▾":"▸"}</td>
-                      <td style={{padding:"8px 10px",fontWeight:700,color:C.navyLight,whiteSpace:"nowrap",borderRight:`1px solid ${C.border}`}}>{id||"—"}</td>
-                      <td style={{padding:"8px 10px",color:C.text,lineHeight:1.45,borderRight:`1px solid ${C.border}`,maxWidth:260}}>
-                        <span style={{display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{String(r[reqK?.story]||"—")}</span>
-                      </td>
-                      <td style={{padding:"8px 10px",color:C.muted,lineHeight:1.45,borderRight:`1px solid ${C.border}`,maxWidth:220}}>
-                        <span style={{display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{String(r[reqK?.acceptance]||"—")}</span>
-                      </td>
-                      <td style={{padding:"8px 10px",color:C.text,borderRight:`1px solid ${C.border}`}}>{String(r[reqK?.testScriptType]||"—")}</td>
-                      <td style={{padding:"8px 10px",textAlign:"center",borderRight:`1px solid ${C.border}`}}>{_buildBadge(r[reqK?.funcBuildStatus],r[reqK?.techBuildStatus])}</td>
-                      <td style={{padding:"8px 10px",textAlign:"center",borderRight:`1px solid ${C.border}`}}>{_reviewBadge(r[reqK?.derivedStatus])}</td>
-                      <td style={{padding:"8px 10px",textAlign:"center",borderRight:`1px solid ${C.border}`}}>
-                        {scens.length>0
-                          ?<span style={{background:"#eff6ff",color:"#1d4ed8",borderRadius:4,padding:"2px 9px",fontSize:11,fontWeight:700,cursor:"pointer"}}>{scens.length}</span>
-                          :<span style={{background:"#fff7ed",color:"#c2410c",borderRadius:4,padding:"2px 7px",fontSize:10,fontWeight:600}}>None</span>}
-                      </td>
-                      <td style={{padding:"8px 10px",textAlign:"center"}}>
-                        <span style={{color:C.muted,fontSize:10,fontStyle:"italic"}}>Coming soon</span>
-                      </td>
+                      <td style={{padding:"7px 8px",textAlign:"center",color:isOpen?C.navyLight:C.muted,fontWeight:700,borderRight:`1px solid ${C.border}`}}>{isOpen?"▾":"▸"}</td>
+                      {td(<span style={{fontWeight:700,color:C.navyLight,whiteSpace:"nowrap"}}>{id||"—"}</span>)}
+                      {td(<span style={{fontSize:10,color:C.muted,whiteSpace:"nowrap"}}>{_fieldVal(r[reqK?.pmExperience])}</span>)}
+                      {td(<span style={{fontSize:10,color:C.text,whiteSpace:"nowrap"}}>{_fieldVal(r[reqK?.component])}</span>)}
+                      {td(<span style={{display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden",lineHeight:1.4,fontSize:11}}>{_fieldVal(r[reqK?.bizReq])}</span>)}
+                      {td(<span style={{display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden",lineHeight:1.4}}>{_fieldVal(r[reqK?.story])}</span>)}
+                      {td(<span style={{display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden",lineHeight:1.4,color:C.muted,fontSize:11}}>{_fieldVal(r[reqK?.acceptance])}</span>)}
+                      {td(<span style={{fontSize:10,color:"#6d28d9"}}>{_fieldVal(r[reqK?.tags])}</span>)}
+                      {td(_buildBadge(r[reqK?.funcBuildStatus],r[reqK?.techBuildStatus]),{textAlign:"center"})}
+                      {td(<span style={{fontSize:10,color:C.text}}>{_fieldVal(r[reqK?.testScriptType])}</span>)}
+                      {td(
+                        scens.length>0
+                          ?<span style={{background:"#eff6ff",color:"#1d4ed8",borderRadius:4,padding:"2px 8px",fontSize:11,fontWeight:700}}>{scens.length}</span>
+                          :<span style={{background:"#fff7ed",color:"#c2410c",borderRadius:4,padding:"2px 6px",fontSize:10,fontWeight:600}}>0</span>
+                        ,{textAlign:"center"}
+                      )}
+                      {td(<span style={{fontWeight:estSum>0?700:400,color:estSum>0?C.navyLight:C.muted}}>{estSum>0?estSum:"—"}</span>,{textAlign:"center"})}
+                      {td(<span style={{color:C.muted,fontSize:10,fontStyle:"italic"}}>—</span>,{textAlign:"center"})}
+                      {td(<span style={{color:C.muted,fontSize:10,fontStyle:"italic"}}>—</span>,{textAlign:"center",borderRight:"none"})}
                     </tr>
+
+                    {/* ── Inline expansion ── */}
                     {isOpen&&(
                       <tr style={{background:"#f0f6ff",borderBottom:`2px solid #93c5fd`}}>
-                        <td colSpan={9} style={{padding:"12px 16px 14px 52px"}}>
-                          {/* Full user story + acceptance criteria */}
-                          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:scens.length?14:0}}>
+                        <td colSpan={14} style={{padding:0}}>
+                          <div style={{padding:"14px 18px 16px 44px",display:"flex",flexDirection:"column",gap:14}}>
+
+                            {/* Section 1: Build Approach */}
                             <div>
-                              <div style={{fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:4}}>User Story</div>
-                              <div style={{fontSize:11,color:C.text,lineHeight:1.55}}>{String(r[reqK?.story]||"—")}</div>
+                              <div style={{fontSize:10,fontWeight:700,color:C.navy,textTransform:"uppercase",letterSpacing:"0.07em",borderBottom:`1px solid #bfdbfe`,paddingBottom:4,marginBottom:8}}>
+                                1 — Build Approach
+                              </div>
+                              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(210px,1fr))",gap:"6px 16px"}}>
+                                {BUILD_FIELDS.map(({label,key})=>{
+                                  const val = _fieldVal(r[reqK?.[key]]);
+                                  return (
+                                    <div key={key} style={{display:"flex",flexDirection:"column",gap:1}}>
+                                      <span style={{fontSize:9,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:"0.05em"}}>{label}</span>
+                                      <span style={{fontSize:11,color:val==="—"?C.muted:C.text,fontStyle:val==="—"?"italic":"normal",lineHeight:1.4}}>{val}</span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
                             </div>
+
+                            {/* Section 2: Test Scenario Details */}
                             <div>
-                              <div style={{fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:4}}>Acceptance Criteria</div>
-                              <div style={{fontSize:11,color:C.text,lineHeight:1.55}}>{String(r[reqK?.acceptance]||"—")}</div>
+                              <div style={{fontSize:10,fontWeight:700,color:C.navy,textTransform:"uppercase",letterSpacing:"0.07em",borderBottom:`1px solid #bfdbfe`,paddingBottom:4,marginBottom:8}}>
+                                2 — Test Scenario Details {scens.length>0&&<span style={{fontWeight:400,color:C.muted,textTransform:"none",letterSpacing:0}}>({scens.length} scenarios)</span>}
+                              </div>
+                              {scens.length===0?(
+                                <div style={{background:"#fff7ed",border:"1px solid #fed7aa",borderRadius:6,padding:"8px 12px",display:"flex",alignItems:"center",gap:8}}>
+                                  <span style={{fontSize:13}}>⚠</span>
+                                  <span style={{fontSize:11,color:"#c2410c",fontWeight:600}}>No test scenarios linked — coverage gap</span>
+                                </div>
+                              ):(
+                                <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
+                                  {scens.map(sc=>{
+                                    const scId  = String(sc[tK?.id]||"").trim();
+                                    const scKey = `${id}__${scId}`;
+                                    const scOpen= expandedSc.has(scKey);
+                                    return (
+                                      <div key={scKey} style={{display:"flex",flexDirection:"column",maxWidth:scOpen?"100%":"auto"}}>
+                                        {/* Bubble */}
+                                        <button onClick={e=>{e.stopPropagation();_toggleSc(scKey);}} style={{
+                                          background:scOpen?"#1e40af":"#eff6ff",color:scOpen?"#fff":"#1d4ed8",
+                                          border:`1.5px solid ${scOpen?"#1e40af":"#93c5fd"}`,borderRadius:20,
+                                          padding:"4px 12px",fontSize:10,fontWeight:700,cursor:"pointer",
+                                          whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:5
+                                        }}>
+                                          <span>{scOpen?"▾":"▸"}</span>
+                                          <span>{scId||"Scenario"}</span>
+                                          <span style={{opacity:0.75,fontWeight:400,maxWidth:120,overflow:"hidden",textOverflow:"ellipsis"}}>
+                                            {String(sc[tK?.name]||"").slice(0,40)||""}
+                                          </span>
+                                        </button>
+                                        {/* Expanded scenario detail */}
+                                        {scOpen&&(
+                                          <div style={{marginTop:4,background:"#fff",border:`1px solid #bfdbfe`,borderRadius:6,padding:"10px 14px",display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:"6px 16px",boxShadow:"0 2px 6px rgba(30,64,175,0.08)"}}>
+                                            {[
+                                              {label:"Test Scenario ID",       val:scId||"—"},
+                                              {label:"Test Scenario",          val:String(sc[tK?.name]||"—")},
+                                              {label:"Applicable Experience",  val:_fieldVal(sc[tK?.applicableExperience])},
+                                              {label:"Applicable Business",    val:_fieldVal(sc[tK?.applicableBusiness])},
+                                              {label:"Applicable Region",      val:_fieldVal(sc[tK?.applicableRegion])},
+                                              {label:"Est. Test Cases",        val:_fieldVal(sc[tK?.estCases])},
+                                            ].map(({label,val})=>(
+                                              <div key={label} style={{display:"flex",flexDirection:"column",gap:1}}>
+                                                <span style={{fontSize:9,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:"0.05em"}}>{label}</span>
+                                                <span style={{fontSize:11,color:val==="—"?C.muted:C.text,lineHeight:1.4}}>{val}</span>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
                             </div>
-                          </div>
-                          {/* Linked test scenarios */}
-                          {scens.length>0?(
+
+                            {/* Section 3: Test Case Detail (placeholder) */}
                             <div>
-                              <div style={{fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:6}}>Linked Test Scenarios ({scens.length})</div>
-                              <table style={{width:"100%",borderCollapse:"collapse",fontSize:10,background:C.white,borderRadius:6,overflow:"hidden"}}>
-                                <thead>
-                                  <tr style={{background:C.navy}}>
-                                    {["ID","Scenario","Sub Process","Est. Cases","Functional","SD Review","D&A"].map(h=>(
-                                      <th key={h} style={{padding:"6px 8px",color:"#fff",fontWeight:700,textAlign:"left",borderRight:"1px solid rgba(255,255,255,0.1)",whiteSpace:"nowrap"}}>{h}</th>
-                                    ))}
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {scens.map((s,si)=>(
-                                    <tr key={si} style={{background:si%2===0?"#f8fafc":C.white,borderBottom:`1px solid ${C.border}`}}>
-                                      <td style={{padding:"5px 8px",fontWeight:700,color:C.navyLight,whiteSpace:"nowrap",borderRight:`1px solid ${C.border}`}}>{String(s[tK?.id]||"—")}</td>
-                                      <td style={{padding:"5px 8px",color:C.text,borderRight:`1px solid ${C.border}`,maxWidth:240,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{String(s[tK?.name]||"—")}</td>
-                                      <td style={{padding:"5px 8px",color:C.muted,whiteSpace:"nowrap",borderRight:`1px solid ${C.border}`}}>{String(s[tK?.subprocess]||"—")}</td>
-                                      <td style={{padding:"5px 8px",textAlign:"center",fontWeight:700,borderRight:`1px solid ${C.border}`}}>{s[tK?.estCases]||"—"}</td>
-                                      <td style={{padding:"5px 8px",textAlign:"center",borderRight:`1px solid ${C.border}`}}>{_reviewBadge(s[tK?.funcStatus])}</td>
-                                      <td style={{padding:"5px 8px",textAlign:"center",borderRight:`1px solid ${C.border}`}}>{_reviewBadge(s[tK?.sdStatus])}</td>
-                                      <td style={{padding:"5px 8px",textAlign:"center"}}>{_reviewBadge(s[tK?.daStatus])}</td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
+                              <div style={{fontSize:10,fontWeight:700,color:C.navy,textTransform:"uppercase",letterSpacing:"0.07em",borderBottom:`1px solid #bfdbfe`,paddingBottom:4,marginBottom:8}}>
+                                3 — Test Case Detail
+                              </div>
+                              <div style={{background:"#f8fafc",border:`1px dashed ${C.border}`,borderRadius:6,padding:"8px 12px"}}>
+                                <span style={{fontSize:11,color:C.muted,fontStyle:"italic"}}>Test case detail — upload test case sheet to link here</span>
+                              </div>
                             </div>
-                          ):(
-                            <div style={{background:"#fff7ed",border:"1px solid #fed7aa",borderRadius:6,padding:"10px 14px",display:"flex",alignItems:"center",gap:8}}>
-                              <span style={{fontSize:16}}>⚠</span>
-                              <span style={{fontSize:11,color:"#c2410c",fontWeight:600}}>No test scenarios linked to this requirement — coverage gap</span>
-                            </div>
-                          )}
-                          {/* Test scripts placeholder */}
-                          <div style={{marginTop:10,background:"#f8fafc",border:`1px dashed ${C.border}`,borderRadius:6,padding:"8px 12px",display:"flex",alignItems:"center",gap:8}}>
-                            <span style={{fontSize:11,color:C.muted,fontStyle:"italic"}}>Test Scripts — upload test script sheet to link scripts here</span>
+
                           </div>
                         </td>
                       </tr>
@@ -2836,10 +2948,10 @@ function ReqTraceabilityTab({ req, test }) {
           </table>
         </div>
         {filtered.length>0&&(
-          <div style={{padding:"8px 14px",borderTop:`1px solid ${C.border}`,background:"#f8fafc",fontSize:10,color:C.muted,display:"flex",gap:16}}>
+          <div style={{padding:"7px 14px",borderTop:`1px solid ${C.border}`,background:"#f8fafc",fontSize:10,color:C.muted,display:"flex",gap:16}}>
             <span>Showing <strong style={{color:C.text}}>{filtered.length}</strong> requirements</span>
-            <span>Coverage: <strong style={{color:covPct>=80?C.complete:covPct>=50?"#d97706":C.delayed}}>{covPct}%</strong> ({covCnt} linked)</span>
-            <span style={{color:"#c2410c"}}>Gaps: <strong>{gapCnt}</strong> with no test scenarios</span>
+            <span>Coverage: <strong style={{color:covPct>=80?C.complete:covPct>=50?"#d97706":C.delayed}}>{covPct}%</strong> ({covCnt} with scenarios, {gapCnt} gaps)</span>
+            <span>Total est. cases: <strong style={{color:C.navyLight}}>{totEst}</strong></span>
           </div>
         )}
       </div>
