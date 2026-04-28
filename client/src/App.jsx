@@ -4740,8 +4740,8 @@ function TestScenariosTab({ data, wp, req }) {
   // Pre-build ALL per-subprocess stats across ALL SITs — no SIT filter.
   // Matches Smartsheet formulas:
   //   Drafted:  COUNTIFS(SubProcess, sp, ToBeDeleted, <>1, DupDMNA, <>1)
-  //   Reviewed: COUNTIFS(SubProcess, sp, ToBeDeleted, <>1, DupDMNA, <>1, teamStatus, "4. Reviewed")
-  //   Pending:  COUNTIFS(SubProcess, sp, ToBeDeleted, <>1, DupDMNA, <>1, teamStatus, "1. Ready for Review" OR "3. Updated, Ready for Review")
+  //   Reviewed: COUNTIFS(SubProcess, sp, ToBeDeleted, <>1, DupDMNA, <>1, OpenFeedback, <>1, teamStatus, "4. Reviewed")
+  //   Pending:  COUNTIFS(SubProcess, sp, ToBeDeleted, <>1, DupDMNA, <>1, OpenFeedback, <>1, teamStatus, "1. Ready for Review" OR "3. Updated, Ready for Review")
   const allSpDrafted = {}, allSpOpenFb = {}, allSpTeamStats = {};
   draftedRows.forEach(r => {
     const sp = String(r[K.subprocess] || "Unknown").trim();
@@ -4752,8 +4752,9 @@ function TestScenariosTab({ data, wp, req }) {
     TEAMS.forEach(t => {
       if (!allSpTeamStats[sp][t.id]) allSpTeamStats[sp][t.id] = { reviewed:0, pending:0, reviewerName:"", revRows:[], pendRows:[] };
       const ts = allSpTeamStats[sp][t.id];
-      if (isReviewedFinal(r[t.statusKey])) { ts.reviewed++; ts.revRows.push(r); }
-      if (isPendingReview(r[t.statusKey])) { ts.pending++;  ts.pendRows.push(r); }
+      const hasOpenFb = isTruthy(r[K.openFeedbackFlag]);
+      if (isReviewedFinal(r[t.statusKey]) && !hasOpenFb) { ts.reviewed++; ts.revRows.push(r); }
+      if (isPendingReview(r[t.statusKey]) && !hasOpenFb) { ts.pending++;  ts.pendRows.push(r); }
       if (!ts.reviewerName) { const rv = String(r[t.reviewerKey]||"").trim(); if (rv) ts.reviewerName = rv; }
     });
   });
@@ -4997,8 +4998,8 @@ function TestScenariosTab({ data, wp, req }) {
           const pct      = totDrafted > 0 ? Math.round(rev/totDrafted*100) : 0;
           const pendPct  = totDrafted > 0 ? Math.round(pend/totDrafted*100) : 0;
           // Use all-SIT rows so drill-down matches the displayed count
-          const revRows  = draftedRows.filter(r => isReviewedFinal(r[t.statusKey]));
-          const pendRows = draftedRows.filter(r => isPendingReview(r[t.statusKey]));
+          const revRows  = draftedRows.filter(r => isReviewedFinal(r[t.statusKey]) && !isTruthy(r[K.openFeedbackFlag]));
+          const pendRows = draftedRows.filter(r => isPendingReview(r[t.statusKey]) && !isTruthy(r[K.openFeedbackFlag]));
           return (
             <div key={t.id} style={{ background:C.white, border:`1px solid ${C.border}`, borderTop:`3px solid ${t.color}`, borderRadius:8, padding:"10px 12px" }}>
               <div style={{ fontSize:9, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.07em", marginBottom:6 }}>{t.label}</div>
