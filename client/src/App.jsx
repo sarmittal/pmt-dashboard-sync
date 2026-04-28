@@ -4780,7 +4780,7 @@ function TestScenariosTab({ data, wp, req }) {
     const rh = (ck, def) => (
       <div onMouseDown={e => { e.preventDefault(); resizing.current = { key:ck, startX:e.clientX, startW:cw(ck,def) }; }}
         style={{ position:"absolute", right:0, top:0, bottom:0, width:5, cursor:"col-resize", zIndex:4, userSelect:"none" }}
-        onMouseEnter={e => e.currentTarget.style.background="rgba(99,140,200,0.45)"}
+        onMouseEnter={e => e.currentTarget.style.background="rgba(255,255,255,0.3)"}
         onMouseLeave={e => e.currentTarget.style.background="transparent"} />
     );
 
@@ -4815,12 +4815,11 @@ function TestScenariosTab({ data, wp, req }) {
 
     const ALL_COLS = [...COMMON_COLS, ...curTeamCols, ...priorTeamCols];
 
-    const thSt = (col, extra={}) => ({
-      padding:"7px 8px", textAlign:"left", fontWeight:700, fontSize:10, whiteSpace:"nowrap",
-      color:col.team ? col.team.color : C.muted,
+    const thSt = (col) => ({
+      padding:"8px 10px", textAlign:"left", fontWeight:700, fontSize:10, whiteSpace:"nowrap",
+      color:"#fff", background:C.navy,
       position:"relative", userSelect:"none", overflow:"hidden",
-      borderRight: col.border ? "2px solid #c8d4e0" : undefined,
-      ...extra,
+      borderRight: col.border ? "1px solid rgba(255,255,255,0.25)" : "1px solid rgba(255,255,255,0.08)",
     });
 
     return (
@@ -4837,15 +4836,17 @@ function TestScenariosTab({ data, wp, req }) {
                 {ALL_COLS.map(c => <col key={c.ck} style={{ width: cw(c.ck, c.def) }} />)}
               </colgroup>
               <thead style={{ position:"sticky", top:0, zIndex:2 }}>
+                {/* Group labels row — team-coloured, sits above the column label row */}
                 <tr>
-                  <th colSpan={COMMON_COLS.length} style={{ padding:"5px 10px", textAlign:"center", background:"#e8edf2", color:C.muted, fontWeight:700, fontSize:9, textTransform:"uppercase", letterSpacing:"0.06em", borderRight:"2px solid #c8d4e0", borderBottom:"1px solid #d1dce8" }}>Scenario Details</th>
-                  {curTeam && <th colSpan={curTeamCols.length} style={{ padding:"5px 10px", textAlign:"center", background:curTeam.color, color:"#fff", fontWeight:800, fontSize:9, textTransform:"uppercase", letterSpacing:"0.06em", borderRight:"2px solid rgba(255,255,255,0.4)", borderBottom:"1px solid rgba(255,255,255,0.3)" }}>▶ {curTeam.label}</th>}
+                  <th colSpan={COMMON_COLS.length} style={{ padding:"4px 10px", textAlign:"center", background:C.navy, color:"rgba(255,255,255,0.5)", fontWeight:700, fontSize:9, textTransform:"uppercase", letterSpacing:"0.07em", borderRight:"1px solid rgba(255,255,255,0.25)", borderBottom:"1px solid rgba(255,255,255,0.12)" }}>Scenario Details</th>
+                  {curTeam && <th colSpan={curTeamCols.length} style={{ padding:"4px 10px", textAlign:"center", background:curTeam.color, color:"#fff", fontWeight:800, fontSize:9, textTransform:"uppercase", letterSpacing:"0.07em", borderRight:"1px solid rgba(255,255,255,0.4)", borderBottom:"1px solid rgba(255,255,255,0.25)" }}>▶ {curTeam.label}</th>}
                   {priorTeams.map(t => {
                     const n = priorTeamCols.filter(c => c.team===t).length;
-                    return <th key={t.id} colSpan={n} style={{ padding:"5px 10px", textAlign:"center", background:t.color, color:"#fff", fontWeight:700, fontSize:9, textTransform:"uppercase", letterSpacing:"0.06em", borderRight:"2px solid rgba(255,255,255,0.3)", borderBottom:"1px solid rgba(255,255,255,0.3)", opacity:0.82 }}>{t.label}</th>;
+                    return <th key={t.id} colSpan={n} style={{ padding:"4px 10px", textAlign:"center", background:t.color, color:"#fff", fontWeight:700, fontSize:9, textTransform:"uppercase", letterSpacing:"0.07em", borderRight:"1px solid rgba(255,255,255,0.3)", borderBottom:"1px solid rgba(255,255,255,0.25)", opacity:0.88 }}>{t.label}</th>;
                   })}
                 </tr>
-                <tr style={{ background:"#f0f4f8", borderBottom:`2px solid ${C.border}` }}>
+                {/* Column label row — matches RAID modal header style */}
+                <tr>
                   {ALL_COLS.map(c => (
                     <th key={c.ck} style={thSt(c)}>
                       {c.label}{rh(c.ck, c.def)}
@@ -4855,10 +4856,10 @@ function TestScenariosTab({ data, wp, req }) {
               </thead>
               <tbody>
                 {mRows.map((r, i) => (
-                  <tr key={i} style={{ background:i%2===0?C.white:"#f9fafb", borderBottom:`1px solid ${C.border}` }}>
+                  <tr key={i} style={{ background:i%2===0?C.white:"#f7f9fc", borderBottom:`1px solid ${C.border}`, verticalAlign:"top" }}>
                     {ALL_COLS.map(c => (
-                      <td key={c.ck} style={{ padding:"7px 8px", verticalAlign:"top", fontSize:11, overflow:"hidden",
-                        borderRight:c.border?"2px solid #c8d4e0":undefined, ...c.tdEx }}>
+                      <td key={c.ck} style={{ padding:"8px 10px", verticalAlign:"top", fontSize:11, overflow:"hidden",
+                        borderRight:c.border?"1px solid #dde4ee":undefined, ...c.tdEx }}>
                         {c.render(r)}
                       </td>
                     ))}
