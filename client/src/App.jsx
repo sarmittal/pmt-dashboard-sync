@@ -4720,6 +4720,12 @@ function TestScenariosTab({ data, wp, req }) {
   const isReqExcluded     = r => { const v = String(r[reqK?.derivedStatus]||"").toLowerCase(); return v.includes("deprecated")||v.includes("deferred"); };
   const isTestScenarioReq = r => reqK?.testScriptType ? String(r[reqK.testScriptType]||"").toLowerCase().includes("test scenario") : false;
 
+  // Lookup map: Req Id → requirement row (used to compute Similar User Story Data in drill-down)
+  const reqById = {};
+  if (req?.items && reqK?.reqId) {
+    req.items.forEach(r => { const id = String(r[reqK.reqId]||"").trim(); if (id) reqById[id] = r; });
+  }
+
   const sitRows = draftedRows.filter(r => {
     const v = String(r[K.sitPlan] || "").trim();
     return v.split(/\n|,/).map(s => s.trim()).some(s => s === activeSit);
@@ -4777,7 +4783,7 @@ function TestScenariosTab({ data, wp, req }) {
     return <span style={{ background:bg, color:col, borderRadius:4, padding:"2px 6px", fontSize:10, fontWeight:600, whiteSpace:"nowrap" }}>{sv}</span>;
   };
 
-  const TeamDrillModal = ({ title, rows:mRows, teamId:tid, onClose }) => {
+  const TeamDrillModal = ({ title, rows:mRows, teamId:tid, reqById:rById={}, reqK:rK, onClose }) => {
     const [colW, setColW] = useState({});
     const resizing = useRef(null);
 
@@ -4833,7 +4839,23 @@ function TestScenariosTab({ data, wp, req }) {
       { ck:"c-xp",  def:150, label:"Applicable Exp.",       render:r=>multiVal(r[K.applicableExperience]), tdEx:{ wordBreak:"break-word" } },
       { ck:"c-rg",  def:130, label:"Applicable Region",     render:r=>multiVal(r[K.applicableRegion]),     tdEx:{ wordBreak:"break-word" } },
       { ck:"c-ui",  def:140, label:"Similar US IDs",        render:r=>multiVal(r[K.similarUSIds]),             tdEx:{ wordBreak:"break-word" } },
-      { ck:"c-ud",  def:200, label:"Similar US Data",       render:r=>{ const v=String(r[K.similarUSData]||""); if(!v) return <span style={{color:C.muted}}>—</span>; return <span title={v} style={{display:"-webkit-box",WebkitLineClamp:3,WebkitBoxOrient:"vertical",overflow:"hidden",color:C.muted,wordBreak:"break-word",cursor:"help"}}>{v}</span>; }, border:true },
+      { ck:"c-ud",  def:220, label:"Similar US Data",       render:r=>{
+        const ids = String(r[K.similarUSIds]||"").split(/\n|,|;/).map(s=>s.trim()).filter(Boolean);
+        if (!ids.length) return <span style={{color:C.muted}}>—</span>;
+        return <div style={{display:"flex",flexDirection:"column",gap:6}}>
+          {ids.map((id,i) => {
+            const req = rById[id];
+            const story = req ? String(req[rK?.story]||"").trim() : "";
+            const ac    = req ? String(req[rK?.acceptance]||"").trim() : "";
+            return <div key={i} style={{borderLeft:"2px solid #cbd5e1",paddingLeft:6,fontSize:10,lineHeight:1.45}}>
+              <div style={{fontWeight:700,color:"#334155",marginBottom:1}}>{id}</div>
+              {story && <div style={{color:C.muted,marginBottom:2}}>{story}</div>}
+              {ac    && <div style={{color:"#94a3b8",fontStyle:"italic"}}>{ac}</div>}
+              {!req  && <div style={{color:"#f87171",fontStyle:"italic"}}>not found in req sheet</div>}
+            </div>;
+          })}
+        </div>;
+      }, border:true },
     ];
 
     const curTeamCols   = curTeam ? mkTeamCols(curTeam, true)          : [];
@@ -5114,7 +5136,7 @@ function TestScenariosTab({ data, wp, req }) {
       </Card>
 
       {spModal    && <ScenarioModal   title={spModal.title}    rows={spModal.rows}    onClose={() => setSpModal(null)} />}
-      {drillModal && <TeamDrillModal  title={drillModal.title} rows={drillModal.rows} teamId={drillModal.teamId} onClose={() => setDrillModal(null)} />}
+      {drillModal && <TeamDrillModal  title={drillModal.title} rows={drillModal.rows} teamId={drillModal.teamId} reqById={reqById} reqK={reqK} onClose={() => setDrillModal(null)} />}
     </div>
   );
 }
