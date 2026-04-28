@@ -896,9 +896,9 @@ const TABS = [
   { id: "workplan",    label: "Workplan" },
   { id: "raid",        label: "RAID Analysis" },
   { id: "cr",          label: "Change Requests" },
-  { id: "backlog",     label: "Backlog" },
   { id: "scorecard",   label: "Component Scorecard" },
   { id: "testing",     label: "Test Scenarios" },
+  { id: "backlog",     label: "Backlog" },
 ];
 
 // ─── STORAGE ─────────────────────────────────────────────────────────────────
