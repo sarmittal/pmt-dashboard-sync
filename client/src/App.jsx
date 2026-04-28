@@ -512,7 +512,7 @@ function parseTestScenarios(sheets) {
     totalEstCases: Math.round(totalEstCases),
     funcReviewed, funcReadyReview,
     bySubprocess, bySprint, sitCounts,
-    activeRows, keys: K,
+    activeRows, allRows: rows, keys: K,
   };
 }
 
@@ -4674,7 +4674,9 @@ function TestScenariosTab({ data, wp, req }) {
   const isOpenFeedback  = s => cleanSt(s).toLowerCase().includes("reviewed, request for updates");
   const isTruthy = v => v === true || v === 1 || String(v).trim() === "1";
   const isDraftExcluded = r => isTruthy(r[K.toBeDeleted]) || isTruthy(r[K.dupDataMiningNA]);
-  const draftedRows = data.activeRows.filter(r => !isDraftExcluded(r));
+  // Use allRows so the drafted count matches the Smartsheet COUNTIFS formula exactly —
+  // only the two boolean columns exclude a row, not funcStatus text.
+  const draftedRows = (data.allRows || data.activeRows).filter(r => !isDraftExcluded(r));
 
   const TEAMS = [
     { id:"sd",   label:"SD Consulting", color:"#1d4ed8", statusKey:K.sdStatus,   reviewerKey:K.sdReviewer,   feedbackKey:K.sdFeedback,   dueDateKey:K.sdDueDate   },
