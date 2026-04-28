@@ -1206,7 +1206,7 @@ export default function App() {
           {TABS.map(t => (
             <button key={t.id} onClick={() => setTab(t.id)} style={{
               padding: "8px 18px", border: "none", cursor: "pointer", transition: "all .15s",
-              fontSize: 15, fontWeight: tab === t.id ? 700 : 500, letterSpacing: "0.04em",
+              fontSize: 14, fontWeight: tab === t.id ? 700 : 500, letterSpacing: "1px",
               borderRadius: 20, margin: "6px 0",
               background: tab === t.id ? "rgba(255,255,255,0.95)" : "transparent",
               color: tab === t.id ? "#595959" : "rgba(255,255,255,0.72)",
@@ -5342,7 +5342,7 @@ function TestScenariosTab({ data, wp, req }) {
         {[{id:"metrics",label:"Overall Metrics"},{id:"review",label:"Review Status"},{id:"scenarios",label:"Test Scenarios"}].map(st => (
           <button key={st.id} onClick={() => setSubTab(st.id)} style={{
             padding:"7px 18px", border:"none", cursor:"pointer", transition:"all .15s",
-            fontSize:14, fontWeight: subTab===st.id ? 700 : 500, letterSpacing:"0.04em",
+            fontSize:13, fontWeight: subTab===st.id ? 700 : 500, letterSpacing:"1px",
             borderRadius:20, margin:"5px 0",
             background: subTab===st.id ? "rgba(255,255,255,0.92)" : "transparent",
             color: subTab===st.id ? "#2d6b65" : "rgba(255,255,255,0.75)",
