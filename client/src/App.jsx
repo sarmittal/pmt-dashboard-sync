@@ -1202,13 +1202,15 @@ export default function App() {
 
       {/* Tab Bar */}
       <div style={{ background: "#595959", borderBottom: `1px solid #444` }}>
-        <div style={{ maxWidth: 1400, margin: "0 auto", padding: "0 24px", display: "flex" }}>
+        <div style={{ maxWidth: 1400, margin: "0 auto", padding: "0 20px", display: "flex", alignItems: "center", gap: 4 }}>
           {TABS.map(t => (
             <button key={t.id} onClick={() => setTab(t.id)} style={{
-              padding: "12px 16px", border: "none", background: "transparent", cursor: "pointer",
-              color: tab === t.id ? "#fff" : "rgba(255,255,255,0.7)",
-              borderBottom: `3px solid ${tab === t.id ? "#fff" : "transparent"}`,
-              fontWeight: tab === t.id ? 700 : 500, fontSize: 13, transition: "all .12s",
+              padding: "8px 18px", border: "none", cursor: "pointer", transition: "all .15s",
+              fontSize: 15, fontWeight: tab === t.id ? 700 : 500, letterSpacing: "0.04em",
+              borderRadius: 20, margin: "6px 0",
+              background: tab === t.id ? "rgba(255,255,255,0.95)" : "transparent",
+              color: tab === t.id ? "#595959" : "rgba(255,255,255,0.72)",
+              boxShadow: tab === t.id ? "0 1px 4px rgba(0,0,0,0.18)" : "none",
             }}>{t.label}</button>
           ))}
         </div>
@@ -5336,13 +5338,15 @@ function TestScenariosTab({ data, wp, req }) {
 
   const subTabBar = (
     <div style={{ background:"#43978F", borderBottom:"1px solid #357a73", marginBottom:16 }}>
-      <div style={{ display:"flex", paddingLeft:4 }}>
+      <div style={{ display:"flex", alignItems:"center", gap:4, paddingLeft:8 }}>
         {[{id:"metrics",label:"Overall Metrics"},{id:"review",label:"Review Status"},{id:"scenarios",label:"Test Scenarios"}].map(st => (
           <button key={st.id} onClick={() => setSubTab(st.id)} style={{
-            padding:"10px 20px", border:"none", background:"transparent", cursor:"pointer",
-            color: subTab===st.id ? "#fff" : "rgba(255,255,255,0.7)",
-            borderBottom:`3px solid ${subTab===st.id?"#fff":"transparent"}`,
-            fontWeight: subTab===st.id ? 700 : 500, fontSize:13, transition:"all .12s",
+            padding:"7px 18px", border:"none", cursor:"pointer", transition:"all .15s",
+            fontSize:14, fontWeight: subTab===st.id ? 700 : 500, letterSpacing:"0.04em",
+            borderRadius:20, margin:"5px 0",
+            background: subTab===st.id ? "rgba(255,255,255,0.92)" : "transparent",
+            color: subTab===st.id ? "#2d6b65" : "rgba(255,255,255,0.75)",
+            boxShadow: subTab===st.id ? "0 1px 4px rgba(0,0,0,0.15)" : "none",
           }}>{st.label}</button>
         ))}
       </div>
@@ -7645,13 +7649,15 @@ function WorkplanTab({ wp, raid, openModal }) {
 
       {/* Sub-tab bar */}
       <div style={{ background: "#43978F", borderBottom: `1px solid #357a73`, marginBottom: 16 }}>
-        <div style={{ display: "flex", paddingLeft: 4 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 4, paddingLeft: 8 }}>
           {SUB_TABS.map(st => (
             <button key={st.id} onClick={() => setSubTab(st.id)} style={{
-              padding: "10px 20px", border: "none", background: "transparent", cursor: "pointer",
-              color: subTab === st.id ? "#fff" : "rgba(255,255,255,0.7)",
-              borderBottom: `3px solid ${subTab === st.id ? "#fff" : "transparent"}`,
-              fontWeight: subTab === st.id ? 700 : 500, fontSize: 13, transition: "all .12s",
+              padding: "7px 18px", border: "none", cursor: "pointer", transition: "all .15s",
+              fontSize: 14, fontWeight: subTab === st.id ? 700 : 500, letterSpacing: "0.04em",
+              borderRadius: 20, margin: "5px 0",
+              background: subTab === st.id ? "rgba(255,255,255,0.92)" : "transparent",
+              color: subTab === st.id ? "#2d6b65" : "rgba(255,255,255,0.75)",
+              boxShadow: subTab === st.id ? "0 1px 4px rgba(0,0,0,0.15)" : "none",
             }}>{st.label}</button>
           ))}
         </div>
