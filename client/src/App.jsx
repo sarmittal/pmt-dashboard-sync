@@ -4737,7 +4737,12 @@ function TestScenariosTab({ data, wp, req }) {
       if (sp) { if (!reqBySubprocess[sp]) reqBySubprocess[sp] = []; reqBySubprocess[sp].push(r); }
     });
   }
-  const isReqExcluded     = r => { const v = String(r[reqK?.derivedStatus]||"").toLowerCase(); return v.includes("deprecated")||v.includes("deferred"); };
+  const _EXCL_EXP = new Set(["3 - leadership", "6 - e&p"]);
+  const isReqExcluded = r => {
+    const status = String(r[reqK?.derivedStatus]||"").toLowerCase().trim();
+    const exp    = String(r[reqK?.pmExperience]||"").toLowerCase().trim();
+    return status.includes("deprecated") || status.includes("deferred") || _EXCL_EXP.has(exp);
+  };
   const isTestScenarioReq = r => reqK?.testScriptType ? String(r[reqK.testScriptType]||"").toLowerCase().includes("test scenario") : false;
 
   // Lookup map: Req Id → requirement row (used to compute Similar User Story Data in drill-down)
