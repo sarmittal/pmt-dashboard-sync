@@ -11,6 +11,7 @@
  * from ../client/dist so a single CF app handles both frontend and backend.
  */
 
+import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import path from "path";
