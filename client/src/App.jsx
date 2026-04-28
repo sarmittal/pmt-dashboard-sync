@@ -4742,37 +4742,21 @@ function TestScenariosTab({ data, wp, req }) {
   });
   const allSpsForFilter = Object.keys(subprocessMap).sort();
 
-  // Pre-build ALL per-subprocess stats across ALL SITs — no SIT filter.
-  // Matches Smartsheet formulas:
-  //   Drafted:  COUNTIFS(SubProcess, sp, ToBeDeleted, <>1, DupDMNA, <>1)
-  //   Reviewed: COUNTIFS(SubProcess, sp, ToBeDeleted, <>1, DupDMNA, <>1, OpenFeedback, <>1, teamStatus, "4. Reviewed")
-  //   Pending:  COUNTIFS(SubProcess, sp, ToBeDeleted, <>1, DupDMNA, <>1, OpenFeedback, <>1, teamStatus, "1. Ready for Review" OR "3. Updated, Ready for Review")
-  const allSpDrafted = {}, allSpOpenFb = {}, allSpTeamStats = {};
-  draftedRows.forEach(r => {
-    const sp = String(r[K.subprocess] || "Unknown").trim();
-    allSpDrafted[sp] = (allSpDrafted[sp] || 0) + 1;
-    if (K.openFeedbackFlag && isTruthy(r[K.openFeedbackFlag]))
-      allSpOpenFb[sp] = (allSpOpenFb[sp] || 0) + 1;
-    if (!allSpTeamStats[sp]) allSpTeamStats[sp] = {};
-    TEAMS.forEach(t => {
-      if (!allSpTeamStats[sp][t.id]) allSpTeamStats[sp][t.id] = { reviewed:0, pending:0, notPushed:0, reviewerName:"", revRows:[], pendRows:[], notPushedRows:[] };
-      const ts = allSpTeamStats[sp][t.id];
-      const hasOpenFb = isTruthy(r[K.openFeedbackFlag]);
-      const statusVal = String(r[t.statusKey]||"").trim();
-      if (isReviewedFinal(r[t.statusKey]) && !hasOpenFb) { ts.reviewed++;  ts.revRows.push(r); }
-      if (isPendingReview(r[t.statusKey]) && !hasOpenFb) { ts.pending++;   ts.pendRows.push(r); }
-      if (!statusVal && !hasOpenFb)                      { ts.notPushed++; ts.notPushedRows.push(r); }
-      if (!ts.reviewerName) { const rv = String(r[t.reviewerKey]||"").trim(); if (rv) ts.reviewerName = rv; }
-    });
-  });
-
-  const allTableRows = Object.entries(subprocessMap).map(([sp]) => {
+  const allTableRows = Object.entries(subprocessMap).map(([sp, spRows]) => {
     const reqRows = reqBySubprocess[sp] || [];
     const userStories         = reqRows.filter(r => !isReqExcluded(r)).length;
     const userStoriesRelevant = reqRows.filter(r => !isReqExcluded(r) && isTestScenarioReq(r)).length;
-    const drafted         = allSpDrafted[sp] || 0;
-    const openFeedbackCount = K.openFeedbackFlag ? (allSpOpenFb[sp] || 0) : 0;
-    const teamStats = Object.fromEntries(TEAMS.map(t => [t.id, allSpTeamStats[sp]?.[t.id] || { reviewed:0, pending:0, notPushed:0, reviewerName:"", revRows:[], pendRows:[], notPushedRows:[] }]));
+    const drafted         = spRows.length;
+    const openFeedbackCount = K.openFeedbackFlag ? spRows.filter(r => isTruthy(r[K.openFeedbackFlag])).length : 0;
+    const teamStats = Object.fromEntries(TEAMS.map(t => {
+      const hasOpenFb = r => isTruthy(r[K.openFeedbackFlag]);
+      const stVal     = r => String(r[t.statusKey]||"").trim();
+      const revRows       = spRows.filter(r => isReviewedFinal(r[t.statusKey]) && !hasOpenFb(r));
+      const pendRows      = spRows.filter(r => isPendingReview(r[t.statusKey])  && !hasOpenFb(r));
+      const notPushedRows = spRows.filter(r => !stVal(r)                        && !hasOpenFb(r));
+      const reviewerName  = spRows.map(r => String(r[t.reviewerKey]||"").trim()).find(v => v) || "";
+      return [t.id, { reviewed: revRows.length, pending: pendRows.length, notPushed: notPushedRows.length, reviewerName, revRows, pendRows, notPushedRows }];
+    }));
     return { sp, drafted, userStories, userStoriesRelevant, openFeedbackCount, teamStats };
   });
   const tableRows = selSp === "ALL" ? allTableRows : allTableRows.filter(r => r.sp === selSp);
