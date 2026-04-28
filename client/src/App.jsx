@@ -896,9 +896,10 @@ const TABS = [
   { id: "workplan",    label: "Workplan" },
   { id: "raid",        label: "RAID Analysis" },
   { id: "cr",          label: "Change Requests" },
-  { id: "scorecard",   label: "Component Scorecard" },
-  { id: "testing",     label: "Test Scenarios" },
-  { id: "backlog",     label: "Backlog" },
+  { id: "scorecard",     label: "Component Scorecard" },
+  { id: "testing",       label: "Test Scenarios" },
+  { id: "traceability",  label: "Req Traceability" },
+  { id: "backlog",       label: "Backlog" },
 ];
 
 // ─── STORAGE ─────────────────────────────────────────────────────────────────
@@ -1225,6 +1226,7 @@ export default function App() {
         {tab === "backlog"      && <BacklogTab raid={raid} />}
         {tab === "scorecard"    && <ScorecardTab wp={wp} raid={raid} req={req} openModal={openModal} />}
         {tab === "testing"      && <TestScenariosTab data={test} wp={wp} req={req} />}
+        {tab === "traceability" && <ReqTraceabilityTab req={req} test={test} />}
       </div>
 
       {modal && <Modal title={modal.title} rows={modal.rows} columns={modal.columns} onClose={() => setModal(null)} />}
@@ -2587,6 +2589,259 @@ function BacklogChartDrillModal({ title, rows, K, teamKey, colConfig, COL_KEYS, 
             </tbody>
           </table>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── REQ TRACEABILITY TAB ────────────────────────────────────────────────────
+function ReqTraceabilityTab({ req, test }) {
+  const reqK = req?.keys;
+  const tK   = test?.keys;
+
+  const [spFilter,  setSpFilter]  = useState("ALL");
+  const [spFilter2, setSpFilter2] = useState("ALL"); // test scenario sub-process
+  const [sprFilter, setSprFilter] = useState("ALL");
+  const [covFilter, setCovFilter] = useState("ALL"); // ALL | yes | no
+  const [search,    setSearch]    = useState("");
+  const [expanded,  setExpanded]  = useState(new Set());
+
+  if (!req) return <Empty label="Upload Requirements file to view Req Traceability." />;
+
+  const reqRows  = req.items   || [];
+  const testRows = test?.activeRows || test?.allRows || [];
+  const splitIds = v => Array.from(new Set(String(v||"").split(/[\n,;]/).map(s=>s.trim()).filter(Boolean)));
+
+  // Build reverse lookup: reqId → test scenario rows
+  const scensByReqId = {};
+  testRows.forEach(r => {
+    splitIds(r[tK?.similarUSIds]).forEach(id => {
+      if (!scensByReqId[id]) scensByReqId[id] = [];
+      scensByReqId[id].push(r);
+    });
+  });
+
+  // Helpers
+  const _toggle = id => setExpanded(p => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; });
+
+  const _buildBadge = (fv, tv) => {
+    const f = String(fv||"").toLowerCase(), t = String(tv||"").toLowerCase();
+    let b = "notStarted";
+    if ([f,t].some(v=>v.includes("block")))                               b = "blocked";
+    else if ([f,t].some(v=>v.includes("progress")||v.includes("in prog"))) b = "inProgress";
+    else if ([f,t].some(v=>v.includes("partial")))                         b = "partial";
+    else if (f.includes("complet")||t.includes("complet"))                 b = "complete";
+    const S = { blocked:{bg:"#fee2e2",c:"#b91c1c",br:"#fca5a5",l:"Blocked"}, inProgress:{bg:"#fef3c7",c:"#92400e",br:"#fcd34d",l:"In Progress"}, partial:{bg:"#dbeafe",c:"#1e40af",br:"#93c5fd",l:"Partial"}, complete:{bg:"#dcfce7",c:"#166534",br:"#86efac",l:"Complete"}, notStarted:{bg:"#f1f5f9",c:"#64748b",br:"#cbd5e1",l:"Not Started"} };
+    const s = S[b];
+    return <span style={{background:s.bg,color:s.c,border:`1px solid ${s.br}`,borderRadius:4,padding:"2px 7px",fontSize:10,fontWeight:600,whiteSpace:"nowrap"}}>{s.l}</span>;
+  };
+
+  const _reviewBadge = v => {
+    const s = String(v||"").replace(/^\d+\.\s*/,"").trim();
+    if (!s||s==="None"||s==="nan") return <span style={{color:C.muted,fontSize:10}}>—</span>;
+    const sl = s.toLowerCase();
+    const [bg,col,br] = sl.includes("reviewed, request")?["#fef3c7","#92400e","#fcd34d"]
+      : sl.includes("reviewed")?["#dcfce7","#166534","#86efac"]
+      : sl.includes("ready")?["#dbeafe","#1e40af","#93c5fd"]
+      : sl.includes("not applicable")?["#f1f5f9","#64748b","#cbd5e1"]
+      : ["#f8fafc","#475569","#e2e8f0"];
+    return <span style={{background:bg,color:col,border:`1px solid ${br}`,borderRadius:4,padding:"2px 6px",fontSize:10,fontWeight:600,whiteSpace:"nowrap"}}>{s.length>22?s.slice(0,21)+"…":s}</span>;
+  };
+
+  const _pill = (label, active, count, onClick) => (
+    <button onClick={onClick} style={{
+      padding:"3px 10px", borderRadius:20, border:`1.5px solid ${active?C.navyLight:C.border}`,
+      background:active?C.navyLight:C.white, color:active?"#fff":C.text,
+      fontSize:10, fontWeight:active?700:400, cursor:"pointer", display:"flex", alignItems:"center", gap:4
+    }}>
+      {label}{count!=null&&<span style={{background:active?"rgba(255,255,255,0.25)":"#f1f5f9",color:active?"#fff":C.muted,borderRadius:10,padding:"0 5px",fontSize:10,fontWeight:700}}>{count}</span>}
+    </button>
+  );
+
+  // Filter options
+  const allSPs     = Array.from(new Set(reqRows.map(r=>String(r[reqK?.component]||"").trim()).filter(Boolean))).sort();
+  const allSprints = Array.from(new Set(reqRows.map(r=>String(r[reqK?.sprint]||"").trim()).filter(Boolean))).sort();
+
+  const filtered = reqRows.filter(r => {
+    const id    = String(r[reqK?.reqId]||"").trim();
+    const sp    = String(r[reqK?.component]||"").trim();
+    const spr   = String(r[reqK?.sprint]||"").trim();
+    const hasSc = (scensByReqId[id]?.length||0) > 0;
+    const q     = search.toLowerCase();
+    return (
+      (spFilter  ==="ALL"||sp===spFilter) &&
+      (sprFilter ==="ALL"||spr===sprFilter) &&
+      (covFilter ==="ALL"||(covFilter==="yes"?hasSc:!hasSc)) &&
+      (!q||id.toLowerCase().includes(q)||String(r[reqK?.story]||"").toLowerCase().includes(q))
+    );
+  });
+
+  const covCnt  = filtered.filter(r=>(scensByReqId[String(r[reqK?.reqId]||"")]?.length||0)>0).length;
+  const gapCnt  = filtered.length - covCnt;
+  const totScen = filtered.reduce((s,r)=>s+(scensByReqId[String(r[reqK?.reqId]||"")]?.length||0),0);
+  const covPct  = filtered.length ? Math.round(covCnt/filtered.length*100) : 0;
+
+  const TH = ({children, style={}}) => (
+    <th style={{padding:"8px 10px",fontWeight:700,fontSize:10,color:"#fff",background:C.navy,
+      textAlign:"left",borderRight:"1px solid rgba(255,255,255,0.1)",whiteSpace:"nowrap",...style}}>{children}</th>
+  );
+
+  return (
+    <div style={{display:"flex",flexDirection:"column",gap:16}}>
+
+      {/* KPI row */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12}}>
+        <KpiCard label="Total Requirements"   value={filtered.length} color={C.navyLight} />
+        <KpiCard label="Scenarios Linked"     value={covCnt}   color={C.complete}  sub={`${covPct}% coverage`} subColor={covPct>=80?C.complete:covPct>=50?"#d97706":C.delayed} />
+        <KpiCard label="No Scenarios (Gap)"   value={gapCnt}   color={gapCnt>0?C.delayed:C.complete} onClick={gapCnt?()=>setCovFilter(covFilter==="no"?"ALL":"no"):null} />
+        <KpiCard label="Total Test Scenarios" value={totScen}  color={C.navyLight} sub={test?"":"Upload Test Scenarios file"} />
+      </div>
+
+      {/* Filter bar */}
+      <div style={{background:"#f8fafc",border:`1px solid ${C.border}`,borderRadius:8,padding:"10px 14px",display:"flex",flexDirection:"column",gap:8}}>
+        <input value={search} onChange={e=>setSearch(e.target.value)}
+          placeholder="Search by Req ID or User Story…"
+          style={{padding:"6px 10px",border:`1px solid ${C.border}`,borderRadius:6,fontSize:12,width:"100%",boxSizing:"border-box",outline:"none"}} />
+        {allSPs.length>0&&(
+          <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+            <span style={{fontSize:10,fontWeight:700,color:C.text,minWidth:90}}>Sub Process</span>
+            {_pill("All",spFilter==="ALL",reqRows.length,()=>setSpFilter("ALL"))}
+            {allSPs.map(v=>_pill(v,spFilter===v,reqRows.filter(r=>String(r[reqK?.component]||"").trim()===v).length,()=>setSpFilter(spFilter===v?"ALL":v)))}
+          </div>
+        )}
+        {allSprints.length>0&&(
+          <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+            <span style={{fontSize:10,fontWeight:700,color:C.text,minWidth:90}}>Build Cycle</span>
+            {_pill("All",sprFilter==="ALL",null,()=>setSprFilter("ALL"))}
+            {allSprints.map(v=>_pill(v,sprFilter===v,reqRows.filter(r=>String(r[reqK?.sprint]||"").trim()===v).length,()=>setSprFilter(sprFilter===v?"ALL":v)))}
+          </div>
+        )}
+        <div style={{display:"flex",alignItems:"center",gap:6,paddingTop:4,borderTop:`1px dashed ${C.border}`}}>
+          <span style={{fontSize:10,fontWeight:700,color:C.text,minWidth:90}}>Coverage</span>
+          {_pill("All",covFilter==="ALL",null,()=>setCovFilter("ALL"))}
+          {_pill(`Has Scenarios (${covCnt})`,covFilter==="yes",null,()=>setCovFilter(covFilter==="yes"?"ALL":"yes"))}
+          {_pill(`No Scenarios (${gapCnt})`,covFilter==="no",null,()=>setCovFilter(covFilter==="no"?"ALL":"no"))}
+        </div>
+      </div>
+
+      {/* Traceability table */}
+      <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden",boxShadow:"0 1px 3px rgba(0,0,0,0.06)"}}>
+        <div style={{overflowX:"auto"}}>
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
+            <thead style={{position:"sticky",top:0,zIndex:2}}>
+              <tr>
+                <TH style={{width:36,minWidth:36}}></TH>
+                <TH style={{width:80}}>Req ID</TH>
+                <TH style={{minWidth:160}}>User Story</TH>
+                <TH style={{minWidth:180}}>Acceptance Criteria</TH>
+                <TH style={{minWidth:110}}>Build Approach</TH>
+                <TH style={{width:110,textAlign:"center"}}>Build Status</TH>
+                <TH style={{width:120,textAlign:"center"}}>Review Status (D&A)</TH>
+                <TH style={{width:90,textAlign:"center"}}>Test Scenarios</TH>
+                <TH style={{width:90,textAlign:"center",borderRight:"none"}}>Test Scripts</TH>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.length===0&&(
+                <tr><td colSpan={9} style={{padding:24,textAlign:"center",color:C.muted}}>No requirements match selected filters.</td></tr>
+              )}
+              {filtered.map((r,i)=>{
+                const id    = String(r[reqK?.reqId]||"").trim()||String(i);
+                const scens = scensByReqId[id]||[];
+                const isOpen= expanded.has(id);
+                const gap   = scens.length===0;
+                const rowBg = gap?"#fffbeb":i%2===0?C.white:"#f9fafb";
+                return (
+                  <React.Fragment key={id}>
+                    <tr style={{background:rowBg,borderBottom:isOpen?`2px solid #93c5fd`:`1px solid ${C.border}`,verticalAlign:"top",cursor:"pointer"}}
+                      onClick={()=>_toggle(id)}>
+                      <td style={{padding:"8px 10px",textAlign:"center",color:isOpen?C.navyLight:C.muted,fontWeight:700}}>{isOpen?"▾":"▸"}</td>
+                      <td style={{padding:"8px 10px",fontWeight:700,color:C.navyLight,whiteSpace:"nowrap",borderRight:`1px solid ${C.border}`}}>{id||"—"}</td>
+                      <td style={{padding:"8px 10px",color:C.text,lineHeight:1.45,borderRight:`1px solid ${C.border}`,maxWidth:260}}>
+                        <span style={{display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{String(r[reqK?.story]||"—")}</span>
+                      </td>
+                      <td style={{padding:"8px 10px",color:C.muted,lineHeight:1.45,borderRight:`1px solid ${C.border}`,maxWidth:220}}>
+                        <span style={{display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{String(r[reqK?.acceptance]||"—")}</span>
+                      </td>
+                      <td style={{padding:"8px 10px",color:C.text,borderRight:`1px solid ${C.border}`}}>{String(r[reqK?.testScriptType]||"—")}</td>
+                      <td style={{padding:"8px 10px",textAlign:"center",borderRight:`1px solid ${C.border}`}}>{_buildBadge(r[reqK?.funcBuildStatus],r[reqK?.techBuildStatus])}</td>
+                      <td style={{padding:"8px 10px",textAlign:"center",borderRight:`1px solid ${C.border}`}}>{_reviewBadge(r[reqK?.derivedStatus])}</td>
+                      <td style={{padding:"8px 10px",textAlign:"center",borderRight:`1px solid ${C.border}`}}>
+                        {scens.length>0
+                          ?<span style={{background:"#eff6ff",color:"#1d4ed8",borderRadius:4,padding:"2px 9px",fontSize:11,fontWeight:700,cursor:"pointer"}}>{scens.length}</span>
+                          :<span style={{background:"#fff7ed",color:"#c2410c",borderRadius:4,padding:"2px 7px",fontSize:10,fontWeight:600}}>None</span>}
+                      </td>
+                      <td style={{padding:"8px 10px",textAlign:"center"}}>
+                        <span style={{color:C.muted,fontSize:10,fontStyle:"italic"}}>Coming soon</span>
+                      </td>
+                    </tr>
+                    {isOpen&&(
+                      <tr style={{background:"#f0f6ff",borderBottom:`2px solid #93c5fd`}}>
+                        <td colSpan={9} style={{padding:"12px 16px 14px 52px"}}>
+                          {/* Full user story + acceptance criteria */}
+                          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:scens.length?14:0}}>
+                            <div>
+                              <div style={{fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:4}}>User Story</div>
+                              <div style={{fontSize:11,color:C.text,lineHeight:1.55}}>{String(r[reqK?.story]||"—")}</div>
+                            </div>
+                            <div>
+                              <div style={{fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:4}}>Acceptance Criteria</div>
+                              <div style={{fontSize:11,color:C.text,lineHeight:1.55}}>{String(r[reqK?.acceptance]||"—")}</div>
+                            </div>
+                          </div>
+                          {/* Linked test scenarios */}
+                          {scens.length>0?(
+                            <div>
+                              <div style={{fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:6}}>Linked Test Scenarios ({scens.length})</div>
+                              <table style={{width:"100%",borderCollapse:"collapse",fontSize:10,background:C.white,borderRadius:6,overflow:"hidden"}}>
+                                <thead>
+                                  <tr style={{background:C.navy}}>
+                                    {["ID","Scenario","Sub Process","Est. Cases","Functional","SD Review","D&A"].map(h=>(
+                                      <th key={h} style={{padding:"6px 8px",color:"#fff",fontWeight:700,textAlign:"left",borderRight:"1px solid rgba(255,255,255,0.1)",whiteSpace:"nowrap"}}>{h}</th>
+                                    ))}
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {scens.map((s,si)=>(
+                                    <tr key={si} style={{background:si%2===0?"#f8fafc":C.white,borderBottom:`1px solid ${C.border}`}}>
+                                      <td style={{padding:"5px 8px",fontWeight:700,color:C.navyLight,whiteSpace:"nowrap",borderRight:`1px solid ${C.border}`}}>{String(s[tK?.id]||"—")}</td>
+                                      <td style={{padding:"5px 8px",color:C.text,borderRight:`1px solid ${C.border}`,maxWidth:240,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{String(s[tK?.name]||"—")}</td>
+                                      <td style={{padding:"5px 8px",color:C.muted,whiteSpace:"nowrap",borderRight:`1px solid ${C.border}`}}>{String(s[tK?.subprocess]||"—")}</td>
+                                      <td style={{padding:"5px 8px",textAlign:"center",fontWeight:700,borderRight:`1px solid ${C.border}`}}>{s[tK?.estCases]||"—"}</td>
+                                      <td style={{padding:"5px 8px",textAlign:"center",borderRight:`1px solid ${C.border}`}}>{_reviewBadge(s[tK?.funcStatus])}</td>
+                                      <td style={{padding:"5px 8px",textAlign:"center",borderRight:`1px solid ${C.border}`}}>{_reviewBadge(s[tK?.sdStatus])}</td>
+                                      <td style={{padding:"5px 8px",textAlign:"center"}}>{_reviewBadge(s[tK?.daStatus])}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          ):(
+                            <div style={{background:"#fff7ed",border:"1px solid #fed7aa",borderRadius:6,padding:"10px 14px",display:"flex",alignItems:"center",gap:8}}>
+                              <span style={{fontSize:16}}>⚠</span>
+                              <span style={{fontSize:11,color:"#c2410c",fontWeight:600}}>No test scenarios linked to this requirement — coverage gap</span>
+                            </div>
+                          )}
+                          {/* Test scripts placeholder */}
+                          <div style={{marginTop:10,background:"#f8fafc",border:`1px dashed ${C.border}`,borderRadius:6,padding:"8px 12px",display:"flex",alignItems:"center",gap:8}}>
+                            <span style={{fontSize:11,color:C.muted,fontStyle:"italic"}}>Test Scripts — upload test script sheet to link scripts here</span>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        {filtered.length>0&&(
+          <div style={{padding:"8px 14px",borderTop:`1px solid ${C.border}`,background:"#f8fafc",fontSize:10,color:C.muted,display:"flex",gap:16}}>
+            <span>Showing <strong style={{color:C.text}}>{filtered.length}</strong> requirements</span>
+            <span>Coverage: <strong style={{color:covPct>=80?C.complete:covPct>=50?"#d97706":C.delayed}}>{covPct}%</strong> ({covCnt} linked)</span>
+            <span style={{color:"#c2410c"}}>Gaps: <strong>{gapCnt}</strong> with no test scenarios</span>
+          </div>
+        )}
       </div>
     </div>
   );
