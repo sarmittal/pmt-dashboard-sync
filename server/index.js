@@ -65,13 +65,22 @@ app.get("/api/health", (_req, res) => {
   });
 });
 
-// Temporary debug endpoint — returns all column names for test + req sheets
+// Temporary debug endpoint — returns column names and storyIds sample values
 app.get("/api/debug/columns", async (req, res) => {
   try {
     if (!cache) await doRefresh();
-    const testCols = cache.data.test?.[0] ? Object.keys(cache.data.test[0]).filter(k=>!k.startsWith("_")).sort() : [];
-    const reqCols  = cache.data.req?.[0]  ? Object.keys(cache.data.req[0]).filter(k=>!k.startsWith("_")).sort()  : [];
-    res.json({ testColumns: testCols, reqColumns: reqCols });
+    const testRows = cache.data.test || [];
+    const reqRows  = cache.data.req  || [];
+    const testCols = testRows[0] ? Object.keys(testRows[0]).filter(k=>!k.startsWith("_")).sort() : [];
+    const reqCols  = reqRows[0]  ? Object.keys(reqRows[0]).filter(k=>!k.startsWith("_")).sort()  : [];
+    // Show storyIds values for rows whose ID contains "TS-00025" or first 10 rows
+    const storyIdCol = "Primary User Story Ids";
+    const idCol      = "ID";
+    const samples = testRows
+      .filter(r => String(r[idCol]||"").includes("TS-000") )
+      .slice(0, 15)
+      .map(r => ({ id: r[idCol], storyIds: r[storyIdCol], type: typeof r[storyIdCol] }));
+    res.json({ testColumns: testCols, reqColumns: reqCols, storyIdSamples: samples });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
