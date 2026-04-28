@@ -4736,20 +4736,20 @@ function TestScenariosTab({ data, wp, req }) {
     req.items.forEach(r => { const id = String(r[reqK.reqId]||"").trim(); if (id) reqById[id] = r; });
   }
 
-  // Set of all req IDs referenced in any drafted scenario's Primary User Story IDs field
+  // Set of all req IDs referenced in any drafted scenario's "Similar User Story IDs" field
   const taggedReqIds = new Set();
-  if (K.storyIds) {
+  if (K.similarUSIds) {
     draftedRows.forEach(r => {
-      String(r[K.storyIds]||"").split(/\n|,|;/).map(s=>s.trim()).filter(Boolean).forEach(id => taggedReqIds.add(id));
+      String(r[K.similarUSIds]||"").split(/\n|,|;/).map(s=>s.trim()).filter(Boolean).forEach(id => taggedReqIds.add(id));
     });
   }
 
   // Reverse map: reqId → [scenarioId, ...] (used in Tagged US drill-down)
   const scenariosByReqId = {};
-  if (K.storyIds && K.id) {
+  if (K.similarUSIds && K.id) {
     draftedRows.forEach(r => {
       const scenId = String(r[K.id]||"").trim();
-      String(r[K.storyIds]||"").split(/\n|,|;/).map(s=>s.trim()).filter(Boolean).forEach(reqId => {
+      String(r[K.similarUSIds]||"").split(/\n|,|;/).map(s=>s.trim()).filter(Boolean).forEach(reqId => {
         if (!scenariosByReqId[reqId]) scenariosByReqId[reqId] = [];
         if (scenId) scenariosByReqId[reqId].push(scenId);
       });
