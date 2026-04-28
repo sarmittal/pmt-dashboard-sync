@@ -4988,6 +4988,7 @@ function TestScenariosTab({ data, wp, req }) {
 
   const TeamDrillModal = ({ title, rows:mRows, teamId:tid, reqById:rById={}, reqK:rK, onClose }) => {
     const [colW, setColW] = useState({});
+    const [spFilter, setSpFilter] = useState("ALL");
     const resizing = useRef(null);
 
     useEffect(() => {
@@ -5011,6 +5012,9 @@ function TestScenariosTab({ data, wp, req }) {
         onMouseEnter={e => e.currentTarget.style.background="rgba(255,255,255,0.3)"}
         onMouseLeave={e => e.currentTarget.style.background="transparent"} />
     );
+
+    const allSps     = Array.from(new Set(mRows.map(r => String(r[K.subprocess]||"Unknown").trim()))).sort();
+    const filteredRows = spFilter === "ALL" ? mRows : mRows.filter(r => String(r[K.subprocess]||"Unknown").trim() === spFilter);
 
     const curTeam    = TEAMS.find(t => t.id === tid);
     const priorTeams = (PRIOR_MAP[tid] || []).map(id => TEAMS.find(t => t.id === id)).filter(Boolean);
@@ -5080,9 +5084,32 @@ function TestScenariosTab({ data, wp, req }) {
       <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center" }} onClick={onClose}>
         <div style={{ background:C.white, borderRadius:10, width:"99%", maxWidth:1800, maxHeight:"92vh", display:"flex", flexDirection:"column", boxShadow:"0 24px 60px rgba(0,0,0,0.35)" }} onClick={e=>e.stopPropagation()}>
           <div style={{ background:C.headerBg, padding:"12px 20px", borderRadius:"10px 10px 0 0", display:"flex", justifyContent:"space-between", alignItems:"center", flexShrink:0 }}>
-            <span style={{ color:"#fff", fontWeight:700, fontSize:13 }}>{title} <span style={{ opacity:.6, fontWeight:400 }}>({mRows.length} scenarios)</span></span>
+            <span style={{ color:"#fff", fontWeight:700, fontSize:13 }}>{title} <span style={{ opacity:.6, fontWeight:400 }}>({filteredRows.length}{filteredRows.length!==mRows.length?` of ${mRows.length}`:""} scenarios)</span></span>
             <button onClick={onClose} style={{ background:"rgba(255,255,255,0.15)", border:"none", color:"#fff", borderRadius:5, padding:"5px 14px", cursor:"pointer", fontSize:13, fontWeight:600 }}>✕</button>
           </div>
+          {/* Sub Process filter bar */}
+          {allSps.length > 1 && (
+            <div style={{ background:"#f8fafc", borderBottom:`1px solid ${C.border}`, padding:"8px 16px", flexShrink:0, display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
+              <span style={{ fontSize:10, color:"#374151", fontWeight:700, minWidth:70 }}>Sub Process</span>
+              {["ALL", ...allSps].map(sp => {
+                const isActive = spFilter === sp;
+                const count = sp === "ALL" ? mRows.length : mRows.filter(r => String(r[K.subprocess]||"Unknown").trim() === sp).length;
+                return (
+                  <button key={sp} onClick={() => setSpFilter(sp)}
+                    style={{ display:"flex", alignItems:"center", gap:4, padding:"3px 9px", borderRadius:20,
+                      border:`2px solid ${isActive?C.navyLight:C.border}`,
+                      background:isActive?C.navyLight:C.white, color:isActive?"#fff":C.text,
+                      cursor:"pointer", fontSize:10, fontWeight:700, transition:"all .12s" }}>
+                    {sp === "ALL" ? "All" : sp}
+                    <span style={{ background:isActive?"rgba(255,255,255,0.25)":"#f1f5f9", color:isActive?"#fff":C.text,
+                      borderRadius:10, padding:"1px 6px", fontSize:10, fontWeight:800, minWidth:18, textAlign:"center" }}>
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
           <div style={{ overflowY:"auto", overflowX:"auto", flex:1 }}>
             <table style={{ borderCollapse:"collapse", fontSize:11, tableLayout:"fixed" }}>
               {/* colgroup is the authoritative source of column widths for tableLayout:fixed */}
@@ -5109,7 +5136,7 @@ function TestScenariosTab({ data, wp, req }) {
                 </tr>
               </thead>
               <tbody>
-                {mRows.map((r, i) => (
+                {filteredRows.map((r, i) => (
                   <tr key={i} style={{ background:i%2===0?C.white:"#f7f9fc", borderBottom:`1px solid ${C.border}`, verticalAlign:"top" }}>
                     {ALL_COLS.map(c => (
                       <td key={c.ck} style={{ padding:"8px 10px", verticalAlign:"top", fontSize:11, overflow:"hidden",
