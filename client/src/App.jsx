@@ -5859,31 +5859,77 @@ function TestScenariosTab({ data, wp, req }) {
         <div style={{ overflowX:"auto" }}>
           <table style={{ width:"100%", borderCollapse:"collapse", fontSize:11 }}>
             <thead style={{ position:"sticky", top:0, zIndex:2 }}>
+              {/* Group header row */}
               <tr style={{ background:C.navy }}>
-                <th style={{ padding:"8px 10px", textAlign:"left",   color:"#fff",    fontWeight:700, fontSize:10, width:scenColW["expand"]||36,  minWidth:36,  borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative" }}>{_rh("expand",36)}</th>
-                <th style={{ padding:"8px 6px",  textAlign:"center", color:"#fda4af", fontWeight:700, fontSize:10, width:scenColW["del"]||75,    minWidth:55,  borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative" }}>To Be Deleted{_rh("del",75)}</th>
-                <th style={{ padding:"8px 6px",  textAlign:"center", color:"#fbbf24", fontWeight:700, fontSize:10, width:scenColW["dup"]||75,    minWidth:55,  borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative" }}>Dup / Data Mining / NA{_rh("dup",75)}</th>
-                <th style={{ padding:"8px 6px",  textAlign:"center", color:"#fde68a", fontWeight:700, fontSize:10, width:scenColW["openFb"]||75, minWidth:55,  borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative" }}>Open Feedback{_rh("openFb",75)}</th>
-                <th style={{ padding:"8px 10px", textAlign:"left",   color:"#fff",    fontWeight:700, fontSize:10, width:scenColW["id"]||90,     minWidth:70,  borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative" }}>ID{_rh("id",90)}</th>
-                <th style={{ padding:"8px 10px", textAlign:"left",   color:"#a8d8ff", fontWeight:700, fontSize:10, width:scenColW["scen"]||220,  minWidth:160, borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative" }}>Scenario{_rh("scen",220)}</th>
-                <th style={{ padding:"8px 10px", textAlign:"left",   color:"#a8d8ff", fontWeight:700, fontSize:10, width:scenColW["sp"]||130,    minWidth:100, borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative" }}>Sub Process{_rh("sp",130)}</th>
-                <th style={{ padding:"8px 10px", textAlign:"left",   color:"#a8d8ff", fontWeight:700, fontSize:10, width:scenColW["det"]||180,   minWidth:120, borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative" }}>Additional Details{_rh("det",180)}</th>
-                <th style={{ padding:"8px 10px", textAlign:"left",   color:"#a8d8ff", fontWeight:700, fontSize:10, width:scenColW["pers"]||120,  minWidth:70,  borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative" }}>Persona{_rh("pers",120)}</th>
-                <th style={{ padding:"8px 10px", textAlign:"center", color:"#a8d8ff", fontWeight:700, fontSize:10, width:scenColW["est"]||65,    minWidth:55,  borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative" }}>Est. Cases{_rh("est",65)}</th>
-                <th style={{ padding:"8px 10px", textAlign:"left",   color:"#a8d8ff", fontWeight:700, fontSize:10, width:scenColW["sit"]||100,   minWidth:80,  borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative" }}>Target SIT{_rh("sit",100)}</th>
-                <th style={{ padding:"8px 10px", textAlign:"center", color:"#fcd34d", fontWeight:700, fontSize:10, width:scenColW["sd"]||110,    minWidth:80,  borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative" }}>Consulting SD Review{_rh("sd",110)}</th>
-                <th style={{ padding:"8px 10px", textAlign:"center", color:"#fcd34d", fontWeight:700, fontSize:10, width:scenColW["pmtsd"]||90,  minWidth:70,  borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative" }}>PMT SD{_rh("pmtsd",90)}</th>
-                <th style={{ padding:"8px 10px", textAlign:"center", color:"#fcd34d", fontWeight:700, fontSize:10, width:scenColW["dt"]||70,     minWidth:55,  borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative" }}>DT{_rh("dt",70)}</th>
-                <th style={{ padding:"8px 10px", textAlign:"center", color:"#c4f1c4", fontWeight:700, fontSize:10, width:scenColW["da"]||90,     minWidth:70,  borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative" }}>D&A{_rh("da",90)}</th>
-                <th style={{ padding:"8px 10px", textAlign:"center", color:"#c4f1c4", fontWeight:700, fontSize:10, width:scenColW["tagUs"]||80,  minWidth:65,  borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative" }}>Tagged US{_rh("tagUs",80)}</th>
-                <th style={{ padding:"8px 10px", textAlign:"center", color:"#93c5fd", fontWeight:700, fontSize:10, width:scenColW["man"]||55,    minWidth:45,  borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative" }} title="Manual (Not Tech Enabled)">Man{_rh("man",55)}</th>
-                <th style={{ padding:"8px 10px", textAlign:"center", color:"#e2e8f0", fontWeight:700, fontSize:10, width:scenColW["rev"]||110,   minWidth:90,  position:"relative" }}>Review Comments{_rh("rev",110)}</th>
+                <th rowSpan={2} style={{ padding:"8px 10px", color:"#fff",    fontWeight:700, fontSize:10, width:scenColW["expand"]||36,  minWidth:36,  borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative", verticalAlign:"bottom" }}>{_rh("expand",36)}</th>
+                <th rowSpan={2} style={{ padding:"8px 6px",  textAlign:"center", color:"#fda4af", fontWeight:700, fontSize:10, width:scenColW["del"]||75,    minWidth:55,  borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative", verticalAlign:"bottom" }}>To Be Deleted{_rh("del",75)}</th>
+                <th rowSpan={2} style={{ padding:"8px 6px",  textAlign:"center", color:"#fbbf24", fontWeight:700, fontSize:10, width:scenColW["dup"]||75,    minWidth:55,  borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative", verticalAlign:"bottom" }}>Dup / Data Mining / NA{_rh("dup",75)}</th>
+                <th rowSpan={2} style={{ padding:"8px 6px",  textAlign:"center", color:"#fde68a", fontWeight:700, fontSize:10, width:scenColW["openFb"]||75, minWidth:55,  borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative", verticalAlign:"bottom" }}>Open Feedback{_rh("openFb",75)}</th>
+                <th rowSpan={2} style={{ padding:"8px 10px", textAlign:"left",   color:"#fff",    fontWeight:700, fontSize:10, width:scenColW["id"]||90,     minWidth:70,  borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative", verticalAlign:"bottom" }}>ID{_rh("id",90)}</th>
+                <th rowSpan={2} style={{ padding:"8px 10px", textAlign:"left",   color:"#a8d8ff", fontWeight:700, fontSize:10, width:scenColW["scen"]||220,  minWidth:160, borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative", verticalAlign:"bottom" }}>Scenario{_rh("scen",220)}</th>
+                <th rowSpan={2} style={{ padding:"8px 10px", textAlign:"left",   color:"#a8d8ff", fontWeight:700, fontSize:10, width:scenColW["sp"]||130,    minWidth:100, borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative", verticalAlign:"bottom" }}>Sub Process{_rh("sp",130)}</th>
+                <th rowSpan={2} style={{ padding:"8px 10px", textAlign:"left",   color:"#a8d8ff", fontWeight:700, fontSize:10, width:scenColW["det"]||180,   minWidth:120, borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative", verticalAlign:"bottom" }}>Additional Details{_rh("det",180)}</th>
+                <th rowSpan={2} style={{ padding:"8px 10px", textAlign:"left",   color:"#a8d8ff", fontWeight:700, fontSize:10, width:scenColW["pers"]||120,  minWidth:70,  borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative", verticalAlign:"bottom" }}>Persona{_rh("pers",120)}</th>
+                <th rowSpan={2} style={{ padding:"8px 10px", textAlign:"center", color:"#a8d8ff", fontWeight:700, fontSize:10, width:scenColW["est"]||65,    minWidth:55,  borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative", verticalAlign:"bottom" }}>Est. Cases{_rh("est",65)}</th>
+                <th rowSpan={2} style={{ padding:"8px 10px", textAlign:"left",   color:"#a8d8ff", fontWeight:700, fontSize:10, width:scenColW["sit"]||100,   minWidth:80,  borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative", verticalAlign:"bottom" }}>Target SIT{_rh("sit",100)}</th>
+                <th colSpan={3}  style={{ padding:"6px 10px", textAlign:"center", color:"#6ee7b7", fontWeight:700, fontSize:10, background:"#064e3b", borderRight:"1px solid rgba(255,255,255,0.1)", borderBottom:"1px solid #10b981", letterSpacing:"0.05em" }}>Internal Tech Team Reviews</th>
+                <th rowSpan={2} style={{ padding:"8px 10px", textAlign:"center", color:"#fcd34d", fontWeight:700, fontSize:10, width:scenColW["sd"]||110,    minWidth:80,  borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative", verticalAlign:"bottom" }}>Consulting SD Review{_rh("sd",110)}</th>
+                <th rowSpan={2} style={{ padding:"8px 10px", textAlign:"center", color:"#fcd34d", fontWeight:700, fontSize:10, width:scenColW["pmtsd"]||90,  minWidth:70,  borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative", verticalAlign:"bottom" }}>PMT SD{_rh("pmtsd",90)}</th>
+                <th rowSpan={2} style={{ padding:"8px 10px", textAlign:"center", color:"#fcd34d", fontWeight:700, fontSize:10, width:scenColW["dt"]||70,     minWidth:55,  borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative", verticalAlign:"bottom" }}>DT{_rh("dt",70)}</th>
+                <th rowSpan={2} style={{ padding:"8px 10px", textAlign:"center", color:"#c4f1c4", fontWeight:700, fontSize:10, width:scenColW["da"]||90,     minWidth:70,  borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative", verticalAlign:"bottom" }}>D&A{_rh("da",90)}</th>
+                <th rowSpan={2} style={{ padding:"8px 10px", textAlign:"center", color:"#c4f1c4", fontWeight:700, fontSize:10, width:scenColW["tagUs"]||80,  minWidth:65,  borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative", verticalAlign:"bottom" }}>Tagged US{_rh("tagUs",80)}</th>
+                <th rowSpan={2} style={{ padding:"8px 10px", textAlign:"center", color:"#93c5fd", fontWeight:700, fontSize:10, width:scenColW["man"]||55,    minWidth:45,  borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative", verticalAlign:"bottom" }} title="Manual (Not Tech Enabled)">Man{_rh("man",55)}</th>
+                <th rowSpan={2} style={{ padding:"8px 10px", textAlign:"center", color:"#e2e8f0", fontWeight:700, fontSize:10, width:scenColW["rev"]||110,   minWidth:90,  position:"relative", verticalAlign:"bottom" }}>Review Comments{_rh("rev",110)}</th>
+              </tr>
+              {/* Group sub-header for Internal Tech Team Reviews */}
+              <tr style={{ background:"#064e3b" }}>
+                <th style={{ padding:"6px 8px", textAlign:"center", color:"#a7f3d0", fontWeight:700, fontSize:10, width:scenColW["owner"]||120, minWidth:90,  borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative" }}>Req Repository Owner{_rh("owner",120)}</th>
+                <th style={{ padding:"6px 8px", textAlign:"center", color:"#a7f3d0", fontWeight:700, fontSize:10, width:scenColW["func"]||100,  minWidth:80,  borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative" }}>Functional{_rh("func",100)}</th>
+                <th style={{ padding:"6px 8px", textAlign:"center", color:"#a7f3d0", fontWeight:700, fontSize:10, width:scenColW["tech"]||100,  minWidth:80,  borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative" }}>Technical{_rh("tech",100)}</th>
               </tr>
             </thead>
             <tbody>
               {_scenFiltered.length === 0 && (
-                <tr><td colSpan={18} style={{ padding:24, textAlign:"center", color:C.muted }}>No scenarios match selected filters</td></tr>
+                <tr><td colSpan={21} style={{ padding:24, textAlign:"center", color:C.muted }}>No scenarios match selected filters</td></tr>
               )}
+              {/* Subtotal row */}
+              {(() => {
+                const stDel  = _scenFiltered.filter(r=>isTruthy(r[K.toBeDeleted])).length;
+                const stDup  = _scenFiltered.filter(r=>isTruthy(r[K.dupDataMiningNA])).length;
+                const stFb   = _scenFiltered.filter(r=>isTruthy(r[K.openFeedbackFlag])).length;
+                const stMan  = _scenFiltered.filter(r=>isTruthy(r[K.manualNotTech])).length;
+                const stId   = _scenFiltered.length;
+                const stEst  = _scenFiltered.reduce((s,r)=>s+(Number(r[K.estCases])||0), 0);
+                const stTag  = _scenFiltered.reduce((s,r)=>s+_splitUSIds(r[K.similarUSIds]).length, 0);
+                const stCell = (v, extra={}) => (
+                  <span style={{ background:"#1e3a5f", color:"#e2e8f0", borderRadius:4, padding:"2px 8px", fontSize:10, fontWeight:800, ...extra }}>{v}</span>
+                );
+                return (
+                  <tr style={{ background:"#0f172a", borderBottom:`2px solid ${C.navyLight}`, position:"sticky", top:41 }}>
+                    <td style={{ padding:"6px 8px", textAlign:"center", color:"#94a3b8", fontSize:9, fontWeight:700 }}>∑</td>
+                    <td style={{ padding:"6px 8px", textAlign:"center", borderRight:`1px solid #1e3a5f` }}>{stCell(stDel, {background:"#7f1d1d", color:"#fca5a5"})}</td>
+                    <td style={{ padding:"6px 8px", textAlign:"center", borderRight:`1px solid #1e3a5f` }}>{stCell(stDup, {background:"#78350f", color:"#fde68a"})}</td>
+                    <td style={{ padding:"6px 8px", textAlign:"center", borderRight:`1px solid #1e3a5f` }}>{stCell(stFb,  {background:"#713f12", color:"#fef08a"})}</td>
+                    <td style={{ padding:"6px 8px", textAlign:"center", borderRight:`1px solid #1e3a5f` }}>{stCell(stId)}</td>
+                    <td style={{ padding:"6px 8px", borderRight:`1px solid #1e3a5f` }} />
+                    <td style={{ padding:"6px 8px", borderRight:`1px solid #1e3a5f` }} />
+                    <td style={{ padding:"6px 8px", borderRight:`1px solid #1e3a5f` }} />
+                    <td style={{ padding:"6px 8px", borderRight:`1px solid #1e3a5f` }} />
+                    <td style={{ padding:"6px 8px", textAlign:"center", borderRight:`1px solid #1e3a5f` }}>{stCell(stEst, {background:"#1e3a5f", color:"#93c5fd"})}</td>
+                    <td style={{ padding:"6px 8px", borderRight:`1px solid #1e3a5f` }} />
+                    <td style={{ padding:"6px 8px", borderRight:`1px solid #1e3a5f` }} />
+                    <td style={{ padding:"6px 8px", borderRight:`1px solid #1e3a5f` }} />
+                    <td style={{ padding:"6px 8px", borderRight:`1px solid #1e3a5f` }} />
+                    <td style={{ padding:"6px 8px", borderRight:`1px solid #1e3a5f` }} />
+                    <td style={{ padding:"6px 8px", borderRight:`1px solid #1e3a5f` }} />
+                    <td style={{ padding:"6px 8px", borderRight:`1px solid #1e3a5f` }} />
+                    <td style={{ padding:"6px 8px", borderRight:`1px solid #1e3a5f` }} />
+                    <td style={{ padding:"6px 8px", textAlign:"center", borderRight:`1px solid #1e3a5f` }}>{stCell(stTag, {background:"#1e3a5f", color:"#a5b4fc"})}</td>
+                    <td style={{ padding:"6px 8px", textAlign:"center", borderRight:`1px solid #1e3a5f` }}>{stCell(stMan, {background:"#1e3a8a", color:"#bfdbfe"})}</td>
+                    <td style={{ padding:"6px 8px" }} />
+                  </tr>
+                );
+              })()}
               {_scenFiltered.map((r, i) => {
                 const scenId      = String(r[K.id]||i);
                 const isOpen      = scenExpanded.has(scenId);
@@ -5917,6 +5963,9 @@ function TestScenariosTab({ data, wp, req }) {
                       <td style={{ padding:"8px 10px", color:C.muted, wordBreak:"break-word", maxWidth:scenColW["pers"]||120, borderRight:`1px solid ${C.border}`, width:scenColW["pers"]||120 }}>{String(r[K.persona]||"—")}</td>
                       <td style={{ padding:"8px 10px", textAlign:"center", fontWeight:700, color:C.text, borderRight:`1px solid ${C.border}`, width:scenColW["est"]||65 }}>{r[K.estCases]||"—"}</td>
                       <td style={{ padding:"8px 10px", color:C.muted, whiteSpace:"nowrap", borderRight:`1px solid ${C.border}`, width:scenColW["sit"]||100 }}>{String(r[K.sitPlan]||"—")}</td>
+                      <td style={{ padding:"8px 10px", textAlign:"center", borderRight:`1px solid ${C.border}`, width:scenColW["owner"]||120 }}>{_statusBadge(r[K.ownerReviewCompleted])}</td>
+                      <td style={{ padding:"8px 10px", textAlign:"center", borderRight:`1px solid ${C.border}`, width:scenColW["func"]||100 }}>{_statusBadge(r[K.funcStatus])}</td>
+                      <td style={{ padding:"8px 10px", textAlign:"center", borderRight:`1px solid ${C.border}`, width:scenColW["tech"]||100 }}>{_statusBadge(r[K.techStatus])}</td>
                       <td style={{ padding:"8px 10px", textAlign:"center", borderRight:`1px solid ${C.border}`, width:scenColW["sd"]||90 }}>{_statusBadge(r[K.sdStatus])}</td>
                       <td style={{ padding:"8px 10px", textAlign:"center", borderRight:`1px solid ${C.border}`, width:scenColW["pmtsd"]||90 }}>{_statusBadge(r[K.pmtStatus])}</td>
                       <td style={{ padding:"8px 10px", textAlign:"center", borderRight:`1px solid ${C.border}`, width:scenColW["dt"]||70 }}>{_statusBadge(r[K.dtStatus])}</td>
@@ -5938,7 +5987,7 @@ function TestScenariosTab({ data, wp, req }) {
                     </tr>
                     {isOpen && (
                       <tr style={{ background:"#f0f6ff", borderBottom:`2px solid #93c5fd` }}>
-                        <td colSpan={18} style={{ padding:"12px 16px 14px 52px" }}>
+                        <td colSpan={21} style={{ padding:"12px 16px 14px 52px" }}>
                           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:16, marginBottom: tagIds.length ? 14 : 0 }}>
                             <div>
                               <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:4 }}>Applicable Experience</div>
