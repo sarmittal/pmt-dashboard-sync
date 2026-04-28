@@ -387,7 +387,10 @@ function parseTestScenarios(sheets) {
     stepDesc:    ks.find(k => /step.?desc/i.test(k)),
     persona:     ks.find(k => /persona/i.test(k)),
     estCases:    ks.find(k => /estimated.?test.?cases/i.test(k)),
-    storyIds:    ks.find(k => /primary.?user.?story/i.test(k)),
+    storyIds:    ks.find(k => /primary.?user.?story/i.test(k))
+                  || ks.find(k => /^user.?story.?ids?$/i.test(k))
+                  || ks.find(k => /applicable.?user.?story.?id/i.test(k))
+                  || ks.find(k => /user.?story.?id/i.test(k) && !/similar/i.test(k)),
     sitPlan:     ks.find(k => k === "Test Scenario Review SIT Plan") || ks.find(k => /sit.?plan|sit.?review/i.test(k)),
     sprintPlan:  ks.find(k => k === "Sprint Build Plan") || ks.find(k => /sprint.?build/i.test(k)),
     funcStatus:   ks.find(k => k === "Review Status (Functional)") || ks.find(k => /review.?status.*functional/i.test(k)),
@@ -4667,9 +4670,10 @@ function TestScenariosTab({ data, wp, req }) {
   const [subTab,    setSubTab]    = useState("metrics");
   const [spModal,   setSpModal]   = useState(null);
   const [drillModal,    setDrillModal]    = useState(null);
-  const [untaggedModal, setUntaggedModal] = useState(null);
-  const [taggedModal,   setTaggedModal]   = useState(null);
-  const [openFbModal,   setOpenFbModal]   = useState(null);
+  const [untaggedModal,  setUntaggedModal]  = useState(null);
+  const [taggedModal,    setTaggedModal]    = useState(null);
+  const [relevantModal,  setRelevantModal]  = useState(null);
+  const [openFbModal,    setOpenFbModal]    = useState(null);
 
   if (!data) return <Empty label="Upload Test Scenarios file above to view this tab." />;
 
@@ -4769,10 +4773,11 @@ function TestScenariosTab({ data, wp, req }) {
   const allTableRows = Object.entries(subprocessMap).map(([sp, spRows]) => {
     const reqRows = reqBySubprocess[sp] || [];
     const userStories         = reqRows.filter(r => !isReqExcluded(r)).length;
-    const userStoriesRelevant = reqRows.filter(r => !isReqExcluded(r) && isTestScenarioReq(r)).length;
-    const untaggedUSRows = reqK?.reqId ? reqRows.filter(r => !isReqExcluded(r) && isTestScenarioReq(r) && !taggedReqIds.has(String(r[reqK.reqId]||"").trim())) : [];
+    const relevantUSRows      = reqRows.filter(r => !isReqExcluded(r) && isTestScenarioReq(r));
+    const userStoriesRelevant = relevantUSRows.length;
+    const untaggedUSRows = reqK?.reqId ? relevantUSRows.filter(r => !taggedReqIds.has(String(r[reqK.reqId]||"").trim())) : [];
     const untaggedUS = untaggedUSRows.length;
-    const taggedUSRows   = reqK?.reqId ? reqRows.filter(r => !isReqExcluded(r) && isTestScenarioReq(r) &&  taggedReqIds.has(String(r[reqK.reqId]||"").trim())) : [];
+    const taggedUSRows   = reqK?.reqId ? relevantUSRows.filter(r =>  taggedReqIds.has(String(r[reqK.reqId]||"").trim())) : [];
     const taggedUS = taggedUSRows.length;
     const drafted            = spRows.length;
     const openFeedbackRows   = K.openFeedbackFlag ? spRows.filter(r => isTruthy(r[K.openFeedbackFlag])) : [];
@@ -4786,13 +4791,14 @@ function TestScenariosTab({ data, wp, req }) {
       const reviewerName  = spRows.map(r => String(r[t.reviewerKey]||"").trim()).find(v => v) || "";
       return [t.id, { reviewed: revRows.length, pending: pendRows.length, notPushed: notPushedRows.length, reviewerName, revRows, pendRows, notPushedRows }];
     }));
-    return { sp, drafted, userStories, userStoriesRelevant, untaggedUS, untaggedUSRows, taggedUS, taggedUSRows, openFeedbackCount, openFeedbackRows, teamStats };
+    return { sp, drafted, userStories, userStoriesRelevant, relevantUSRows, untaggedUS, untaggedUSRows, taggedUS, taggedUSRows, openFeedbackCount, openFeedbackRows, teamStats };
   });
   const tableRows = selSp === "ALL" ? allTableRows : allTableRows.filter(r => r.sp === selSp);
 
   const totDrafted      = tableRows.reduce((s,r) => s+r.drafted, 0);
   const totUserStories  = tableRows.reduce((s,r) => s+r.userStories, 0);
   const totRelevant     = tableRows.reduce((s,r) => s+r.userStoriesRelevant, 0);
+  const totRelevantRows = tableRows.flatMap(r => r.relevantUSRows || []);
   const totUntagged     = tableRows.reduce((s,r) => s+r.untaggedUS, 0);
   const totUntaggedRows = tableRows.flatMap(r => r.untaggedUSRows || []);
   const totTagged       = tableRows.reduce((s,r) => s+r.taggedUS, 0);
@@ -4807,8 +4813,9 @@ function TestScenariosTab({ data, wp, req }) {
   const overallMetrics = allSubprocesses.map(sp => {
     const spRows  = draftedRows.filter(r => String(r[K.subprocess]||"Unknown").trim() === sp);
     const reqRows = reqBySubprocess[sp] || [];
-    const userStories         = reqRows.filter(r => !isReqExcluded(r)).length;
-    const userStoriesRelevant = reqRows.filter(r => !isReqExcluded(r) && isTestScenarioReq(r)).length;
+    const userStories    = reqRows.filter(r => !isReqExcluded(r)).length;
+    const relevantUSRows = reqRows.filter(r => !isReqExcluded(r) && isTestScenarioReq(r));
+    const userStoriesRelevant = relevantUSRows.length;
     const drafted = spRows.length;
     let totalTeamReviews = 0;
     spRows.forEach(r => {
@@ -4819,14 +4826,15 @@ function TestScenariosTab({ data, wp, req }) {
     const maxReviews = drafted * REVIEW_TEAMS_5.length;
     const reviewPct  = maxReviews > 0 ? Math.round(totalTeamReviews / maxReviews * 100) : 0;
     const fully      = spRows.filter(r => REVIEW_TEAMS_5.every(t => isReviewedFinal(r[t.statusKey]) && !isTruthy(r[K.openFeedbackFlag]))).length;
-    const untaggedUSRows = reqK?.reqId ? reqRows.filter(r => !isReqExcluded(r) && isTestScenarioReq(r) && !taggedReqIds.has(String(r[reqK.reqId]||"").trim())) : [];
+    const untaggedUSRows = reqK?.reqId ? relevantUSRows.filter(r => !taggedReqIds.has(String(r[reqK.reqId]||"").trim())) : [];
     const untaggedUS = untaggedUSRows.length;
-    const taggedUSRows   = reqK?.reqId ? reqRows.filter(r => !isReqExcluded(r) && isTestScenarioReq(r) &&  taggedReqIds.has(String(r[reqK.reqId]||"").trim())) : [];
+    const taggedUSRows   = reqK?.reqId ? relevantUSRows.filter(r =>  taggedReqIds.has(String(r[reqK.reqId]||"").trim())) : [];
     const taggedUS = taggedUSRows.length;
-    return { sp, userStories, userStoriesRelevant, untaggedUS, untaggedUSRows, taggedUS, taggedUSRows, drafted, totalTeamReviews, maxReviews, reviewPct, fully };
+    return { sp, userStories, userStoriesRelevant, relevantUSRows, untaggedUS, untaggedUSRows, taggedUS, taggedUSRows, drafted, totalTeamReviews, maxReviews, reviewPct, fully };
   });
   const omTotUS  = overallMetrics.reduce((s,r)=>s+r.userStories,0);
   const omTotRel = overallMetrics.reduce((s,r)=>s+r.userStoriesRelevant,0);
+  const omTotRelRows   = overallMetrics.flatMap(r=>r.relevantUSRows||[]);
   const omTotUntag     = overallMetrics.reduce((s,r)=>s+r.untaggedUS,0);
   const omTotUntagRows = overallMetrics.flatMap(r=>r.untaggedUSRows||[]);
   const omTotTagged    = overallMetrics.reduce((s,r)=>s+r.taggedUS,0);
@@ -5368,8 +5376,8 @@ function TestScenariosTab({ data, wp, req }) {
                 <th style={{ padding:"8px 12px", textAlign:"left", color:"#fff", fontWeight:700, fontSize:10, minWidth:170, position:"sticky", left:0, background:C.navy, borderRight:`1px solid rgba(255,255,255,0.15)`, zIndex:2 }}>SubProcess / Component</th>
                 <th style={{ padding:"8px 8px", textAlign:"center", color:"#a8d8ff", fontWeight:700, fontSize:10, borderRight:`1px solid rgba(255,255,255,0.1)`, minWidth:65 }}>User Stories</th>
                 <th style={{ padding:"8px 8px", textAlign:"center", color:"#a8d8ff", fontWeight:700, fontSize:10, borderRight:`1px solid rgba(255,255,255,0.1)`, minWidth:80 }}>Relevant for Scenarios</th>
-                <th style={{ padding:"8px 8px", textAlign:"center", color:"#fcd34d", fontWeight:700, fontSize:10, borderRight:`1px solid rgba(255,255,255,0.1)`, minWidth:75 }}>Untagged US</th>
-                <th style={{ padding:"8px 8px", textAlign:"center", color:"#c4f1c4", fontWeight:700, fontSize:10, borderRight:`1px solid rgba(255,255,255,0.1)`, minWidth:75 }}>Tagged US</th>
+                <th style={{ padding:"8px 8px", textAlign:"center", color:"#fcd34d", fontWeight:700, fontSize:10, borderRight:`1px solid rgba(255,255,255,0.1)`, minWidth:90 }}>Untagged User Story</th>
+                <th style={{ padding:"8px 8px", textAlign:"center", color:"#c4f1c4", fontWeight:700, fontSize:10, borderRight:`1px solid rgba(255,255,255,0.1)`, minWidth:90 }}>Tagged User Story</th>
                 <th style={{ padding:"8px 8px", textAlign:"center", color:"#a8d8ff", fontWeight:700, fontSize:10, borderRight:`1px solid rgba(255,255,255,0.1)`, minWidth:60 }}>Drafted</th>
                 <th style={{ padding:"8px 8px", textAlign:"center", color:"#fcd34d", fontWeight:700, fontSize:10, borderRight:`1px solid rgba(255,255,255,0.15)`, minWidth:65 }}>Open Feedback</th>
                 {TEAMS.flatMap(t => [
@@ -5381,7 +5389,9 @@ function TestScenariosTab({ data, wp, req }) {
               <tr style={{ background:"#eef4ff", borderBottom:`2px solid ${C.navyLight}` }}>
                 <td style={{ padding:"7px 12px", color:C.navy, fontWeight:800, fontSize:10, position:"sticky", left:0, background:"#eef4ff", borderRight:`1px solid ${C.border}`, zIndex:2, textTransform:"uppercase", letterSpacing:"0.06em" }}>SUBTOTAL</td>
                 <td style={{ padding:"7px 8px", textAlign:"center", color:C.navyLight, fontWeight:700, fontSize:10 }}>{totUserStories||"—"}</td>
-                <td style={{ padding:"7px 8px", textAlign:"center", color:C.navyLight, fontWeight:700, fontSize:10 }}>{totRelevant||"—"}</td>
+                <td style={{ padding:"7px 8px", textAlign:"center", fontSize:10 }}>
+                  {totRelevant>0 ? <span onClick={() => setRelevantModal({ title:"All Sub Processes — Relevant User Stories", rows:totRelevantRows })} style={{ background:"#eff6ff", color:"#1d4ed8", borderRadius:4, padding:"1px 6px", fontSize:10, fontWeight:700, cursor:"pointer" }}>{totRelevant}</span> : <span style={{ color:C.muted }}>—</span>}
+                </td>
                 <td style={{ padding:"7px 8px", textAlign:"center", fontSize:10 }}>
                   {totUntagged>0 ? <span onClick={() => setUntaggedModal({ title:"All Sub Processes — Untagged User Stories", rows:totUntaggedRows })} style={{ background:"#fef3c7", color:"#92400e", borderRadius:4, padding:"1px 6px", fontSize:10, fontWeight:700, cursor:"pointer" }}>{totUntagged}</span> : <span style={{ color:C.muted }}>—</span>}
                 </td>
@@ -5442,7 +5452,11 @@ function TestScenariosTab({ data, wp, req }) {
                     </span>
                   </td>
                   <td style={{ padding:"9px 8px", textAlign:"center", color:C.navyLight, fontWeight:700 }}>{row.userStories||"—"}</td>
-                  <td style={{ padding:"9px 8px", textAlign:"center", color:C.navyLight, fontWeight:700 }}>{row.userStoriesRelevant||"—"}</td>
+                  <td style={{ padding:"9px 8px", textAlign:"center" }}>
+                    {row.userStoriesRelevant > 0
+                      ? <span onClick={e => { e.stopPropagation(); setRelevantModal({ title:`${row.sp} — Relevant User Stories`, rows:row.relevantUSRows||[] }); }} style={{ background:"#eff6ff", color:"#1d4ed8", borderRadius:4, padding:"2px 8px", fontSize:10, fontWeight:700, cursor:"pointer" }}>{row.userStoriesRelevant}</span>
+                      : <span style={{ color:C.muted }}>—</span>}
+                  </td>
                   <td style={{ padding:"9px 8px", textAlign:"center" }}>
                     {row.untaggedUS > 0
                       ? <span onClick={e => { e.stopPropagation(); setUntaggedModal({ title:`${row.sp} — Untagged User Stories`, rows:row.untaggedUSRows||[] }); }} style={{ background:"#fef3c7", color:"#92400e", borderRadius:4, padding:"2px 8px", fontSize:10, fontWeight:700, cursor:"pointer" }}>{row.untaggedUS}</span>
@@ -5554,8 +5568,8 @@ function TestScenariosTab({ data, wp, req }) {
               <th style={{ padding:"8px 14px", textAlign:"left", color:"#fff", fontWeight:700, fontSize:10, minWidth:200, position:"sticky", left:0, background:C.navy, borderRight:`1px solid rgba(255,255,255,0.15)`, zIndex:2 }}>SubProcess / Component</th>
               <th style={{ padding:"8px 10px", textAlign:"center", color:"#a8d8ff", fontWeight:700, fontSize:10, borderRight:`1px solid rgba(255,255,255,0.1)`, minWidth:80 }}>User Stories</th>
               <th style={{ padding:"8px 10px", textAlign:"center", color:"#a8d8ff", fontWeight:700, fontSize:10, borderRight:`1px solid rgba(255,255,255,0.1)`, minWidth:100 }}>Relevant for Scenarios</th>
-              <th style={{ padding:"8px 10px", textAlign:"center", color:"#fcd34d", fontWeight:700, fontSize:10, borderRight:`1px solid rgba(255,255,255,0.1)`, minWidth:75 }}>Untagged US</th>
-              <th style={{ padding:"8px 10px", textAlign:"center", color:"#c4f1c4", fontWeight:700, fontSize:10, borderRight:`1px solid rgba(255,255,255,0.1)`, minWidth:75 }}>Tagged US</th>
+              <th style={{ padding:"8px 10px", textAlign:"center", color:"#fcd34d", fontWeight:700, fontSize:10, borderRight:`1px solid rgba(255,255,255,0.1)`, minWidth:90 }}>Untagged User Story</th>
+              <th style={{ padding:"8px 10px", textAlign:"center", color:"#c4f1c4", fontWeight:700, fontSize:10, borderRight:`1px solid rgba(255,255,255,0.1)`, minWidth:90 }}>Tagged User Story</th>
               <th style={{ padding:"8px 10px", textAlign:"center", color:"#a8d8ff", fontWeight:700, fontSize:10, borderRight:`1px solid rgba(255,255,255,0.1)`, minWidth:70 }}>Scenarios Drafted</th>
               <th style={{ padding:"8px 10px", textAlign:"center", color:"#c4f1c4", fontWeight:700, fontSize:10, borderRight:`1px solid rgba(255,255,255,0.1)`, minWidth:80 }}>Fully Reviewed</th>
               <th style={{ padding:"8px 10px", textAlign:"center", color:"#fde68a", fontWeight:700, fontSize:10, borderRight:`1px solid rgba(255,255,255,0.15)`, minWidth:120 }}>Review Completion</th>
@@ -5564,7 +5578,9 @@ function TestScenariosTab({ data, wp, req }) {
             <tr style={{ background:"#eef4ff", borderBottom:`2px solid ${C.navyLight}` }}>
               <td style={{ padding:"7px 14px", color:C.navy, fontWeight:800, fontSize:10, position:"sticky", left:0, background:"#eef4ff", borderRight:`1px solid ${C.border}`, zIndex:2, textTransform:"uppercase", letterSpacing:"0.06em" }}>SUBTOTAL</td>
               <td style={{ padding:"7px 10px", textAlign:"center", color:C.navyLight, fontWeight:700, fontSize:10 }}>{omTotUS||"—"}</td>
-              <td style={{ padding:"7px 10px", textAlign:"center", color:C.navyLight, fontWeight:700, fontSize:10 }}>{omTotRel||"—"}</td>
+              <td style={{ padding:"7px 10px", textAlign:"center", fontSize:10 }}>
+                {omTotRel>0 ? <span onClick={() => setRelevantModal({ title:"All Sub Processes — Relevant User Stories", rows:omTotRelRows })} style={{ background:"#eff6ff", color:"#1d4ed8", borderRadius:4, padding:"1px 7px", fontSize:10, fontWeight:700, cursor:"pointer" }}>{omTotRel}</span> : <span style={{ color:C.muted }}>—</span>}
+              </td>
               <td style={{ padding:"7px 10px", textAlign:"center" }}>
                 {omTotUntag>0 ? <span onClick={() => setUntaggedModal({ title:"All Sub Processes — Untagged User Stories", rows:omTotUntagRows })} style={{ background:"#fef3c7", color:"#92400e", borderRadius:4, padding:"1px 7px", fontSize:10, fontWeight:700, cursor:"pointer" }}>{omTotUntag}</span> : <span style={{ color:C.muted }}>—</span>}
               </td>
@@ -5595,7 +5611,11 @@ function TestScenariosTab({ data, wp, req }) {
                     </span>
                   </td>
                   <td style={{ padding:"9px 10px", textAlign:"center", color:C.navyLight, fontWeight:700 }}>{row.userStories||"—"}</td>
-                  <td style={{ padding:"9px 10px", textAlign:"center", color:C.navyLight, fontWeight:700 }}>{row.userStoriesRelevant||"—"}</td>
+                  <td style={{ padding:"9px 10px", textAlign:"center" }}>
+                    {row.userStoriesRelevant > 0
+                      ? <span onClick={() => setRelevantModal({ title:`${row.sp} — Relevant User Stories`, rows:row.relevantUSRows||[] })} style={{ background:"#eff6ff", color:"#1d4ed8", borderRadius:4, padding:"2px 8px", fontSize:10, fontWeight:700, cursor:"pointer" }}>{row.userStoriesRelevant}</span>
+                      : <span style={{ color:C.muted }}>—</span>}
+                  </td>
                   <td style={{ padding:"9px 10px", textAlign:"center" }}>
                     {row.untaggedUS > 0
                       ? <span onClick={() => setUntaggedModal({ title:`${row.sp} — Untagged User Stories`, rows:row.untaggedUSRows||[] })} style={{ background:"#fef3c7", color:"#92400e", borderRadius:4, padding:"2px 8px", fontSize:10, fontWeight:700, cursor:"pointer" }}>{row.untaggedUS}</span>
@@ -5640,9 +5660,10 @@ function TestScenariosTab({ data, wp, req }) {
 
       {spModal        && <ScenarioModal   title={spModal.title}        rows={spModal.rows}        onClose={() => setSpModal(null)} />}
       {drillModal     && <TeamDrillModal  title={drillModal.title}     rows={drillModal.rows}     teamId={drillModal.teamId} reqById={reqById} reqK={reqK} onClose={() => setDrillModal(null)} />}
-      {untaggedModal  && <ReqDrillModal      title={untaggedModal.title}  rows={untaggedModal.rows}  mode="untagged" scenariosByReqId={scenariosByReqId} onClose={() => setUntaggedModal(null)} />}
-      {taggedModal    && <ReqDrillModal      title={taggedModal.title}    rows={taggedModal.rows}    mode="tagged"   scenariosByReqId={scenariosByReqId} onClose={() => setTaggedModal(null)} />}
-      {openFbModal    && <OpenFeedbackModal  title={openFbModal.title}    rows={openFbModal.rows}    onClose={() => setOpenFbModal(null)} />}
+      {untaggedModal  && <ReqDrillModal      title={untaggedModal.title}   rows={untaggedModal.rows}   mode="untagged" scenariosByReqId={scenariosByReqId} onClose={() => setUntaggedModal(null)} />}
+      {taggedModal    && <ReqDrillModal      title={taggedModal.title}     rows={taggedModal.rows}     mode="tagged"   scenariosByReqId={scenariosByReqId} onClose={() => setTaggedModal(null)} />}
+      {relevantModal  && <ReqDrillModal      title={relevantModal.title}   rows={relevantModal.rows}   mode="tagged"   scenariosByReqId={scenariosByReqId} onClose={() => setRelevantModal(null)} />}
+      {openFbModal    && <OpenFeedbackModal  title={openFbModal.title}     rows={openFbModal.rows}     onClose={() => setOpenFbModal(null)} />}
     </div>
   );
 }
