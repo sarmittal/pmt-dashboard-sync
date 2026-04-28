@@ -4832,8 +4832,8 @@ function TestScenariosTab({ data, wp, req }) {
       { ck:"c-bz",  def:140, label:"Applicable Business",   render:r=>multiVal(r[K.applicableBusiness]),   tdEx:{ wordBreak:"break-word" } },
       { ck:"c-xp",  def:150, label:"Applicable Exp.",       render:r=>multiVal(r[K.applicableExperience]), tdEx:{ wordBreak:"break-word" } },
       { ck:"c-rg",  def:130, label:"Applicable Region",     render:r=>multiVal(r[K.applicableRegion]),     tdEx:{ wordBreak:"break-word" } },
-      { ck:"c-ui",  def:120, label:"Similar US IDs",        render:r=>String(r[K.similarUSIds]||"—"),         tdEx:{ color:C.muted, wordBreak:"break-word" } },
-      { ck:"c-ud",  def:130, label:"Similar US Data",       render:r=>String(r[K.similarUSData]||"—"),        tdEx:{ color:C.muted, wordBreak:"break-word" }, border:true },
+      { ck:"c-ui",  def:140, label:"Similar US IDs",        render:r=>multiVal(r[K.similarUSIds]),             tdEx:{ wordBreak:"break-word" } },
+      { ck:"c-ud",  def:200, label:"Similar US Data",       render:r=>{ const v=String(r[K.similarUSData]||""); if(!v) return <span style={{color:C.muted}}>—</span>; return <span title={v} style={{display:"-webkit-box",WebkitLineClamp:3,WebkitBoxOrient:"vertical",overflow:"hidden",color:C.muted,wordBreak:"break-word",cursor:"help"}}>{v}</span>; }, border:true },
     ];
 
     const curTeamCols   = curTeam ? mkTeamCols(curTeam, true)          : [];
