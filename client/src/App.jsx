@@ -2049,7 +2049,7 @@ function RaidKpiModal({ title, rows, K, teamKey, allTeams, allTypes, allComps, s
                     {colConfig.component.visible       && <td style={{ padding:"8px 10px", color:C.text, wordBreak:"break-word", width:colConfig.component.width }}>{String(r[K.component]||"—")}</td>}
                     {colConfig.experience.visible      && <td style={{ padding:"8px 10px", color:C.muted, wordBreak:"break-word", width:colConfig.experience.width }}>{String(r[K.experience]||"—")}</td>}
                     {colConfig.topic.visible           && <td style={{ padding:"8px 10px", color:C.muted, wordBreak:"break-word", width:colConfig.topic.width }}>{String(r[K.topic]||"—")}</td>}
-                    {colConfig.tag?.visible            && <td style={{ padding:"8px 10px", width:colConfig.tag?.width||100 }}>{r._rowId && K.tag ? <EditableCell sheet="raid" rowId={r._rowId} colName={K.tag} value={localVals[r._rowId]?.[K.tag] ?? String(r[K.tag]||"")} onSaved={v=>localUpdate(r._rowId,K.tag,v)} renderDisplay={v=>{const pts=v.split(/[\n,;]+/).map(s=>s.trim()).filter(Boolean);return pts.length?<span style={{display:"flex",flexWrap:"wrap",gap:2}}>{pts.map((p,i)=><span key={i} style={{background:"#fef3c7",color:"#92400e",border:"1px solid #fcd34d",borderRadius:3,padding:"2px 5px",fontSize:10,whiteSpace:"nowrap"}}>{p}</span>)}</span>:<span style={{color:C.muted}}>—</span>;}} /> : (() => { const parts=String(r[K.tag]||"").split(/[\n,;]+/).map(s=>s.trim()).filter(Boolean); if(!parts.length) return <span style={{color:C.muted}}>—</span>; return <span style={{display:"flex",flexWrap:"wrap",gap:2}}>{parts.map((p,i)=><span key={i} style={{background:"#fef3c7",color:"#92400e",border:"1px solid #fcd34d",borderRadius:3,padding:"2px 5px",fontSize:10,whiteSpace:"nowrap"}}>{p}</span>)}</span>; })()}</td>}
+                    {colConfig.tag?.visible            && <td style={{ padding:"8px 10px", width:colConfig.tag?.width||100, overflow:"hidden" }}>{r._rowId && K.tag ? <EditableCell sheet="raid" rowId={r._rowId} colName={K.tag} value={localVals[r._rowId]?.[K.tag] ?? String(r[K.tag]||"")} onSaved={v=>localUpdate(r._rowId,K.tag,v)} renderDisplay={v=>{const pts=v.split(/[\n,;]+/).map(s=>s.trim()).filter(Boolean);return pts.length?<span style={{display:"flex",flexWrap:"wrap",gap:2}}>{pts.map((p,i)=><span key={i} style={{background:"#fef3c7",color:"#92400e",border:"1px solid #fcd34d",borderRadius:3,padding:"2px 5px",fontSize:10,whiteSpace:"nowrap"}}>{p}</span>)}</span>:<span style={{color:C.muted}}>—</span>;}} /> : (() => { const parts=String(r[K.tag]||"").split(/[\n,;]+/).map(s=>s.trim()).filter(Boolean); if(!parts.length) return <span style={{color:C.muted}}>—</span>; return <span style={{display:"flex",flexWrap:"wrap",gap:2}}>{parts.map((p,i)=><span key={i} style={{background:"#fef3c7",color:"#92400e",border:"1px solid #fcd34d",borderRadius:3,padding:"2px 5px",fontSize:10,whiteSpace:"nowrap"}}>{p}</span>)}</span>; })()}</td>}
                     {colConfig.desc.visible            && <td style={{ padding:"8px 10px", wordBreak:"break-word", lineHeight:1.5, width:colConfig.desc.width }}>{r._rowId && K.desc ? <EditableCell sheet="raid" rowId={r._rowId} colName={K.desc} value={localVals[r._rowId]?.[K.desc] ?? String(r[K.desc]||"")} multiline onSaved={v=>localUpdate(r._rowId,K.desc,v)} /> : String(r[K.desc]||"—")}</td>}
                     {colConfig.comment.visible         && <td style={{ padding:"8px 10px", wordBreak:"break-word", lineHeight:1.5, width:colConfig.comment.width }}>{r._rowId && K.comment ? <EditableCell sheet="raid" rowId={r._rowId} colName={K.comment} value={localVals[r._rowId]?.[K.comment] ?? String(r[K.comment]||"")} multiline onSaved={v=>localUpdate(r._rowId,K.comment,v)} /> : String(r[K.comment]||"—")}</td>}
                     {colConfig.owner?.visible          && <td style={{ padding:"8px 10px", color:C.text, wordBreak:"break-word", width:colConfig.owner.width }}>{String(r[K.owner]||"—")}</td>}
@@ -2512,9 +2512,9 @@ function ChangeRequestTab({ raid, cap }) {
               </button>
             </div>
           )}
-          <div style={{ overflowX:"auto" }}>
+          <div style={{ maxHeight:"calc(100vh - 230px)", overflowY:"auto", overflowX:"auto" }}>
             <table style={{ width:"100%", borderCollapse:"collapse", fontSize:11 }}>
-              <thead>
+              <thead style={{ position:"sticky", top:0, zIndex:2 }}>
                 <tr style={{ background:"#162f50" }}>
                   <th style={{ padding:"7px 8px", textAlign:"center", color:"#fff", fontWeight:700, fontSize:10, minWidth:36, borderRight:"1px solid rgba(255,255,255,0.1)" }}>
                     <input type="checkbox" checked={allChecked} onChange={toggleAll}
@@ -3013,6 +3013,7 @@ function ReqTraceabilityTab({ req, test }) {
 
       {/* Filter bar */}
       <div style={{background:"#f8fafc",border:`1px solid ${C.border}`,borderRadius:8,padding:"10px 14px",display:"flex",flexDirection:"column",gap:8}}>
+        <div style={{fontSize:10,fontWeight:700,color:"#374151",textTransform:"uppercase",letterSpacing:"0.06em"}}>Filters</div>
         <input value={search} onChange={e=>setSearch(e.target.value)}
           placeholder="Search by Req ID, Business Requirement or User Story…"
           style={{padding:"6px 10px",border:`1px solid ${C.border}`,borderRadius:6,fontSize:12,width:"100%",boxSizing:"border-box",outline:"none"}} />
@@ -3021,14 +3022,14 @@ function ReqTraceabilityTab({ req, test }) {
         {(allExps.length>0||allSPs.length>0)&&<div style={{borderTop:`1px solid ${C.border}`,margin:"2px 0"}}/>}
         {allExps.length>0&&(
           <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
-            <span style={{fontSize:10,fontWeight:700,color:C.text,minWidth:90}}>Experience</span>
+            <span style={{fontSize:10,fontWeight:700,color:"#374151",minWidth:90}}>Experience</span>
             {_pill("All",expFilter==="ALL",baseRows.length,()=>setExpFilter("ALL"))}
             {allExps.map(v=>_pill(v,expFilter===v,baseRowCounts.byExp[v]||0,()=>setExpFilter(expFilter===v?"ALL":v)))}
           </div>
         )}
         {allSPs.length>0&&(
           <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
-            <span style={{fontSize:10,fontWeight:700,color:C.text,minWidth:90}}>Sub Process</span>
+            <span style={{fontSize:10,fontWeight:700,color:"#374151",minWidth:90}}>Sub Process</span>
             {_pill("All",spFilter==="ALL",baseRows.length,()=>setSpFilter("ALL"))}
             {allSPs.map(v=>_pill(v,spFilter===v,baseRowCounts.bySP[v]||0,()=>setSpFilter(spFilter===v?"ALL":v)))}
           </div>
@@ -3037,7 +3038,7 @@ function ReqTraceabilityTab({ req, test }) {
         {/* ── Group 2: Status filters ── */}
         <div style={{borderTop:`1px solid ${C.border}`,margin:"2px 0"}}/>
         <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
-          <span style={{fontSize:10,fontWeight:700,color:C.text,minWidth:90}}>Build Status</span>
+          <span style={{fontSize:10,fontWeight:700,color:"#374151",minWidth:90}}>Build Status</span>
           {_pill("All",buildFilter==="ALL",null,()=>setBuildFilter("ALL"))}
           {Object.entries(BUILD_STATUS_META).map(([key,{l}])=>
             _pill(l, buildFilter===key, baseRowCounts.byBuild[key]||0, ()=>setBuildFilter(buildFilter===key?"ALL":key))
@@ -3045,7 +3046,7 @@ function ReqTraceabilityTab({ req, test }) {
         </div>
         {allReviewStatuses.length>0&&(
           <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
-            <span style={{fontSize:10,fontWeight:700,color:C.text,minWidth:90}}>Review Status</span>
+            <span style={{fontSize:10,fontWeight:700,color:"#374151",minWidth:90}}>Review Status</span>
             {_pill("All",reviewFilter==="ALL",null,()=>setReviewFilter("ALL"))}
             {allReviewStatuses.map(v=>
               _pill(v.replace(/^\d+\.\s*/,""), reviewFilter===v, baseRowCounts.byReview[v]||0, ()=>setReviewFilter(reviewFilter===v?"ALL":v))
@@ -3056,7 +3057,7 @@ function ReqTraceabilityTab({ req, test }) {
         {/* ── Group 3: Coverage & tags ── */}
         <div style={{borderTop:`1px solid ${C.border}`,margin:"2px 0"}}/>
         <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
-          <span style={{fontSize:10,fontWeight:700,color:C.text,minWidth:90}}>Coverage</span>
+          <span style={{fontSize:10,fontWeight:700,color:"#374151",minWidth:90}}>Coverage</span>
           {_pill("All",covFilter==="ALL",null,()=>setCovFilter("ALL"))}
           {[
             {key:"covered", label:"Covered",     bg:"#dcfce7",c:"#166534"},
@@ -3077,7 +3078,7 @@ function ReqTraceabilityTab({ req, test }) {
         </div>
         {allTags.length>0&&(
           <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
-            <span style={{fontSize:10,fontWeight:700,color:C.text,minWidth:90}}>Tags</span>
+            <span style={{fontSize:10,fontWeight:700,color:"#374151",minWidth:90}}>Tags</span>
             {_pill("All",tagFilter==="ALL",null,()=>setTagFilter("ALL"))}
             {allTags.map(v=>_pill(v,tagFilter===v,baseRowCounts.byTag[v]||0,()=>setTagFilter(tagFilter===v?"ALL":v)))}
           </div>
@@ -3086,7 +3087,7 @@ function ReqTraceabilityTab({ req, test }) {
 
       {/* Table */}
       <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden",boxShadow:"0 1px 3px rgba(0,0,0,0.06)"}}>
-        <div style={{overflowX:"auto"}}>
+        <div style={{ maxHeight:"calc(100vh - 230px)", overflowY:"auto", overflowX:"auto" }}>
           <table style={{borderCollapse:"collapse",fontSize:11,tableLayout:"fixed",
             width:"100%",minWidth:28+Object.values(colConfig).reduce((s,c)=>s+c.w,0)}}>
             <colgroup>
@@ -3667,12 +3668,13 @@ function BacklogTab({ raid }) {
         </div>
 
         {/* Filters */}
-        <div style={{padding:"10px 16px",borderBottom:`1px solid ${C.border}`,background:C.white,display:"flex",flexDirection:"column",gap:10}}>
+        <div style={{background:"#f8fafc",borderBottom:`1px solid ${C.border}`,padding:"10px 14px",display:"flex",flexDirection:"column",gap:8}}>
+          <div style={{fontSize:10,fontWeight:700,color:"#374151",textTransform:"uppercase",letterSpacing:"0.06em"}}>Filters</div>
 
           {/* Row 1: Team */}
           {allTeams.length>0 && (
             <div style={{display:"flex",gap:4,alignItems:"center",flexWrap:"wrap"}}>
-              <span style={{fontSize:10,color:C.muted,fontWeight:600,marginRight:2}}>Team</span>
+              <span style={{fontSize:10,color:"#374151",fontWeight:700,marginRight:2,minWidth:90,flexShrink:0}}>Team</span>
               {pill("All",teamFilter==="All",rows.filter(r=>mP(r)&&mT(r)&&mC(r)&&mE(r)).length,()=>setTeamFilter("All"),null,rows.filter(r=>mP(r)&&mT(r)&&mC(r)&&mE(r)))}
               {allTeams.map(t=>pill(t,teamFilter===t,rows.filter(r=>String(r[teamKey]||"").trim()===t&&mP(r)&&mT(r)&&mC(r)&&mE(r)).length,()=>setTeamFilter(teamFilter===t?"All":t),null,rows.filter(r=>String(r[teamKey]||"").trim()===t&&mP(r)&&mT(r)&&mC(r)&&mE(r))))}
               <button onClick={()=>setShowColPanel(p=>!p)}
@@ -3684,7 +3686,7 @@ function BacklogTab({ raid }) {
           {/* Row 2: Type + Experience */}
           <div style={{display:"flex",gap:12,alignItems:"center",flexWrap:"wrap"}}>
             <div style={{display:"flex",gap:4,alignItems:"center",flexWrap:"wrap"}}>
-              <span style={{fontSize:10,color:C.muted,fontWeight:600,marginRight:2}}>Type</span>
+              <span style={{fontSize:10,color:"#374151",fontWeight:700,marginRight:2,minWidth:90,flexShrink:0}}>Type</span>
               {pill("All",typeFilter==="All",rows.filter(r=>mP(r)&&mC(r)&&mTm(r)&&mE(r)).length,()=>setTypeFilter("All"),null,rows.filter(r=>mP(r)&&mC(r)&&mTm(r)&&mE(r)))}
               {allTypes.map(t=>pill(t,typeFilter===t,rows.filter(r=>String(r[K.type]||"").trim()===t&&mP(r)&&mC(r)&&mTm(r)&&mE(r)).length,()=>setTypeFilter(typeFilter===t?"All":t),null,rows.filter(r=>String(r[K.type]||"").trim()===t&&mP(r)&&mC(r)&&mTm(r)&&mE(r))))}
             </div>
@@ -3692,7 +3694,7 @@ function BacklogTab({ raid }) {
               <>
                 <div style={{width:1,height:18,background:C.border}}/>
                 <div style={{display:"flex",gap:4,alignItems:"center",flexWrap:"wrap"}}>
-                  <span style={{fontSize:10,color:C.muted,fontWeight:600,marginRight:2}}>Experience</span>
+                  <span style={{fontSize:10,color:"#374151",fontWeight:700,marginRight:2,minWidth:90,flexShrink:0}}>Experience</span>
                   {pill("All",expFilter==="All",rows.filter(r=>mP(r)&&mT(r)&&mC(r)&&mTm(r)).length,()=>setExpFilter("All"),null,rows.filter(r=>mP(r)&&mT(r)&&mC(r)&&mTm(r)))}
                   {allExps.map(e=>pill(e,expFilter===e,rows.filter(r=>String(r[K.experience]||"").trim()===e&&mP(r)&&mT(r)&&mC(r)&&mTm(r)).length,()=>setExpFilter(expFilter===e?"All":e),null,rows.filter(r=>String(r[K.experience]||"").trim()===e&&mP(r)&&mT(r)&&mC(r)&&mTm(r))))}
                 </div>
@@ -3708,7 +3710,7 @@ function BacklogTab({ raid }) {
           {/* Row 3: Component */}
           {allComps.length>0&&(
             <div style={{display:"flex",gap:4,alignItems:"center",flexWrap:"wrap"}}>
-              <span style={{fontSize:10,color:C.muted,fontWeight:600,marginRight:2}}>Component</span>
+              <span style={{fontSize:10,color:"#374151",fontWeight:700,marginRight:2,minWidth:90,flexShrink:0}}>Component</span>
               {pill("All",compFilter==="All",rows.filter(r=>mP(r)&&mT(r)&&mTm(r)&&mE(r)).length,()=>setCompFilter("All"),null,rows.filter(r=>mP(r)&&mT(r)&&mTm(r)&&mE(r)))}
               {allComps.map(c=>pill(c,compFilter===c,rows.filter(r=>String(r[K.component]||"").trim()===c&&mP(r)&&mT(r)&&mTm(r)&&mE(r)).length,()=>setCompFilter(compFilter===c?"All":c),null,rows.filter(r=>String(r[K.component]||"").trim()===c&&mP(r)&&mT(r)&&mTm(r)&&mE(r))))}
             </div>
@@ -3741,7 +3743,7 @@ function BacklogTab({ raid }) {
         </div>
 
         {/* Table */}
-        <div style={{ maxHeight:"calc(100vh - 230px)", overflowY:"auto", overflowX:"auto" }}>
+        <div style={{ maxHeight:"calc(100vh - 230px)", overflowY:"auto", overflowX:"hidden" }}>
           <table style={{borderCollapse:"collapse",fontSize:11,tableLayout:"fixed",width:"100%"}}>
             <thead style={{ position:"sticky", top:0, zIndex:2 }}>
               <tr style={{background:"#162f50"}}>
@@ -4101,8 +4103,9 @@ function RaidAnalysisTab({ raid }) {
         {/* Filters + table */}
         {selectedTeam && (
           <>
-            {/* Filter bar — independent cross-filters with highlight */}
-            <div style={{ padding:"10px 16px", borderBottom:`1px solid ${C.border}`, background:C.white, display:"flex", flexDirection:"column", gap:10 }}>
+            {/* Filter bar */}
+            <div style={{ background:"#f8fafc", border:`1px solid ${C.border}`, borderRadius:8, padding:"10px 14px", display:"flex", flexDirection:"column", gap:8 }}>
+              <div style={{ fontSize:10, fontWeight:700, color:"#374151", textTransform:"uppercase", letterSpacing:"0.06em" }}>Filters</div>
               {(() => {
                 // Reusable pill — active=selected, highlighted=has results given other filters
                 const pill = (val, isActive, count, onClick, col) => {
@@ -4142,14 +4145,14 @@ function RaidAnalysisTab({ raid }) {
                     {/* Row 1: Status + Type */}
                     <div style={{ display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
                       <div style={{ display:"flex", gap:4, alignItems:"center" }}>
-                        <span style={{ fontSize:10, color:C.muted, fontWeight:600, marginRight:2 }}>Status</span>
+                        <span style={{ fontSize:10, color:"#374151", fontWeight:700, marginRight:2, minWidth:90, flexShrink:0 }}>Status</span>
                         {pill("All",      statusFilter==="All",      sCounts.all,     () => setStatusFilter("All"),                                      C.navyLight)}
                         {pill("Delayed",  statusFilter==="Delayed",  sCounts.delayed, () => setStatusFilter(statusFilter==="Delayed"?"All":"Delayed"),    C.delayed)}
                         {pill("On Track", statusFilter==="On Track", sCounts.onTrack, () => setStatusFilter(statusFilter==="On Track"?"All":"On Track"),  C.onTrack)}
                       </div>
                       <div style={{ width:1, height:20, background:C.border }} />
                       <div style={{ display:"flex", gap:4, alignItems:"center", flexWrap:"wrap" }}>
-                        <span style={{ fontSize:10, color:C.muted, fontWeight:600, marginRight:2 }}>Type</span>
+                        <span style={{ fontSize:10, color:"#374151", fontWeight:700, marginRight:2, minWidth:40, flexShrink:0 }}>Type</span>
                         {pill("All", typeFilter==="All", teamRows.filter(r => tMatchS(r) && tMatchC(r)).length, () => setTypeFilter("All"), null)}
                         {tCounts.map(({val,count}) => pill(val, typeFilter===val, count, () => setTypeFilter(typeFilter===val?"All":val), null))}
                       </div>
@@ -4162,7 +4165,7 @@ function RaidAnalysisTab({ raid }) {
                     {/* Row 2: Component */}
                     {allComponents.length > 0 && (
                       <div style={{ display:"flex", gap:4, alignItems:"center", flexWrap:"wrap" }}>
-                        <span style={{ fontSize:10, color:C.muted, fontWeight:600, marginRight:2 }}>Component</span>
+                        <span style={{ fontSize:10, color:"#374151", fontWeight:700, marginRight:2, minWidth:90, flexShrink:0 }}>Component</span>
                         {pill("All", compFilter==="All", teamRows.filter(r => tMatchS(r) && tMatchT(r)).length, () => setCompFilter("All"), null)}
                         {cCounts.map(({val,count}) => pill(val, compFilter===val, count, () => setCompFilter(compFilter===val?"All":val), null))}
                       </div>
@@ -4200,7 +4203,7 @@ function RaidAnalysisTab({ raid }) {
             </div>
 
             {/* Table */}
-            <div style={{ maxHeight:"calc(100vh - 230px)", overflowY:"auto", overflowX:"auto" }}>
+            <div style={{ maxHeight:"calc(100vh - 230px)", overflowY:"auto", overflowX:"hidden" }}>
               <table style={{ borderCollapse:"collapse", fontSize:11, tableLayout:"fixed", width:"100%" }}>
                 <thead style={{ position:"sticky", top:0, zIndex:2 }}>
                   <tr style={{ background:"#162f50" }}>
@@ -4255,7 +4258,7 @@ function RaidAnalysisTab({ raid }) {
                         {colConfig.component?.visible        && <td style={{ padding:"8px 10px", color:C.text, wordBreak:"break-word", width:colConfig.component.width }}>{String(r[K.component]||"—")}</td>}
                         {colConfig.experience?.visible       && <td style={{ padding:"8px 10px", color:C.muted, wordBreak:"break-word", width:colConfig.experience.width }}>{String(r[K.experience]||"—")}</td>}
                         {colConfig.topic?.visible            && <td style={{ padding:"8px 10px", color:C.muted, wordBreak:"break-word", width:colConfig.topic.width }}>{String(r[K.topic]||"—")}</td>}
-                        {colConfig.tag?.visible              && <td style={{ padding:"8px 10px", width:colConfig.tag.width }}>{r._rowId&&K.tag?<EditableCell sheet="raid" rowId={r._rowId} colName={K.tag} value={localVals[r._rowId]?.[K.tag]??String(r[K.tag]||"")} onSaved={v=>localUpdate(r._rowId,K.tag,v)} renderDisplay={v=>{const pts=v.split(/[\n,;]+/).map(s=>s.trim()).filter(Boolean);return pts.length?<span style={{display:"flex",flexWrap:"wrap",gap:2}}>{pts.map((p,i)=><span key={i} style={{background:"#fef3c7",color:"#92400e",border:"1px solid #fcd34d",borderRadius:3,padding:"2px 5px",fontSize:10,whiteSpace:"nowrap"}}>{p}</span>)}</span>:<span style={{color:C.muted}}>—</span>;}} />:(() => { const parts=String(r[K.tag]||"").split(/[\n,;]+/).map(s=>s.trim()).filter(Boolean); if(!parts.length) return <span style={{color:C.muted}}>—</span>; return <span style={{display:"flex",flexWrap:"wrap",gap:2}}>{parts.map((p,i)=><span key={i} style={{background:"#fef3c7",color:"#92400e",border:"1px solid #fcd34d",borderRadius:3,padding:"2px 5px",fontSize:10,whiteSpace:"nowrap"}}>{p}</span>)}</span>; })()}</td>}
+                        {colConfig.tag?.visible              && <td style={{ padding:"8px 10px", width:colConfig.tag.width, overflow:"hidden" }}>{r._rowId&&K.tag?<EditableCell sheet="raid" rowId={r._rowId} colName={K.tag} value={localVals[r._rowId]?.[K.tag]??String(r[K.tag]||"")} onSaved={v=>localUpdate(r._rowId,K.tag,v)} renderDisplay={v=>{const pts=v.split(/[\n,;]+/).map(s=>s.trim()).filter(Boolean);return pts.length?<span style={{display:"flex",flexWrap:"wrap",gap:2}}>{pts.map((p,i)=><span key={i} style={{background:"#fef3c7",color:"#92400e",border:"1px solid #fcd34d",borderRadius:3,padding:"2px 5px",fontSize:10,whiteSpace:"nowrap"}}>{p}</span>)}</span>:<span style={{color:C.muted}}>—</span>;}} />:(() => { const parts=String(r[K.tag]||"").split(/[\n,;]+/).map(s=>s.trim()).filter(Boolean); if(!parts.length) return <span style={{color:C.muted}}>—</span>; return <span style={{display:"flex",flexWrap:"wrap",gap:2}}>{parts.map((p,i)=><span key={i} style={{background:"#fef3c7",color:"#92400e",border:"1px solid #fcd34d",borderRadius:3,padding:"2px 5px",fontSize:10,whiteSpace:"nowrap"}}>{p}</span>)}</span>; })()}</td>}
                         {colConfig.desc.visible      && <td style={{ padding:"8px 10px", wordBreak:"break-word", lineHeight:1.5, width:colConfig.desc.width }}>{r._rowId&&K.desc?<EditableCell sheet="raid" rowId={r._rowId} colName={K.desc} value={localVals[r._rowId]?.[K.desc]??String(r[K.desc]||"")} multiline onSaved={v=>localUpdate(r._rowId,K.desc,v)}/>:String(r[K.desc]||"—")}</td>}
                         {colConfig.comment.visible   && <td style={{ padding:"8px 10px", wordBreak:"break-word", lineHeight:1.5, width:colConfig.comment.width }}>{r._rowId&&K.comment?<EditableCell sheet="raid" rowId={r._rowId} colName={K.comment} value={localVals[r._rowId]?.[K.comment]??String(r[K.comment]||"")} multiline onSaved={v=>localUpdate(r._rowId,K.comment,v)}/>:String(r[K.comment]||"—")}</td>}
                         {colConfig.owner?.visible            && <td style={{ padding:"8px 10px", color:C.text, wordBreak:"break-word", width:colConfig.owner.width }}>{String(r[K.owner]||"—")}</td>}
@@ -6093,27 +6096,22 @@ function TestScenariosTab({ data, wp, req, subTab, setSubTab }) {
       );
       return (
         <>
-          {/* Filter card — matches RAID Analysis style */}
-          <div style={{ background:C.white, border:`1px solid ${C.border}`, borderRadius:10, overflow:"hidden" }}>
-            <div style={{ padding:"12px 16px 10px", background:"#d0d5de", borderBottom:`1px solid ${C.border}` }}>
-              <div style={{ fontSize:10, fontWeight:700, color:C.text, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:8 }}>
-                Filters
-                <span style={{ fontSize:9, color:C.muted, fontWeight:400, textTransform:"none", marginLeft:8 }}>— selecting one filter adjusts the counts on the other</span>
-              </div>
-              {/* Row 1: SIT */}
-              <div style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"wrap", marginBottom:8 }}>
-                <span style={{ fontSize:10, color:"#374151", fontWeight:700, marginRight:2, minWidth:60 }}>SIT Plan</span>
-                {pill("All", activeSit==="ALL", allSitCt, () => { setSelSit("ALL"); }, C.navyLight)}
-                {sitCounts.map(({val,count}) => pill(val, activeSit===val, count, () => setSelSit(activeSit===val?"ALL":val), C.navyLight))}
-              </div>
-              {/* Row 2: Sub Process */}
-              <div style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
-                <span style={{ fontSize:10, color:"#374151", fontWeight:700, marginRight:2, minWidth:60 }}>Sub Process</span>
-                {pill("All", selSp==="ALL", allSpCt, () => setSelSp("ALL"), null)}
-                {spCounts.map(({val,count}) => pill(val, selSp===val, count, () => setSelSp(selSp===val?"ALL":val), null))}
-              </div>
+          {/* Filter card */}
+          <div style={{ background:"#f8fafc", border:`1px solid ${C.border}`, borderRadius:8, padding:"10px 14px", display:"flex", flexDirection:"column", gap:8 }}>
+            <div style={{ fontSize:10, fontWeight:700, color:"#374151", textTransform:"uppercase", letterSpacing:"0.06em" }}>Filters</div>
+            {/* Row 1: SIT */}
+            <div style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
+              <span style={{ fontSize:10, color:"#374151", fontWeight:700, marginRight:2, minWidth:90, flexShrink:0 }}>SIT Plan</span>
+              {pill("All", activeSit==="ALL", allSitCt, () => { setSelSit("ALL"); }, C.navyLight)}
+              {sitCounts.map(({val,count}) => pill(val, activeSit===val, count, () => setSelSit(activeSit===val?"ALL":val), C.navyLight))}
             </div>
-            <div style={{ padding:"6px 16px", background:C.white, fontSize:10, color:C.muted, borderBottom:`1px solid ${C.border}` }}>
+            {/* Row 2: Sub Process */}
+            <div style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
+              <span style={{ fontSize:10, color:"#374151", fontWeight:700, marginRight:2, minWidth:90, flexShrink:0 }}>Sub Process</span>
+              {pill("All", selSp==="ALL", allSpCt, () => setSelSp("ALL"), null)}
+              {spCounts.map(({val,count}) => pill(val, selSp===val, count, () => setSelSp(selSp===val?"ALL":val), null))}
+            </div>
+            <div style={{ fontSize:10, color:C.muted }}>
               Showing <b style={{ color:C.text }}>{tableRows.length}</b> sub-processes · <b style={{ color:C.text }}>{totDrafted}</b> scenarios
             </div>
           </div>
@@ -6572,21 +6570,21 @@ function TestScenariosTab({ data, wp, req, subTab, setSubTab }) {
             {_allScenSits.map(v => _fpill(v, scenSitF===v, _allScenRows.filter(r=>String(r[K.sitPlan]||"").trim()===v&&(scenSpF==="ALL"||String(r[K.subprocess]||"").trim()===scenSpF)&&(scenPersonaF==="ALL"||String(r[K.persona]||"").trim()===scenPersonaF)&&_flagMatch(r)).length, ()=>setScenSitF(scenSitF===v?"ALL":v)))}
           </div>
         )}
-        {/* Flag filters */}
-        <div style={{ display:"flex", flexDirection:"column", gap:6, paddingTop:4, borderTop:`1px dashed ${C.border}` }}>
+        {/* Flag filters — single row */}
+        <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap", paddingTop:4, borderTop:`1px dashed ${C.border}` }}>
           {[
-            { f:"del",    label:"To Be Deleted",              color:"#b91c1c", bg:"#fee2e2", key:K.toBeDeleted     },
-            { f:"dup",    label:"Dup / Data Mining / NA",     color:"#92400e", bg:"#fde8cc", key:K.dupDataMiningNA },
-            { f:"openFb", label:"Open Feedback",              color:"#854d0e", bg:"#fefce8", key:K.openFeedbackFlag},
-            { f:"manual", label:"Manual (Not Tech Enabled)",  color:"#1e40af", bg:"#dbeafe", key:K.manualNotTech   },
+            { f:"del",    label:"To Be Deleted",         color:"#b91c1c", bg:"#fee2e2", key:K.toBeDeleted     },
+            { f:"dup",    label:"Dup / Data Mining",      color:"#92400e", bg:"#fde8cc", key:K.dupDataMiningNA },
+            { f:"openFb", label:"Open Feedback",          color:"#854d0e", bg:"#fefce8", key:K.openFeedbackFlag},
+            { f:"manual", label:"Manual",                 color:"#1e40af", bg:"#dbeafe", key:K.manualNotTech   },
           ].filter(x=>x.key).map(({f,label,color,bg,key}) => {
             const val = scenFlagF[f] || "ALL";
             const yesCnt = _allScenRows.filter(r=>isTruthy(r[key])).length;
             const noCnt  = _allScenRows.length - yesCnt;
             return (
-              <div key={f} style={{ display:"flex", alignItems:"center", gap:8 }}>
-                <span style={{ fontSize:10, fontWeight:700, color:"#374151", minWidth:175, flexShrink:0 }}>{label}</span>
-                <div style={{ display:"flex", borderRadius:6, border:`1px solid #d1d5db`, overflow:"hidden", flexShrink:0 }}>
+              <div key={f} style={{ display:"flex", alignItems:"center", gap:4, flexShrink:0 }}>
+                <span style={{ fontSize:10, fontWeight:700, color:"#374151", whiteSpace:"nowrap" }}>{label}:</span>
+                <div style={{ display:"flex", borderRadius:6, border:`1px solid #d1d5db`, overflow:"hidden" }}>
                   {[
                     { v:"ALL", text:"All" },
                     { v:"YES", text:`Yes (${yesCnt})` },
@@ -6597,7 +6595,7 @@ function TestScenariosTab({ data, wp, req, subTab, setSubTab }) {
                     const activeCol= v==="YES" ? color : v==="NO" ? "#166534" : "#3730a3";
                     return (
                       <button key={v} onClick={()=>_setFlag(f,v)}
-                        style={{ padding:"3px 10px", border:"none", borderRight:`1px solid #d1d5db`,
+                        style={{ padding:"3px 8px", border:"none", borderRight:`1px solid #d1d5db`,
                           background: active ? activeBg : C.white,
                           color: active ? activeCol : C.muted,
                           fontWeight: active ? 700 : 500, fontSize:10, cursor:"pointer",
@@ -6639,7 +6637,6 @@ function TestScenariosTab({ data, wp, req, subTab, setSubTab }) {
               <col style={{ width: scenColW["da"]    ||58  }} />
               <col style={{ width: scenColW["tagUs"] ||48  }} />
               <col style={{ width: scenColW["man"]   ||46  }} />
-              <col style={{ width: scenColW["rev"]   ||58  }} />
             </colgroup>
             <thead style={{ position:"sticky", top:0, zIndex:2 }}>
               {/* Group header row */}
@@ -6661,8 +6658,7 @@ function TestScenariosTab({ data, wp, req, subTab, setSubTab }) {
                 <th rowSpan={2} style={{ padding:"6px 4px",  textAlign:"center", color:"#fcd34d", fontWeight:700, fontSize:10, borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative", verticalAlign:"bottom" }}>DT{_rh("dt",44)}</th>
                 <th rowSpan={2} style={{ padding:"6px 4px",  textAlign:"center", color:"#c4f1c4", fontWeight:700, fontSize:10, borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative", verticalAlign:"bottom" }}>D&A{_rh("da",58)}</th>
                 <th rowSpan={2} style={{ padding:"6px 4px",  textAlign:"center", color:"#c4f1c4", fontWeight:700, fontSize:10, borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative", verticalAlign:"bottom" }}>Tagged US{_rh("tagUs",48)}</th>
-                <th rowSpan={2} style={{ padding:"6px 4px",  textAlign:"center", color:"#93c5fd", fontWeight:700, fontSize:10, borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative", verticalAlign:"bottom" }} title="Manual (Not Tech Enabled)">Manual{_rh("man",46)}</th>
-                <th rowSpan={2} style={{ padding:"6px 4px",  textAlign:"center", color:"#e2e8f0", fontWeight:700, fontSize:10, position:"relative", verticalAlign:"bottom" }}>Review Comments{_rh("rev",58)}</th>
+                <th rowSpan={2} style={{ padding:"6px 4px",  textAlign:"center", color:"#93c5fd", fontWeight:700, fontSize:10, position:"relative", verticalAlign:"bottom" }} title="Manual (Not Tech Enabled)">Manual{_rh("man",46)}</th>
               </tr>
               {/* Sub-header for Internal Tech Team Reviews columns */}
               <tr style={{ background:"#dcfce7" }}>
@@ -6673,7 +6669,7 @@ function TestScenariosTab({ data, wp, req, subTab, setSubTab }) {
             </thead>
             <tbody>
               {_scenFiltered.length === 0 && (
-                <tr><td colSpan={21} style={{ padding:24, textAlign:"center", color:C.muted }}>No scenarios match selected filters</td></tr>
+                <tr><td colSpan={20} style={{ padding:24, textAlign:"center", color:C.muted }}>No scenarios match selected filters</td></tr>
               )}
               {/* Subtotal row */}
               {(() => {
@@ -6710,8 +6706,7 @@ function TestScenariosTab({ data, wp, req, subTab, setSubTab }) {
                     <td style={{ padding:"6px 8px", borderRight:br }} />
                     <td style={{ padding:"6px 8px", borderRight:br }} />
                     <td style={{ padding:"6px 8px", textAlign:"center", borderRight:br }}>{num(stTag, "#1d4ed8")}</td>
-                    <td style={{ padding:"6px 8px", textAlign:"center", borderRight:br }}>{num(stMan, "#1e40af")}</td>
-                    <td style={{ padding:"6px 8px" }} />
+                    <td style={{ padding:"6px 8px", textAlign:"center" }}>{num(stMan, "#1e40af")}</td>
                   </tr>
                 );
               })()}
@@ -6757,11 +6752,8 @@ function TestScenariosTab({ data, wp, req, subTab, setSubTab }) {
                         ? <span style={{ background:"#eff6ff", color:"#1d4ed8", borderRadius:4, padding:"2px 8px", fontSize:10, fontWeight:700 }}>{tagIds.length}</span>
                         : <span style={{ color:C.muted }}>—</span>}
                     </td>
-                    <td style={{ padding:"8px 10px", textAlign:"center", borderRight:`1px solid ${C.border}`, width:scenColW["man"]||46 }}>
+                    <td style={{ padding:"8px 10px", textAlign:"center", width:scenColW["man"]||46 }}>
                       {isManual ? <span style={{ background:"#dbeafe", color:"#1e40af", borderRadius:3, padding:"1px 5px", fontSize:10, fontWeight:700 }}>✓</span> : <span style={{ color:C.muted }}>—</span>}
-                    </td>
-                    <td style={{ padding:"8px 10px", textAlign:"center", width:scenColW["rev"]||58 }}>
-                      <span style={{ color:C.navyLight, fontSize:10, fontWeight:700, whiteSpace:"nowrap" }}>↗</span>
                     </td>
                   </tr>
                 );
