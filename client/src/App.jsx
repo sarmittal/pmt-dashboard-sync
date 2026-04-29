@@ -7568,8 +7568,10 @@ function ScorecardTab({ wp, raid, req, openModal }) {
       {(() => {
         // Use pre-computed bucket counts from parseRequirements (already handles fallback to Status column)
         const compData    = req ? Object.values(req.byComponent || {}) : [];
-        const allCompRows = compData.flatMap(d => d.rows || []).filter(r =>
-          !REQ_EXCL_EXP.some(e => String(r[req?.keys?.pmExperience]||"").toLowerCase().includes(e)));
+        const allCompRows = compData.flatMap(d => d.rows || []).filter(r => {
+          if (!String(r[req?.keys?.reqId]||"").trim()) return false;
+          return !REQ_EXCL_EXP.some(e => String(r[req?.keys?.pmExperience]||"").toLowerCase().includes(e));
+        });
 
         // statusBucket with fallback: func/tech build status → Status column
         const statusBucket = r => {
