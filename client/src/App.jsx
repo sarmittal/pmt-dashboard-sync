@@ -237,8 +237,8 @@ function parseRequirements(sheets) {
   const rows = sheets[key]; if (!rows?.length) return null;
   const ks = Object.keys(rows[0]);
 
-  // Log detected columns for debugging
-  console.log("[PMT] Req columns:", ks.slice(0, 20));
+  // Log ALL detected columns for debugging
+  console.log("[PMT] Req ALL columns:", ks);
 
   const K = {
     story:           ks.find(k => k === "User Story") || ks.find(k => /^user.?story$/i.test(k)) || ks[0],
@@ -270,19 +270,19 @@ function parseRequirements(sheets) {
                   || ks.find(k => /build.?mgmt.?comment/i.test(k))
                   || ks.find(k => /build.?comment/i.test(k)),
     testScriptType:  ks.find(k => k === "Test Script/Test Scenario") || ks.find(k => /test.?script.*scenario|test.?scenario/i.test(k)),
-    tags:            ks.find(k => k === "Tags") || ks.find(k => k === "Tag") || ks.find(k => /^tags?$/i.test(k)),
-    // Build approach fields
-    sf:              ks.find(k => k === "SF")                                    || ks.find(k => /^sf$/i.test(k)),
-    sfPov:           ks.find(k => k === "SF Design POV")                         || ks.find(k => /sf.?design.?pov/i.test(k)),
-    sfWorkbook:      ks.find(k => k === "SF Configuration Workbook Reference")   || ks.find(k => /sf.*workbook|sf.*configuration/i.test(k)),
-    btp:             ks.find(k => k === "BTP")                                   || ks.find(k => /^btp$/i.test(k)),
-    btpPov:          ks.find(k => k === "BTP Design POV")                        || ks.find(k => /btp.?design.?pov/i.test(k)),
-    ci:              ks.find(k => k === "CI")                                    || ks.find(k => /^ci$/i.test(k)),
-    ciPov:           ks.find(k => k === "CI/API POV")                            || ks.find(k => /ci.*api.*pov|ci.?pov/i.test(k)),
-    ai:              ks.find(k => k === "AI")                                    || ks.find(k => /^ai$/i.test(k)),
-    aiPov:           ks.find(k => k === "AI POV")                               || ks.find(k => /^ai.?pov$/i.test(k)),
-    techSpec:        ks.find(k => k === "Tech lean Spec Reference")              || ks.find(k => /tech.*lean.*spec|tech.*spec.*ref/i.test(k)),
-    snowPov:         ks.find(k => k === "SNOW POV")                              || ks.find(k => /snow.?pov/i.test(k)),
+    tags:            ks.find(k => /^tags?$/i.test(k)) || ks.find(k => /\btags?\b/i.test(k)),
+    // Build approach fields — match exact name first, then broad regex
+    sf:              ks.find(k => k.trim() === "SF")                              || ks.find(k => /^sf$/i.test(k.trim())),
+    sfPov:           ks.find(k => /sf.{0,3}design.{0,3}pov/i.test(k))            || ks.find(k => /sf.{0,5}pov/i.test(k) && /design/i.test(k)),
+    sfWorkbook:      ks.find(k => /sf.{0,10}configuration.{0,10}workbook/i.test(k)) || ks.find(k => /sf.{0,10}workbook/i.test(k)),
+    btp:             ks.find(k => k.trim() === "BTP")                             || ks.find(k => /^btp$/i.test(k.trim())),
+    btpPov:          ks.find(k => /btp.{0,3}design.{0,3}pov/i.test(k))           || ks.find(k => /btp.{0,5}pov/i.test(k)),
+    ci:              ks.find(k => k.trim() === "CI")                              || ks.find(k => /^ci$/i.test(k.trim())),
+    ciPov:           ks.find(k => /ci.{0,5}api.{0,5}pov/i.test(k))              || ks.find(k => /ci.{0,5}pov/i.test(k)),
+    ai:              ks.find(k => k.trim() === "AI")                              || ks.find(k => /^ai$/i.test(k.trim())),
+    aiPov:           ks.find(k => /^ai.{0,5}pov$/i.test(k.trim()))               || ks.find(k => /\bai\b.{0,5}pov/i.test(k)),
+    techSpec:        ks.find(k => /tech.{0,10}lean.{0,10}spec/i.test(k))         || ks.find(k => /tech.{0,10}spec.{0,10}ref/i.test(k)),
+    snowPov:         ks.find(k => /snow.{0,5}pov/i.test(k)),
   };
 
   console.log("[PMT] Req key mapping:", K);
@@ -2882,15 +2882,15 @@ function ReqTraceabilityTab({ req, test }) {
                                   <span style={{fontSize:11,color:"#c2410c",fontWeight:600}}>No test scenarios linked — coverage gap</span>
                                 </div>
                               ):(
-                                <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
-                                  {scens.map(sc=>{
-                                    const scId  = String(sc[tK?.id]||"").trim();
-                                    const scKey = `${id}__${scId}`;
-                                    const scOpen= expandedSc.has(scKey);
-                                    return (
-                                      <div key={scKey} style={{display:"flex",flexDirection:"column",maxWidth:scOpen?"100%":"auto"}}>
-                                        {/* Bubble */}
-                                        <button onClick={e=>{e.stopPropagation();_toggleSc(scKey);}} style={{
+                                <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                                  {/* Bubble row */}
+                                  <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                                    {scens.map(sc=>{
+                                      const scId  = String(sc[tK?.id]||"").trim();
+                                      const scKey = `${id}__${scId}`;
+                                      const scOpen= expandedSc.has(scKey);
+                                      return (
+                                        <button key={scKey} onClick={e=>{e.stopPropagation();_toggleSc(scKey);}} style={{
                                           background:scOpen?"#1e40af":"#eff6ff",color:scOpen?"#fff":"#1d4ed8",
                                           border:`1.5px solid ${scOpen?"#1e40af":"#93c5fd"}`,borderRadius:20,
                                           padding:"4px 12px",fontSize:10,fontWeight:700,cursor:"pointer",
@@ -2898,28 +2898,31 @@ function ReqTraceabilityTab({ req, test }) {
                                         }}>
                                           <span>{scOpen?"▾":"▸"}</span>
                                           <span>{scId||"Scenario"}</span>
-                                          <span style={{opacity:0.75,fontWeight:400,maxWidth:120,overflow:"hidden",textOverflow:"ellipsis"}}>
-                                            {String(sc[tK?.name]||"").slice(0,40)||""}
+                                          <span style={{opacity:0.75,fontWeight:400,maxWidth:160,overflow:"hidden",textOverflow:"ellipsis"}}>
+                                            {String(sc[tK?.name]||"").slice(0,50)||""}
                                           </span>
                                         </button>
-                                        {/* Expanded scenario detail */}
-                                        {scOpen&&(
-                                          <div style={{marginTop:4,background:"#fff",border:`1px solid #bfdbfe`,borderRadius:6,padding:"10px 14px",display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:"6px 16px",boxShadow:"0 2px 6px rgba(30,64,175,0.08)"}}>
-                                            {[
-                                              {label:"Test Scenario ID",       val:scId||"—"},
-                                              {label:"Test Scenario",          val:String(sc[tK?.name]||"—")},
-                                              {label:"Applicable Experience",  val:_fieldVal(sc[tK?.applicableExperience])},
-                                              {label:"Applicable Business",    val:_fieldVal(sc[tK?.applicableBusiness])},
-                                              {label:"Applicable Region",      val:_fieldVal(sc[tK?.applicableRegion])},
-                                              {label:"Est. Test Cases",        val:_fieldVal(sc[tK?.estCases])},
-                                            ].map(({label,val})=>(
-                                              <div key={label} style={{display:"flex",flexDirection:"column",gap:1}}>
-                                                <span style={{fontSize:9,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:"0.05em"}}>{label}</span>
-                                                <span style={{fontSize:11,color:val==="—"?C.muted:C.text,lineHeight:1.4}}>{val}</span>
-                                              </div>
-                                            ))}
+                                      );
+                                    })}
+                                  </div>
+                                  {/* Expanded detail panels — render below all bubbles, full width */}
+                                  {scens.filter(sc=>expandedSc.has(`${id}__${String(sc[tK?.id]||"").trim()}`)).map(sc=>{
+                                    const scId = String(sc[tK?.id]||"").trim();
+                                    return (
+                                      <div key={`det_${scId}`} style={{width:"100%",background:"#fff",border:`1px solid #bfdbfe`,borderRadius:6,padding:"12px 16px",display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:"10px 24px",boxShadow:"0 2px 6px rgba(30,64,175,0.08)"}}>
+                                        {[
+                                          {label:"Test Scenario ID",      val:scId||"—"},
+                                          {label:"Test Scenario",         val:String(sc[tK?.name]||"—")},
+                                          {label:"Applicable Experience", val:_fieldVal(sc[tK?.applicableExperience])},
+                                          {label:"Applicable Business",   val:_fieldVal(sc[tK?.applicableBusiness])},
+                                          {label:"Applicable Region",     val:_fieldVal(sc[tK?.applicableRegion])},
+                                          {label:"Est. Test Cases",       val:_fieldVal(sc[tK?.estCases])},
+                                        ].map(({label,val})=>(
+                                          <div key={label} style={{display:"flex",flexDirection:"column",gap:2}}>
+                                            <span style={{fontSize:9,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:"0.05em"}}>{label}</span>
+                                            <span style={{fontSize:11,color:val==="—"?C.muted:C.text,lineHeight:1.45}}>{val}</span>
                                           </div>
-                                        )}
+                                        ))}
                                       </div>
                                     );
                                   })}
@@ -2948,10 +2951,14 @@ function ReqTraceabilityTab({ req, test }) {
           </table>
         </div>
         {filtered.length>0&&(
-          <div style={{padding:"7px 14px",borderTop:`1px solid ${C.border}`,background:"#f8fafc",fontSize:10,color:C.muted,display:"flex",gap:16}}>
+          <div style={{padding:"7px 14px",borderTop:`1px solid ${C.border}`,background:"#f8fafc",fontSize:10,color:C.muted,display:"flex",gap:16,flexWrap:"wrap",alignItems:"center"}}>
             <span>Showing <strong style={{color:C.text}}>{filtered.length}</strong> requirements</span>
             <span>Coverage: <strong style={{color:covPct>=80?C.complete:covPct>=50?"#d97706":C.delayed}}>{covPct}%</strong> ({covCnt} with scenarios, {gapCnt} gaps)</span>
             <span>Total est. cases: <strong style={{color:C.navyLight}}>{totEst}</strong></span>
+            <span style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:6}}>
+              <span style={{display:"inline-block",width:12,height:12,background:"#fffbeb",border:"1px solid #fde68a",borderRadius:2}}></span>
+              <span>Yellow rows = no linked test scenarios (coverage gap)</span>
+            </span>
           </div>
         )}
       </div>
