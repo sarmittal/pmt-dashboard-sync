@@ -786,7 +786,7 @@ function Modal({ title, rows, columns, onClose }) {
 }
 
 // Keys in colConfig-based RAID tables that are editable — used to show ✎ in headers
-const RAID_EDITABLE_HEADER_KEYS = new Set(["desc", "comment", "critPath", "raidDueDate", "tag"]);
+const RAID_EDITABLE_HEADER_KEYS = new Set(["desc", "comment", "critPath", "raidDueDate", "tag", "priority", "resolutionDate"]);
 
 // Pencil badge rendered next to editable column headers
 const EditHeaderBadge = () => (
@@ -1698,7 +1698,7 @@ function ExecutiveSummaryTab({ wp, raid, req, cap, openModal }) {
             <table style={{ width:"100%", borderCollapse:"collapse", fontSize:11 }}>
               <thead>
                 <tr style={{ background:"#162f50" }}>
-                  {["Sprint","Total","Complete","In Progress","Blocked","Not Started","Partial"].map((h,i) => (
+                  {["Sprint","Total","% Done","Complete","In Progress","Blocked","Not Started","Partial"].map((h,i) => (
                     <th key={h} style={{ padding:"8px 12px", textAlign:i===0?"left":"center", color:"#fff", fontSize:10, fontWeight:700, whiteSpace:"nowrap" }}>{h}</th>
                   ))}
                 </tr>
@@ -1712,6 +1712,7 @@ function ExecutiveSummaryTab({ wp, raid, req, cap, openModal }) {
                     <tr key={sp.name} style={{ background:i%2===0?C.white:"#f8fafc", borderBottom:`1px solid ${C.border}` }}>
                       <td style={{ padding:"8px 12px", fontWeight:600, color:C.text }}>{sp.name}</td>
                       <td style={{ padding:"8px 12px", textAlign:"center" }}>{mkCell(sp.total,     null,       C.text)}</td>
+                      <td style={{ padding:"8px 12px", textAlign:"center" }}>{sp.total>0?(() => { const pct=Math.round((sp.complete||0)/sp.total*100); const [bg,c]=pct>=80?["#dcfce7","#166534"]:pct>=50?["#fef3c7","#92400e"]:["#fee2e2","#b91c1c"]; return <span style={{background:bg,color:c,borderRadius:4,padding:"2px 7px",fontSize:10,fontWeight:700}}>{pct}%</span>; })():<span style={{color:C.muted}}>—</span>}</td>
                       <td style={{ padding:"8px 12px", textAlign:"center" }}>{mkCell(sp.complete,  "complete",  "#1d4ed8")}</td>
                       <td style={{ padding:"8px 12px", textAlign:"center" }}>{mkCell(sp.inProgress,"inProgress","#15803d")}</td>
                       <td style={{ padding:"8px 12px", textAlign:"center" }}>{mkCell(sp.blocked,   "blocked",   "#b91c1c")}</td>
@@ -1734,6 +1735,7 @@ function ExecutiveSummaryTab({ wp, raid, req, cap, openModal }) {
                     <tr style={{ background:"#e8eef7", borderTop:`2px solid #162f50` }}>
                       <td style={{ padding:"8px 12px", fontWeight:800, color:"#162f50", fontSize:11 }}>TOTAL</td>
                       <td style={{ padding:"8px 12px", textAlign:"center" }}>{mkTotCell(tot.total,     null,       "#162f50")}</td>
+                      <td style={{ padding:"8px 12px", textAlign:"center" }}>{tot.total>0?(() => { const pct=Math.round((tot.complete||0)/tot.total*100); const [bg,c]=pct>=80?["#dcfce7","#166534"]:pct>=50?["#fef3c7","#92400e"]:["#fee2e2","#b91c1c"]; return <span style={{background:bg,color:c,borderRadius:4,padding:"2px 7px",fontSize:10,fontWeight:800}}>{pct}%</span>; })():<span style={{color:C.muted}}>—</span>}</td>
                       <td style={{ padding:"8px 12px", textAlign:"center" }}>{mkTotCell(tot.complete,  "complete",  "#1d4ed8")}</td>
                       <td style={{ padding:"8px 12px", textAlign:"center" }}>{mkTotCell(tot.inProgress,"inProgress","#15803d")}</td>
                       <td style={{ padding:"8px 12px", textAlign:"center" }}>{mkTotCell(tot.blocked,   "blocked",   "#b91c1c")}</td>
@@ -1969,7 +1971,7 @@ function RaidKpiModal({ title, rows, K, teamKey, allTeams, allTypes, allComps, s
                 return (
                   <tr key={i} style={{ background:i%2===0?C.white:"#f7f9fc", borderBottom:`1px solid ${C.border}`, verticalAlign:"top" }}>
                     {colConfig.raidId.visible          && <td style={{ padding:"8px 10px", fontWeight:700, color:C.navyLight, wordBreak:"break-word", width:colConfig.raidId.width }}>{String(r[K.id]||"—")}</td>}
-                    {colConfig.priority?.visible       && (() => { const pv=String(r[K.priority]||"—"); const pc=getPriorityColor(pv); return <td style={{ padding:"8px 10px", width:colConfig.priority.width }}><span style={{ background:pc?"#fee2e2":"#f1f5f9", color:pc||C.text, border:`1px solid ${pc?pc+"50":"#e2e8f0"}`, borderRadius:3, padding:"2px 6px", fontSize:10, fontWeight:700, whiteSpace:"nowrap" }}>{pv}</span></td>; })()}
+                    {colConfig.priority?.visible       && <td style={{ padding:"8px 10px", width:colConfig.priority.width }}>{r._rowId&&K.priority?<EditableCell sheet="raid" rowId={r._rowId} colName={K.priority} value={localVals[r._rowId]?.[K.priority]??String(r[K.priority]||"")} onSaved={v=>localUpdate(r._rowId,K.priority,v)}/>:(() => { const pv=String(r[K.priority]||"—"); const pc=getPriorityColor(pv); return <span style={{ background:pc?"#fee2e2":"#f1f5f9", color:pc||C.text, border:`1px solid ${pc?pc+"50":"#e2e8f0"}`, borderRadius:3, padding:"2px 6px", fontSize:10, fontWeight:700, whiteSpace:"nowrap" }}>{pv}</span>; })()}</td>}
                     {colConfig.status.visible          && <td style={{ padding:"8px 10px", width:colConfig.status.width }}><span style={{ background:sCol+"20", color:sCol, border:`1px solid ${sCol}40`, borderRadius:4, padding:"2px 6px", fontSize:10, fontWeight:700, whiteSpace:"nowrap" }}>{status||"—"}</span></td>}
                     {colConfig.type.visible            && <td style={{ padding:"8px 10px", color:C.text, wordBreak:"break-word", width:colConfig.type.width }}>{String(r[K.type]||"—")}</td>}
                     {colConfig.component.visible       && <td style={{ padding:"8px 10px", color:C.text, wordBreak:"break-word", width:colConfig.component.width }}>{String(r[K.component]||"—")}</td>}
@@ -1983,7 +1985,7 @@ function RaidKpiModal({ title, rows, K, teamKey, allTeams, allTypes, allComps, s
                     {colConfig.critPath?.visible       && <td style={{ padding:"8px 10px", width:colConfig.critPath.width }}>{r._rowId && K.critPath ? <EditableCell sheet="raid" rowId={r._rowId} colName={K.critPath} value={localVals[r._rowId]?.[K.critPath] ?? String(r[K.critPath]||"")} onSaved={v=>localUpdate(r._rowId,K.critPath,v)} /> : (() => { const v=String(r[K.critPath]||"").trim(); if(!v||v==="—") return <span style={{color:C.muted}}>—</span>; const hi=v.toLowerCase()!=="no"&&v.toLowerCase()!=="n/a"; return <span style={{background:hi?"#fee2e2":"#f1f5f9",color:hi?C.delayed:C.muted,borderRadius:3,padding:"2px 6px",fontSize:10,fontWeight:600}}>{v}</span>; })()}</td>}
                     {colConfig.dueDate?.visible        && <td style={{ padding:"8px 10px", color:dueCol, fontWeight:600, whiteSpace:"nowrap", width:colConfig.dueDate.width }}>{dueStr}</td>}
                     {colConfig.raidDueDate?.visible    && <td style={{ padding:"8px 10px", width:colConfig.raidDueDate?.width||120 }}>{r._rowId&&K.raidDueDate?<EditableCell sheet="raid" rowId={r._rowId} colName={K.raidDueDate} value={localVals[r._rowId]?.[K.raidDueDate]??String(r[K.raidDueDate]||"")} onSaved={v=>localUpdate(r._rowId,K.raidDueDate,v)}/>:<span style={{color:C.muted}}>—</span>}</td>}
-                    {colConfig.resolutionDate?.visible && <td style={{ padding:"8px 10px", color:C.muted, whiteSpace:"nowrap", width:colConfig.resolutionDate?.width||120 }}>{fmtDate(r[K.resolutionDate])||"—"}</td>}
+                    {colConfig.resolutionDate?.visible && <td style={{ padding:"8px 10px", width:colConfig.resolutionDate?.width||120 }}>{r._rowId&&K.resolutionDate?<EditableCell sheet="raid" rowId={r._rowId} colName={K.resolutionDate} value={localVals[r._rowId]?.[K.resolutionDate]??String(r[K.resolutionDate]||"")} onSaved={v=>localUpdate(r._rowId,K.resolutionDate,v)}/>:<span style={{color:C.muted}}>{fmtDate(r[K.resolutionDate])||"—"}</span>}</td>}
                   </tr>
                 );
               })}
@@ -2070,7 +2072,7 @@ function CRDrillModal({ title, rows, K, showCompletion, onClose }) {
     { key:"link",    td:(r,url)=><td style={{padding:"6px 8px",textAlign:"center",width:colCfg.link.width,overflow:"hidden"}}>{url?<a href={url} target="_blank" rel="noreferrer" style={{color:C.accent,fontWeight:700}}>↗</a>:"—"}</td> },
     { key:"raidId",  td:(r)=><td style={{padding:"6px 8px",fontWeight:700,color:C.navyLight,whiteSpace:"nowrap",width:colCfg.raidId.width,overflow:"hidden"}}>{String(r[K.id]||"—")}</td> },
     { key:"status",  td:(r)=><td style={{padding:"6px 8px",width:colCfg.status.width,overflow:"hidden"}}><span style={{background:"#f0f4f8",color:C.text,border:`1px solid ${C.border}`,borderRadius:4,padding:"2px 7px",fontSize:10,fontWeight:600,whiteSpace:"nowrap"}}>{String(r[K.crStatus]||"—").trim()}</span></td> },
-    { key:"priority",td:(r)=><td style={{padding:"6px 8px",color:C.text,whiteSpace:"nowrap",width:colCfg.priority.width,overflow:"hidden"}}>{String(r[K.priority]||"—")}</td> },
+    { key:"priority",td:(r)=><td style={{padding:"6px 8px",width:colCfg.priority.width,overflow:"hidden"}}>{r._rowId&&K.priority?<EditableCell sheet="raid" rowId={r._rowId} colName={K.priority} value={localVals[r._rowId]?.[K.priority]??String(r[K.priority]||"")} onSaved={v=>localUpdate(r._rowId,K.priority,v)}/>:String(r[K.priority]||"—")}</td> },
     { key:"type",    td:(r)=><td style={{padding:"6px 8px",color:C.muted,whiteSpace:"nowrap",width:colCfg.type.width,overflow:"hidden"}}>{String(r[K.type]||"—")}</td> },
     { key:"exp",     td:(r)=><td style={{padding:"6px 8px",color:C.text,wordBreak:"break-word",width:colCfg.exp.width,overflow:"hidden"}}>{String(r[K.experience]||"—")}</td> },
     { key:"comp",    td:(r)=><td style={{padding:"6px 8px",color:C.text,wordBreak:"break-word",width:colCfg.comp.width,overflow:"hidden"}}>{String(r[K.component]||"—")}</td> },
@@ -2087,7 +2089,7 @@ function CRDrillModal({ title, rows, K, showCompletion, onClose }) {
     { key:"ux",      td:(r)=>numCell(r,K.crUx) },
     { key:"sprint",  td:(r)=><td style={{padding:"6px 8px",whiteSpace:"nowrap",width:colCfg.sprint.width,overflow:"hidden"}}>{r._rowId&&K.crTargetSprint?<EditableCell sheet="raid" rowId={r._rowId} colName={K.crTargetSprint} value={localVals[r._rowId]?.[K.crTargetSprint]??String(r[K.crTargetSprint]||"")} onSaved={v=>localUpdate(r._rowId,K.crTargetSprint,v)}/>:String(r[K.crTargetSprint]||"—")}</td> },
     { key:"tag",     td:(r)=><td style={{padding:"6px 8px",width:colCfg.tag.width,overflow:"hidden"}}>{r._rowId&&K.tag?<EditableCell sheet="raid" rowId={r._rowId} colName={K.tag} value={localVals[r._rowId]?.[K.tag]??String(r[K.tag]||"")} onSaved={v=>localUpdate(r._rowId,K.tag,v)}/>:(() => { const v=String(r[K.tag]||"").trim(); if(!v||v==="—") return <span style={{color:C.muted}}>—</span>; return <span style={{background:"#fef3c7",color:"#92400e",border:"1px solid #fcd34d",borderRadius:3,padding:"2px 6px",fontSize:10,whiteSpace:"nowrap"}}>{v}</span>; })()}</td> },
-    { key:"resDate", td:(r)=><td style={{padding:"6px 8px",color:C.muted,whiteSpace:"nowrap",width:colCfg.resDate.width,overflow:"hidden"}}>{fmtDate(r[K.resolutionDate])||"—"}</td> },
+    { key:"resDate", td:(r)=><td style={{padding:"6px 8px",width:colCfg.resDate.width,overflow:"hidden"}}>{r._rowId&&K.resolutionDate?<EditableCell sheet="raid" rowId={r._rowId} colName={K.resolutionDate} value={localVals[r._rowId]?.[K.resolutionDate]??String(r[K.resolutionDate]||"")} onSaved={v=>localUpdate(r._rowId,K.resolutionDate,v)}/>:<span style={{color:C.muted}}>{fmtDate(r[K.resolutionDate])||"—"}</span>}</td> },
     { key:"compl",   td:(r)=>showCompletion?<td style={{padding:"6px 8px",width:colCfg.compl.width,overflow:"hidden"}}><span style={{background:isCompleted(r)?"#dcfce7":"#f3f4f6",color:isCompleted(r)?"#166534":"#6b7280",borderRadius:4,padding:"2px 7px",fontSize:10,fontWeight:700}}>{String(r[K.crCompletion]||"—")}</span></td>:null },
   ];
 
@@ -4178,7 +4180,7 @@ function RaidAnalysisTab({ raid }) {
                     return (
                       <tr key={i} style={{ background:i%2===0?C.white:"#f7f9fc", borderBottom:`1px solid ${C.border}`, verticalAlign:"top" }}>
                         {colConfig.raidId?.visible         && <td style={{ padding:"8px 10px", fontWeight:700, color:C.navyLight, wordBreak:"break-word", width:colConfig.raidId.width }}>{String(r[K.id]||"—")}</td>}
-                        {colConfig.priority?.visible       && (() => { const pv=String(r[K.priority]||"—"); const pc=getPriorityColor(pv); return <td style={{ padding:"8px 10px", width:colConfig.priority.width }}><span style={{ background:pc?"#fee2e2":"#f1f5f9", color:pc||C.text, border:`1px solid ${pc?pc+"50":"#e2e8f0"}`, borderRadius:3, padding:"2px 6px", fontSize:10, fontWeight:700, whiteSpace:"nowrap" }}>{pv}</span></td>; })()}
+                        {colConfig.priority?.visible       && <td style={{ padding:"8px 10px", width:colConfig.priority.width }}>{r._rowId&&K.priority?<EditableCell sheet="raid" rowId={r._rowId} colName={K.priority} value={localVals[r._rowId]?.[K.priority]??String(r[K.priority]||"")} onSaved={v=>localUpdate(r._rowId,K.priority,v)}/>:(() => { const pv=String(r[K.priority]||"—"); const pc=getPriorityColor(pv); return <span style={{ background:pc?"#fee2e2":"#f1f5f9", color:pc||C.text, border:`1px solid ${pc?pc+"50":"#e2e8f0"}`, borderRadius:3, padding:"2px 6px", fontSize:10, fontWeight:700, whiteSpace:"nowrap" }}>{pv}</span>; })()}</td>}
                         {colConfig.status?.visible          && <td style={{ padding:"8px 10px", width:colConfig.status.width }}>
                           <span style={{ background:sCol+"20", color:sCol, border:`1px solid ${sCol}40`, borderRadius:4, padding:"2px 6px", fontSize:10, fontWeight:700, whiteSpace:"nowrap" }}>{status||"—"}</span>
                         </td>}
@@ -4193,7 +4195,7 @@ function RaidAnalysisTab({ raid }) {
                         {colConfig.critPath?.visible         && <td style={{ padding:"8px 10px", width:colConfig.critPath.width }}>{r._rowId&&K.critPath?<EditableCell sheet="raid" rowId={r._rowId} colName={K.critPath} value={localVals[r._rowId]?.[K.critPath]??String(r[K.critPath]||"")} onSaved={v=>localUpdate(r._rowId,K.critPath,v)}/>:(() => { const v=String(r[K.critPath]||"").trim(); if(!v||v==="—") return <span style={{color:C.muted}}>—</span>; const hi=v.toLowerCase()!=="no"&&v.toLowerCase()!=="n/a"; return <span style={{background:hi?"#fee2e2":"#f1f5f9",color:hi?C.delayed:C.muted,borderRadius:3,padding:"2px 6px",fontSize:10,fontWeight:600}}>{v}</span>; })()}</td>}
                         {colConfig.dueDate?.visible          && <td style={{ padding:"8px 10px", color:dueCol, fontWeight:600, whiteSpace:"nowrap", width:colConfig.dueDate.width }}>{dueStr}</td>}
                         {colConfig.raidDueDate?.visible      && <td style={{ padding:"8px 10px", width:colConfig.raidDueDate?.width||120 }}>{r._rowId&&K.raidDueDate?<EditableCell sheet="raid" rowId={r._rowId} colName={K.raidDueDate} value={localVals[r._rowId]?.[K.raidDueDate]??String(r[K.raidDueDate]||"")} onSaved={v=>localUpdate(r._rowId,K.raidDueDate,v)}/>:<span style={{color:C.muted}}>—</span>}</td>}
-                        {colConfig.resolutionDate?.visible   && <td style={{ padding:"8px 10px", color:C.muted, whiteSpace:"nowrap", width:colConfig.resolutionDate?.width||120 }}>{fmtDate(r[K.resolutionDate])||"—"}</td>}
+                        {colConfig.resolutionDate?.visible   && <td style={{ padding:"8px 10px", width:colConfig.resolutionDate?.width||120 }}>{r._rowId&&K.resolutionDate?<EditableCell sheet="raid" rowId={r._rowId} colName={K.resolutionDate} value={localVals[r._rowId]?.[K.resolutionDate]??String(r[K.resolutionDate]||"")} onSaved={v=>localUpdate(r._rowId,K.resolutionDate,v)}/>:<span style={{color:C.muted}}>{fmtDate(r[K.resolutionDate])||"—"}</span>}</td>}
                       </tr>
                     );
                   })}
@@ -4331,7 +4333,7 @@ function RaidDrillModal({ title, rows, raidKeys, onClose, initialStatusFilter, i
     ...(resolutionDateCol ? [resolutionDateCol] : [])];
   const wideCols = new Set([descCol, commentCol]);
   // dateCol (Due Date) is calculated — not editable; raidDueDateCol (RAID Due Date) is the user override
-  const editableCols = new Set([descCol, commentCol, critCol, raidDueDateCol, tagCol, K.crTargetSprint].filter(Boolean));
+  const editableCols = new Set([descCol, commentCol, critCol, raidDueDateCol, tagCol, K.crTargetSprint, priorityCol, resolutionDateCol].filter(Boolean));
   const multilineCols = new Set([descCol, commentCol]);
   // Display labels for columns whose header differs from the raw column name
   const colLabels = { [raidDueDateCol]: "Override Due Date" };

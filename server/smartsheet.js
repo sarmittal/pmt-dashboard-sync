@@ -36,6 +36,8 @@ export const EDITABLE = {
     "RAID Due Date",
     "Tag",
     "Targeted Build Sprint",
+    "Priority",
+    "Resolution Date (if applicable)",
   ],
 };
 
