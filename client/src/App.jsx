@@ -1076,10 +1076,34 @@ async function clearAll() {
   Object.values(KEYS).forEach(k => { try { sessionStorage.removeItem(k); } catch(e) {} });
 }
 
+// ─── SUBNAV ──────────────────────────────────────────────────────────────────
+function SubNav({ items, active, onSelect }) {
+  return (
+    <div style={{marginLeft:28,marginTop:1,marginBottom:2,display:"flex",flexDirection:"column",gap:1}}>
+      {items.map(st => (
+        <button key={st.id} onClick={()=>onSelect(st.id)} style={{
+          display:"flex", alignItems:"center", gap:7, width:"100%", padding:"4px 10px",
+          borderRadius:5, border:"none", cursor:"pointer",
+          background: active===st.id ? "rgba(255,255,255,0.1)" : "transparent",
+          color: active===st.id ? "#fff" : "rgba(255,255,255,0.42)",
+          fontSize:11, fontWeight: active===st.id ? 600 : 400,
+          textAlign:"left", transition:"all .1s",
+          borderLeft: `2px solid ${active===st.id ? "#e2c97e99" : "transparent"}`,
+        }}>
+          <span style={{width:5,height:5,borderRadius:"50%",background:active===st.id?"#e2c97e":"rgba(255,255,255,0.2)",flexShrink:0}}/>
+          {st.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 // ─── APP ─────────────────────────────────────────────────────────────────────
 export default function App() {
   const [tab, setTab] = useState("executive");
-  const [wpSubTab, setWpSubTab] = useState("workstream");
+  const [wpSubTab,      setWpSubTab]      = useState("workstream");
+  const [testSubTab,    setTestSubTab]    = useState("metrics");
+  const [testVarSubTab, setTestVarSubTab] = useState("variations");
   const [modal, setModal] = useState(null);
   const [wp, setWp] = useState(null);
   const [raid, setRaid] = useState(null);
@@ -1240,50 +1264,43 @@ export default function App() {
                 <span style={{fontSize:12,width:16,textAlign:"center",flexShrink:0}}>{icon}</span>
                 {label}
               </button>
-              {id==="workplan" && tab==="workplan" && (
-                <div style={{marginLeft:28,marginTop:2,marginBottom:2,display:"flex",flexDirection:"column",gap:1}}>
-                  {[
-                    {id:"workstream", label:"Workstream Status"},
-                    {id:"sapbuild",   label:"SAP Config & Build"},
-                    {id:"ep",         label:"E&P"},
-                  ].map(st => (
-                    <button key={st.id} onClick={()=>setWpSubTab(st.id)} style={{
-                      display:"flex", alignItems:"center", gap:7, width:"100%", padding:"5px 10px",
-                      borderRadius:5, border:"none", cursor:"pointer",
-                      background: wpSubTab===st.id ? "rgba(255,255,255,0.1)" : "transparent",
-                      color: wpSubTab===st.id ? "#fff" : "rgba(255,255,255,0.45)",
-                      fontSize:11, fontWeight: wpSubTab===st.id ? 600 : 400,
-                      textAlign:"left", transition:"all .12s",
-                      borderLeft: `2px solid ${wpSubTab===st.id ? C.gold+"99" : "transparent"}`,
-                    }}>
-                      <span style={{width:6,height:6,borderRadius:"50%",background:wpSubTab===st.id?"#e2c97e":"rgba(255,255,255,0.25)",flexShrink:0}}/>
-                      {st.label}
-                    </button>
-                  ))}
-                </div>
+              {id==="workplan" && (
+                <SubNav items={[
+                  {id:"workstream",label:"Workstream Status"},
+                  {id:"sapbuild",  label:"SAP Config & Build"},
+                  {id:"ep",        label:"E&P"},
+                ]} active={wpSubTab} onSelect={v=>{setWpSubTab(v);setTab("workplan");}} />
+              )}
+              {id==="testing" && (
+                <SubNav items={[
+                  {id:"metrics",   label:"Overall Metrics"},
+                  {id:"review",    label:"Review Status"},
+                  {id:"scenarios", label:"Test Scenarios"},
+                ]} active={testSubTab} onSelect={v=>{setTestSubTab(v);setTab("testing");}} />
+              )}
+              {id==="testvariations" && (
+                <SubNav items={[
+                  {id:"variations", label:"Variations"},
+                  {id:"dimensions", label:"EC Dimensions"},
+                  {id:"review",     label:"Review"},
+                  {id:"coverage",   label:"Coverage"},
+                ]} active={testVarSubTab} onSelect={v=>{setTestVarSubTab(v);setTab("testvariations");}} />
               )}
             </div>
           ))}
         </nav>
 
-        {/* Data Status */}
-        <div style={{ padding:"10px 14px 6px", borderTop:"1px solid rgba(255,255,255,0.08)" }}>
-          <div style={{ fontSize:9, fontWeight:700, color:"rgba(255,255,255,0.32)", textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:6 }}>Data Sources</div>
-          {[["wp","Workplan",wp],["raid","RAID",raid],["req","Requirements",req],["test","Test Scenarios",test],["cap","Capacity",cap]].map(([key,label,state]) => (
-            <div key={key} style={{ display:"flex", alignItems:"center", gap:6, marginBottom:3 }}>
-              <span style={{ width:6, height:6, borderRadius:"50%", background:state?"#22c55e":"#475569", display:"inline-block", flexShrink:0 }} />
-              <span style={{ fontSize:10, color:state?"rgba(255,255,255,0.72)":"rgba(255,255,255,0.3)" }}>{label}</span>
-            </div>
+        {/* Data Status — compact dot row */}
+        <div style={{ padding:"6px 12px", borderTop:"1px solid rgba(255,255,255,0.08)", display:"flex", alignItems:"center", gap:5, flexWrap:"wrap" }}>
+          {[["wp","WP",wp],["raid","RAID",raid],["req","REQ",req],["test","TEST",test],["cap","CAP",cap]].map(([key,label,state]) => (
+            <span key={key} title={label} style={{ display:"flex", alignItems:"center", gap:3, fontSize:9, color:state?"rgba(255,255,255,0.65)":"rgba(255,255,255,0.25)", fontWeight:state?600:400 }}>
+              <span style={{ width:5, height:5, borderRadius:"50%", background:state?"#22c55e":"#374151", display:"inline-block", flexShrink:0 }} />
+              {label}
+            </span>
           ))}
-          {syncMeta && (
-            <div style={{ fontSize:9, color:"rgba(255,255,255,0.28)", marginTop:5 }}>
-              {syncMeta.source==="smartsheet"?"Smartsheet":"Snapshot"} · {syncMeta.lastSync?.slice(0,10)}
-            </div>
-          )}
-          {!syncMeta && !isLoading && (
-            <div style={{ fontSize:9, color:"#f59e0b", marginTop:4 }}>⚠ No data loaded</div>
-          )}
-          {isLoading && <div style={{ fontSize:9, color:"#60a5fa", marginTop:4 }}>⏳ Loading…</div>}
+          {syncMeta && <span style={{ fontSize:9, color:"rgba(255,255,255,0.22)", marginLeft:"auto" }}>{syncMeta.lastSync?.slice(0,10)}</span>}
+          {!syncMeta && !isLoading && <span style={{ fontSize:9, color:"#f59e0b" }}>⚠</span>}
+          {isLoading && <span style={{ fontSize:9, color:"#60a5fa" }}>⏳</span>}
         </div>
 
         {/* Refresh + Upload */}
@@ -1331,8 +1348,8 @@ export default function App() {
         {tab==="cr"              && <ChangeRequestTab raid={raid} cap={cap} />}
         {tab==="backlog"         && <BacklogTab raid={raid} />}
         {tab==="scorecard"       && <ScorecardTab wp={wp} raid={raid} req={req} openModal={openModal} />}
-        {tab==="testing"         && <TestScenariosTab data={test} wp={wp} req={req} />}
-        {tab==="testvariations"  && <TestVariationsTab data={test} ecFromSmartsheet={ec} />}
+        {tab==="testing"         && <TestScenariosTab data={test} wp={wp} req={req} subTab={testSubTab} setSubTab={setTestSubTab} />}
+        {tab==="testvariations"  && <TestVariationsTab data={test} ecFromSmartsheet={ec} subTab={testVarSubTab} setSubTab={setTestVarSubTab} />}
         {tab==="traceability"    && <ReqTraceabilityTab req={req} test={test} />}
       </main>
 
@@ -5169,10 +5186,9 @@ const sprintBubbleColor = (sd) => {
 
 
 // ─── TEST SCENARIOS TAB ──────────────────────────────────────────────────────
-function TestScenariosTab({ data, wp, req }) {
+function TestScenariosTab({ data, wp, req, subTab, setSubTab }) {
   const [selSit,    setSelSit]    = useState("ALL");
   const [selSp,     setSelSp]     = useState("ALL");
-  const [subTab,    setSubTab]    = useState("metrics");
   const [spModal,   setSpModal]   = useState(null);
   const [drillModal,    setDrillModal]    = useState(null);
   // Scenarios sub-tab state
@@ -5821,23 +5837,6 @@ function TestScenariosTab({ data, wp, req }) {
             </tbody>
           </table>
         </div>
-      </div>
-    </div>
-  );
-
-  const subTabBar = (
-    <div style={{ background:"#43978F", borderBottom:"1px solid #357a73", marginBottom:16 }}>
-      <div style={{ display:"flex", alignItems:"center", gap:4, paddingLeft:8 }}>
-        {[{id:"metrics",label:"Overall Metrics"},{id:"review",label:"Review Status"},{id:"scenarios",label:"Test Scenarios"}].map(st => (
-          <button key={st.id} onClick={() => setSubTab(st.id)} style={{
-            padding:"7px 18px", border:"none", cursor:"pointer", transition:"all .15s",
-            fontSize:13, fontWeight: subTab===st.id ? 700 : 500, letterSpacing:"1px",
-            borderRadius:20, margin:"5px 0",
-            background: subTab===st.id ? "rgba(255,255,255,0.92)" : "transparent",
-            color: subTab===st.id ? "#2d6b65" : "rgba(255,255,255,0.75)",
-            boxShadow: subTab===st.id ? "0 1px 4px rgba(0,0,0,0.15)" : "none",
-          }}>{st.label}</button>
-        ))}
       </div>
     </div>
   );
@@ -6643,7 +6642,6 @@ function TestScenariosTab({ data, wp, req }) {
 
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
-      {subTabBar}
       {subTab === "review"  && reviewSubTab}
       {subTab === "metrics" && metricsSubTab}
       {subTab === "scenarios" && scenariosSubTab}
@@ -6660,8 +6658,7 @@ function TestScenariosTab({ data, wp, req }) {
 }
 
 // ─── TEST VARIATIONS TAB ─────────────────────────────────────────────────────
-function TestVariationsTab({ data, ecFromSmartsheet }) {
-  const [subTab, setSubTab] = useState("variations");
+function TestVariationsTab({ data, ecFromSmartsheet, subTab, setSubTab }) {
   // Smartsheet is source of truth when available; fall back to localStorage then built-in defaults
   const [ecClasses, setEcClasses] = useState(() => {
     if (ecFromSmartsheet?.length) return ecFromSmartsheet;
@@ -6774,18 +6771,6 @@ function TestVariationsTab({ data, ecFromSmartsheet }) {
             {coverageStats.unassigned} scenarios need EC assignment
           </div>
         )}
-      </div>
-
-      <div style={{ display:"flex", gap:2, marginBottom:16, borderBottom:`2px solid ${C.border}` }}>
-        {SUB.map(st => (
-          <button key={st.id} onClick={() => setSubTab(st.id)}
-            style={{ padding:"8px 18px", border:"none", cursor:"pointer", fontWeight:subTab===st.id?700:500,
-              fontSize:12, background:"transparent", marginBottom:-2,
-              borderBottom:subTab===st.id?`3px solid ${C.accent}`:"3px solid transparent",
-              color:subTab===st.id?C.accent:C.muted }}>
-            {st.label}
-          </button>
-        ))}
       </div>
 
       {subTab === "variations" && (
