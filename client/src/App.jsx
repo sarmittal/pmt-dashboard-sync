@@ -2612,11 +2612,14 @@ function ReqTraceabilityTab({ req, test }) {
   const reqK = req?.keys;
   const tK   = test?.keys;
 
-  const [expFilter, setExpFilter] = useState("ALL"); // PM Experience
-  const [spFilter,  setSpFilter]  = useState("ALL"); // Sub Process
-  const [search,    setSearch]    = useState("");
-  const [expanded,  setExpanded]  = useState(new Set()); // expanded req rows
-  const [expandedSc,setExpandedSc]= useState(new Set()); // expanded scenario bubbles
+  const [expFilter,    setExpFilter]    = useState("ALL"); // PM Experience
+  const [spFilter,     setSpFilter]     = useState("ALL"); // Sub Process
+  const [buildFilter,  setBuildFilter]  = useState("ALL"); // Build Status bucket
+  const [covFilter,    setCovFilter]    = useState("ALL"); // Coverage Status
+  const [tagFilter,    setTagFilter]    = useState("ALL"); // Tag
+  const [search,       setSearch]       = useState("");
+  const [expanded,     setExpanded]     = useState(new Set());
+  const [expandedSc,   setExpandedSc]   = useState(new Set());
 
   if (!req) return <Empty label="Upload Requirements file to view Req Traceability." />;
 
@@ -2651,15 +2654,47 @@ function ReqTraceabilityTab({ req, test }) {
 
   const allExps = Array.from(new Set(baseRows.map(r=>String(r[reqK?.pmExperience]||"").trim()).filter(Boolean))).sort();
   const allSPs  = Array.from(new Set(baseRows.map(r=>String(r[reqK?.component]||"").trim()).filter(Boolean))).sort();
+  const allTags = Array.from(new Set(
+    baseRows.flatMap(r=>String(r[reqK?.tags]||"").split(/[\n,;]+/).map(t=>t.trim()).filter(Boolean))
+  )).sort();
+
+  // Build status bucket (worst of func+tech) — shared by filter + badge
+  const _statusBucket = r => {
+    const RANK = {blocked:5,inProgress:4,partial:3,notStarted:2,complete:1,na:0};
+    const toB = s => {
+      const v=String(s||"").toLowerCase();
+      if(!v||v==="nan") return null;
+      if(v.includes("block"))    return "blocked";
+      if(v.includes("progress")) return "inProgress";
+      if(v.includes("partial"))  return "partial";
+      if(v.includes("complet"))  return "complete";
+      if(v.includes("n/a")||v==="na") return "na";
+      return "notStarted";
+    };
+    const fb=toB(r[reqK?.funcBuildStatus]), tb=toB(r[reqK?.techBuildStatus]);
+    return fb&&tb ? ((RANK[fb]||0)>=(RANK[tb]||0)?fb:tb) : fb||tb||"notStarted";
+  };
+
+  // Coverage status key per row
+  const _covKey = r => {
+    const isScript = String(r[reqK?.testScriptType]||"").toLowerCase();
+    if (isScript.includes("script") && !isScript.includes("scenario")) return "script";
+    const id = String(r[reqK?.reqId]||"").trim();
+    return (scensByReqId[id]?.length||0) > 0 ? "covered" : "gap";
+  };
 
   const filtered = baseRows.filter(r => {
-    const exp = String(r[reqK?.pmExperience]||"").trim();
-    const sp  = String(r[reqK?.component]||"").trim();
-    const id  = String(r[reqK?.reqId]||"").trim();
-    const q   = search.toLowerCase();
+    const exp  = String(r[reqK?.pmExperience]||"").trim();
+    const sp   = String(r[reqK?.component]||"").trim();
+    const id   = String(r[reqK?.reqId]||"").trim();
+    const q    = search.toLowerCase();
+    const tags = String(r[reqK?.tags]||"").split(/[\n,;]+/).map(t=>t.trim()).filter(Boolean);
     return (
-      (expFilter==="ALL"||exp===expFilter) &&
-      (spFilter ==="ALL"||sp===spFilter) &&
+      (expFilter  ==="ALL"||exp===expFilter) &&
+      (spFilter   ==="ALL"||sp===spFilter) &&
+      (buildFilter==="ALL"||_statusBucket(r)===buildFilter) &&
+      (covFilter  ==="ALL"||_covKey(r)===covFilter) &&
+      (tagFilter  ==="ALL"||tags.includes(tagFilter)) &&
       (!q||id.toLowerCase().includes(q)||String(r[reqK?.story]||"").toLowerCase().includes(q)||String(r[reqK?.bizReq]||"").toLowerCase().includes(q))
     );
   });
@@ -2667,30 +2702,18 @@ function ReqTraceabilityTab({ req, test }) {
   const _toggle   = id => setExpanded  (p => { const n=new Set(p); n.has(id)?n.delete(id):n.add(id); return n; });
   const _toggleSc = id => setExpandedSc(p => { const n=new Set(p); n.has(id)?n.delete(id):n.add(id); return n; });
 
-  // Build status badge (worst of func + tech, mirrors component scorecard)
-  const _buildBadge = (fv, tv) => {
-    const RANK = {blocked:5,inProgress:4,partial:3,notStarted:2,complete:1,na:0};
-    const toBucket = s => {
-      const v=String(s||"").toLowerCase();
-      if(!v||v==="nan") return null;
-      if(v.includes("block"))   return "blocked";
-      if(v.includes("progress"))return "inProgress";
-      if(v.includes("partial")) return "partial";
-      if(v.includes("complet")) return "complete";
-      if(v.includes("n/a")||v==="na") return "na";
-      return "notStarted";
-    };
-    const fb=toBucket(fv), tb=toBucket(tv);
-    const b = fb&&tb ? ((RANK[fb]||0)>=(RANK[tb]||0)?fb:tb) : fb||tb||"notStarted";
-    const S = {
-      blocked:    {bg:"#fee2e2",c:"#b91c1c",br:"#fca5a5",l:"Blocked"},
-      inProgress: {bg:"#fef3c7",c:"#92400e",br:"#fcd34d",l:"In Progress"},
-      partial:    {bg:"#dbeafe",c:"#1e40af",br:"#93c5fd",l:"Partial"},
-      complete:   {bg:"#dcfce7",c:"#166534",br:"#86efac",l:"Complete"},
-      notStarted: {bg:"#f1f5f9",c:"#64748b",br:"#cbd5e1",l:"Not Started"},
-      na:         {bg:"#f1f5f9",c:"#64748b",br:"#cbd5e1",l:"N/A"},
-    };
-    const s=S[b]||S.notStarted;
+  // Build status badge — reuses _statusBucket (defined earlier)
+  const BUILD_STATUS_META = {
+    blocked:    {bg:"#fee2e2",c:"#b91c1c",br:"#fca5a5",l:"Blocked"},
+    inProgress: {bg:"#fef3c7",c:"#92400e",br:"#fcd34d",l:"In Progress"},
+    partial:    {bg:"#dbeafe",c:"#1e40af",br:"#93c5fd",l:"Partial"},
+    complete:   {bg:"#dcfce7",c:"#166534",br:"#86efac",l:"Complete"},
+    notStarted: {bg:"#f1f5f9",c:"#64748b",br:"#cbd5e1",l:"Not Started"},
+    na:         {bg:"#f1f5f9",c:"#64748b",br:"#cbd5e1",l:"N/A"},
+  };
+  const _buildBadge = r => {
+    const b = _statusBucket(r);
+    const s = BUILD_STATUS_META[b]||BUILD_STATUS_META.notStarted;
     return <span style={{background:s.bg,color:s.c,border:`1px solid ${s.br}`,borderRadius:4,padding:"2px 7px",fontSize:10,fontWeight:600,whiteSpace:"nowrap"}}>{s.l}</span>;
   };
 
@@ -2777,6 +2800,46 @@ function ReqTraceabilityTab({ req, test }) {
             <span style={{fontSize:10,fontWeight:700,color:C.text,minWidth:90}}>Sub Process</span>
             {_pill("All",spFilter==="ALL",baseRows.length,()=>setSpFilter("ALL"))}
             {allSPs.map(v=>_pill(v,spFilter===v,baseRows.filter(r=>String(r[reqK?.component]||"").trim()===v).length,()=>setSpFilter(spFilter===v?"ALL":v)))}
+          </div>
+        )}
+        {/* Build Status filter */}
+        <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",paddingTop:4,borderTop:`1px dashed ${C.border}`}}>
+          <span style={{fontSize:10,fontWeight:700,color:C.text,minWidth:90}}>Build Status</span>
+          {_pill("All",buildFilter==="ALL",null,()=>setBuildFilter("ALL"))}
+          {Object.entries(BUILD_STATUS_META).map(([key,{l}])=>
+            _pill(l, buildFilter===key, baseRows.filter(r=>_statusBucket(r)===key).length, ()=>setBuildFilter(buildFilter===key?"ALL":key))
+          )}
+        </div>
+        {/* Coverage Status filter */}
+        <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+          <span style={{fontSize:10,fontWeight:700,color:C.text,minWidth:90}}>Coverage</span>
+          {_pill("All",covFilter==="ALL",null,()=>setCovFilter("ALL"))}
+          {[
+            {key:"covered", label:"Covered",     bg:"#dcfce7",c:"#166534"},
+            {key:"gap",     label:"No Scenario", bg:"#fee2e2",c:"#b91c1c"},
+            {key:"script",  label:"Script Reqd", bg:"#f5f3ff",c:"#6d28d9"},
+          ].map(({key,label,bg,c})=>(
+            <button key={key} onClick={()=>setCovFilter(covFilter===key?"ALL":key)} style={{
+              padding:"3px 10px",borderRadius:20,border:`1.5px solid ${covFilter===key?c:C.border}`,
+              background:covFilter===key?bg:C.white,color:covFilter===key?c:C.text,
+              fontSize:10,fontWeight:covFilter===key?700:400,cursor:"pointer",display:"flex",alignItems:"center",gap:4
+            }}>
+              {label}
+              <span style={{background:covFilter===key?"rgba(0,0,0,0.08)":"#f1f5f9",color:covFilter===key?c:C.muted,borderRadius:10,padding:"0 5px",fontSize:10,fontWeight:700}}>
+                {baseRows.filter(r=>_covKey(r)===key).length}
+              </span>
+            </button>
+          ))}
+        </div>
+        {/* Tags filter */}
+        {allTags.length>0&&(
+          <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+            <span style={{fontSize:10,fontWeight:700,color:C.text,minWidth:90}}>Tags</span>
+            {_pill("All",tagFilter==="ALL",null,()=>setTagFilter("ALL"))}
+            {allTags.map(v=>{
+              const cnt = baseRows.filter(r=>String(r[reqK?.tags]||"").split(/[\n,;]+/).map(t=>t.trim()).includes(v)).length;
+              return _pill(v,tagFilter===v,cnt,()=>setTagFilter(tagFilter===v?"ALL":v));
+            })}
           </div>
         )}
       </div>
@@ -2870,7 +2933,7 @@ function ReqTraceabilityTab({ req, test }) {
                       {td(<span style={{display:"-webkit-box",WebkitLineClamp:3,WebkitBoxOrient:"vertical",overflow:"hidden",lineHeight:1.45,fontSize:11}}>{_fieldVal(r[reqK?.story])}</span>)}
                       {td(<span style={{display:"-webkit-box",WebkitLineClamp:3,WebkitBoxOrient:"vertical",overflow:"hidden",lineHeight:1.45,color:C.muted,fontSize:11}}>{_fieldVal(r[reqK?.acceptance])}</span>)}
                       {td(tagPills)}
-                      {td(_buildBadge(r[reqK?.funcBuildStatus],r[reqK?.techBuildStatus]),{textAlign:"center",verticalAlign:"middle"})}
+                      {td(_buildBadge(r),{textAlign:"center",verticalAlign:"middle"})}
                       {td(<span style={{fontSize:10,color:C.text}}>{_fieldVal(r[reqK?.testScriptType])}</span>)}
                       {td(<span style={{fontWeight:700,color:C.navyLight}}>{scens.length||"0"}</span>,{textAlign:"center",verticalAlign:"middle"})}
                       {td(<span style={{fontWeight:estSum>0?700:400,color:estSum>0?C.navyLight:C.muted}}>{estSum||"—"}</span>,{textAlign:"center",verticalAlign:"middle"})}
