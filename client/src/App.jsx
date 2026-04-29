@@ -2786,24 +2786,26 @@ function ReqTraceabilityTab({ req, test }) {
         <div style={{overflowX:"auto"}}>
           <table style={{width:"100%",borderCollapse:"collapse",fontSize:11,tableLayout:"fixed"}}>
             <colgroup>
-              <col style={{width:32}}/>
-              <col style={{width:80}}/>
-              <col style={{width:72}}/>
-              <col style={{width:90}}/>
-              <col style={{width:180}}/>
-              <col style={{width:180}}/>
-              <col style={{width:160}}/>
-              <col style={{width:64}}/>
-              <col style={{width:96}}/>
-              <col style={{width:100}}/>
-              <col style={{width:64}}/>
-              <col style={{width:72}}/>
-              <col style={{width:90}}/>
-              <col style={{width:90}}/>
+              <col style={{width:28}}/>  {/* expand */}
+              <col style={{width:110}}/> {/* coverage status */}
+              <col style={{width:80}}/>  {/* req id */}
+              <col style={{width:72}}/>  {/* experience */}
+              <col style={{width:90}}/>  {/* sub process */}
+              <col style={{width:170}}/> {/* business req */}
+              <col style={{width:170}}/> {/* user story */}
+              <col style={{width:150}}/> {/* acceptance criteria */}
+              <col style={{width:100}}/> {/* tags */}
+              <col style={{width:90}}/>  {/* build status */}
+              <col style={{width:90}}/>  {/* test script/scenario */}
+              <col style={{width:58}}/>  {/* scen count */}
+              <col style={{width:66}}/>  {/* est cases */}
+              <col style={{width:90}}/>  {/* rationalized */}
+              <col style={{width:90}}/>  {/* test script link */}
             </colgroup>
             <thead style={{position:"sticky",top:0,zIndex:2}}>
               <tr>
                 <TH></TH>
+                <TH>Coverage Status</TH>
                 <TH>Req ID</TH>
                 <TH>Experience</TH>
                 <TH>Sub Process</TH>
@@ -2813,58 +2815,73 @@ function ReqTraceabilityTab({ req, test }) {
                 <TH>Tags</TH>
                 <TH style={{textAlign:"center"}}>Build Status</TH>
                 <TH>Test Script / Scenario</TH>
-                <TH style={{textAlign:"center"}}>Scen Count</TH>
+                <TH style={{textAlign:"center"}}>Scen #</TH>
                 <TH style={{textAlign:"center"}}>Est. Cases</TH>
-                <TH style={{textAlign:"center"}}>Rationalized Cases</TH>
-                <TH style={{textAlign:"center",borderRight:"none"}}>Test Script Link</TH>
+                <TH style={{textAlign:"center"}}>Rationalized</TH>
+                <TH style={{textAlign:"center",borderRight:"none"}}>Script Link</TH>
               </tr>
             </thead>
             <tbody>
               {filtered.length===0&&(
-                <tr><td colSpan={14} style={{padding:24,textAlign:"center",color:C.muted}}>No requirements match selected filters.</td></tr>
+                <tr><td colSpan={15} style={{padding:24,textAlign:"center",color:C.muted}}>No requirements match selected filters.</td></tr>
               )}
               {filtered.map((r,i)=>{
                 const id       = String(r[reqK?.reqId]||"").trim()||String(i);
-                const rowKey   = `${i}_${id}`; // unique even when same reqId repeats across experiences
+                const rowKey   = `${i}_${id}`;
                 const scens    = scensByReqId[id]||[];
                 const estSum   = scens.reduce((s,t)=>s+(parseFloat(t[tK?.estCases])||0),0);
                 const isOpen   = expanded.has(rowKey);
                 const isScript = isTestScript(r);
-                // Gap = scenario-type req with no linked scenarios; test-script rows are never gaps
                 const gap      = !isScript && scens.length===0;
-                const rowBg    = gap?"#fffbeb":isScript&&i%2===0?"#faf5ff":isScript?"#f5f3ff":i%2===0?C.white:"#f9fafb";
+                const rowBg    = i%2===0 ? C.white : "#f9fafb";
                 const td = (children, style={}) => (
-                  <td style={{padding:"7px 8px",verticalAlign:"top",borderRight:`1px solid ${C.border}`,overflow:"hidden",textOverflow:"ellipsis",...style}}>{children}</td>
+                  <td style={{padding:"7px 8px",verticalAlign:"top",borderRight:`1px solid ${C.border}`,overflow:"hidden",...style}}>{children}</td>
                 );
+                // Tags → pills (multi-select split by newline/comma)
+                const tagPills = (() => {
+                  const raw = String(r[reqK?.tags]||"").trim();
+                  if (!raw||raw==="nan"||raw==="None") return <span style={{color:C.muted,fontSize:10}}>—</span>;
+                  const PILL_COLORS = [["#e0e7ff","#4338ca"],["#dcfce7","#166534"],["#fef3c7","#92400e"],["#fae8ff","#86198f"],["#ffedd5","#c2410c"]];
+                  return (
+                    <div style={{display:"flex",flexWrap:"wrap",gap:2}}>
+                      {raw.split(/[\n,;]+/).map(t=>t.trim()).filter(Boolean).map((t,ti)=>{
+                        const [bg,c]=PILL_COLORS[ti%PILL_COLORS.length];
+                        return <span key={t} style={{background:bg,color:c,borderRadius:10,padding:"1px 6px",fontSize:9,fontWeight:600,whiteSpace:"nowrap"}}>{t}</span>;
+                      })}
+                    </div>
+                  );
+                })();
+                // Coverage status badge
+                const statusBadge = gap
+                  ? <span style={{background:"#fee2e2",color:"#b91c1c",border:"1px solid #fca5a5",borderRadius:4,padding:"2px 6px",fontSize:9,fontWeight:700,whiteSpace:"nowrap"}}>No Scenario</span>
+                  : isScript
+                  ? <span style={{background:"#f5f3ff",color:"#6d28d9",border:"1px solid #c4b5fd",borderRadius:4,padding:"2px 6px",fontSize:9,fontWeight:700,whiteSpace:"nowrap"}}>Script Reqd</span>
+                  : <span style={{background:"#dcfce7",color:"#166534",border:"1px solid #86efac",borderRadius:4,padding:"2px 6px",fontSize:9,fontWeight:700,whiteSpace:"nowrap"}}>Covered</span>;
                 return (
                   <React.Fragment key={rowKey}>
                     <tr style={{background:rowBg,borderBottom:isOpen?`2px solid #93c5fd`:`1px solid ${C.border}`,cursor:"pointer"}}
                       onClick={()=>_toggle(rowKey)}>
                       <td style={{padding:"7px 8px",textAlign:"center",color:isOpen?C.navyLight:C.muted,fontWeight:700,borderRight:`1px solid ${C.border}`}}>{isOpen?"▾":"▸"}</td>
-                      {td(<span style={{fontWeight:700,color:C.navyLight,whiteSpace:"nowrap"}}>{id||"—"}</span>)}
+                      {td(statusBadge,{verticalAlign:"middle"})}
+                      {td(<span style={{fontWeight:700,color:C.navyLight,whiteSpace:"nowrap",fontSize:11}}>{id||"—"}</span>)}
                       {td(<span style={{fontSize:10,color:C.muted,whiteSpace:"nowrap"}}>{_fieldVal(r[reqK?.pmExperience])}</span>)}
-                      {td(<span style={{fontSize:10,color:C.text,whiteSpace:"nowrap"}}>{_fieldVal(r[reqK?.component])}</span>)}
-                      {td(<span style={{display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden",lineHeight:1.4,fontSize:11}}>{_fieldVal(r[reqK?.bizReq])}</span>)}
-                      {td(<span style={{display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden",lineHeight:1.4}}>{_fieldVal(r[reqK?.story])}</span>)}
-                      {td(<span style={{display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden",lineHeight:1.4,color:C.muted,fontSize:11}}>{_fieldVal(r[reqK?.acceptance])}</span>)}
-                      {td(<span style={{fontSize:10,color:"#6d28d9"}}>{_fieldVal(r[reqK?.tags])}</span>)}
-                      {td(_buildBadge(r[reqK?.funcBuildStatus],r[reqK?.techBuildStatus]),{textAlign:"center"})}
+                      {td(<span style={{fontSize:10,color:C.text}}>{_fieldVal(r[reqK?.component])}</span>)}
+                      {td(<span style={{display:"-webkit-box",WebkitLineClamp:3,WebkitBoxOrient:"vertical",overflow:"hidden",lineHeight:1.45,fontSize:11}}>{_fieldVal(r[reqK?.bizReq])}</span>)}
+                      {td(<span style={{display:"-webkit-box",WebkitLineClamp:3,WebkitBoxOrient:"vertical",overflow:"hidden",lineHeight:1.45,fontSize:11}}>{_fieldVal(r[reqK?.story])}</span>)}
+                      {td(<span style={{display:"-webkit-box",WebkitLineClamp:3,WebkitBoxOrient:"vertical",overflow:"hidden",lineHeight:1.45,color:C.muted,fontSize:11}}>{_fieldVal(r[reqK?.acceptance])}</span>)}
+                      {td(tagPills)}
+                      {td(_buildBadge(r[reqK?.funcBuildStatus],r[reqK?.techBuildStatus]),{textAlign:"center",verticalAlign:"middle"})}
                       {td(<span style={{fontSize:10,color:C.text}}>{_fieldVal(r[reqK?.testScriptType])}</span>)}
-                      {td(
-                        scens.length>0
-                          ?<span style={{background:"#eff6ff",color:"#1d4ed8",borderRadius:4,padding:"2px 8px",fontSize:11,fontWeight:700}}>{scens.length}</span>
-                          :<span style={{background:"#fff7ed",color:"#c2410c",borderRadius:4,padding:"2px 6px",fontSize:10,fontWeight:600}}>0</span>
-                        ,{textAlign:"center"}
-                      )}
-                      {td(<span style={{fontWeight:estSum>0?700:400,color:estSum>0?C.navyLight:C.muted}}>{estSum>0?estSum:"—"}</span>,{textAlign:"center"})}
-                      {td(<span style={{color:C.muted,fontSize:10,fontStyle:"italic"}}>—</span>,{textAlign:"center"})}
-                      {td(<span style={{color:C.muted,fontSize:10,fontStyle:"italic"}}>—</span>,{textAlign:"center",borderRight:"none"})}
+                      {td(<span style={{fontWeight:700,color:C.navyLight}}>{scens.length||"0"}</span>,{textAlign:"center",verticalAlign:"middle"})}
+                      {td(<span style={{fontWeight:estSum>0?700:400,color:estSum>0?C.navyLight:C.muted}}>{estSum||"—"}</span>,{textAlign:"center",verticalAlign:"middle"})}
+                      {td(<span style={{color:C.muted,fontSize:10,fontStyle:"italic"}}>—</span>,{textAlign:"center",verticalAlign:"middle"})}
+                      {td(<span style={{color:C.muted,fontSize:10,fontStyle:"italic"}}>—</span>,{textAlign:"center",verticalAlign:"middle",borderRight:"none"})}
                     </tr>
 
                     {/* ── Inline expansion ── */}
                     {isOpen&&(
                       <tr style={{background:"#f0f6ff",borderBottom:`2px solid #93c5fd`}}>
-                        <td colSpan={14} style={{padding:0}}>
+                        <td colSpan={15} style={{padding:0}}>
                           <div style={{padding:"14px 18px 16px 44px",display:"flex",flexDirection:"column",gap:14}}>
 
                             {/* Section 1: Build Approach */}
@@ -2872,13 +2889,23 @@ function ReqTraceabilityTab({ req, test }) {
                               <div style={{fontSize:10,fontWeight:700,color:C.navy,textTransform:"uppercase",letterSpacing:"0.07em",borderBottom:`1px solid #bfdbfe`,paddingBottom:4,marginBottom:8}}>
                                 1 — Build Approach
                               </div>
-                              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(210px,1fr))",gap:"6px 16px"}}>
+                              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:"8px 20px"}}>
                                 {BUILD_FIELDS.map(({label,key})=>{
-                                  const val = _fieldVal(r[reqK?.[key]]);
+                                  const raw = String(r[reqK?.[key]]||"").trim();
+                                  const empty = !raw||raw==="nan"||raw==="None";
+                                  const isUrl = !empty && (raw.startsWith("http://") || raw.startsWith("https://"));
+                                  const content = empty
+                                    ? <span style={{fontSize:11,color:C.muted,fontStyle:"italic"}}>—</span>
+                                    : isUrl
+                                    ? <a href={raw} target="_blank" rel="noopener noreferrer"
+                                        style={{fontSize:11,color:C.navyLight,textDecoration:"underline",display:"flex",alignItems:"center",gap:3}}>
+                                        Open document <span style={{fontSize:10}}>↗</span>
+                                      </a>
+                                    : <span style={{fontSize:11,color:C.text,lineHeight:1.45,wordBreak:"break-word"}}>{raw}</span>;
                                   return (
-                                    <div key={key} style={{display:"flex",flexDirection:"column",gap:1}}>
+                                    <div key={key} style={{display:"flex",flexDirection:"column",gap:2}}>
                                       <span style={{fontSize:9,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:"0.05em"}}>{label}</span>
-                                      <span style={{fontSize:11,color:val==="—"?C.muted:C.text,fontStyle:val==="—"?"italic":"normal",lineHeight:1.4}}>{val}</span>
+                                      {content}
                                     </div>
                                   );
                                 })}
@@ -2974,15 +3001,10 @@ function ReqTraceabilityTab({ req, test }) {
             <span>Showing <strong style={{color:C.text}}>{filtered.length}</strong> requirements</span>
             <span>Coverage: <strong style={{color:covPct>=80?C.complete:covPct>=50?"#d97706":C.delayed}}>{covPct}%</strong> ({covCnt} with scenarios, {gapCnt} gaps)</span>
             <span>Total est. cases: <strong style={{color:C.navyLight}}>{totEst}</strong></span>
-            <span style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:12}}>
-              <span style={{display:"flex",alignItems:"center",gap:5}}>
-                <span style={{display:"inline-block",width:12,height:12,background:"#fffbeb",border:"1px solid #fde68a",borderRadius:2}}></span>
-                <span>Yellow = scenario gap (missing test scenario link)</span>
-              </span>
-              <span style={{display:"flex",alignItems:"center",gap:5}}>
-                <span style={{display:"inline-block",width:12,height:12,background:"#f5f3ff",border:"1px solid #c4b5fd",borderRadius:2}}></span>
-                <span>Purple = test script type (requires script link)</span>
-              </span>
+            <span style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:10}}>
+              <span style={{background:"#fee2e2",color:"#b91c1c",border:"1px solid #fca5a5",borderRadius:4,padding:"1px 6px",fontSize:9,fontWeight:700}}>No Scenario</span><span style={{fontSize:10,color:C.muted}}>= scenario gap</span>
+              <span style={{background:"#f5f3ff",color:"#6d28d9",border:"1px solid #c4b5fd",borderRadius:4,padding:"1px 6px",fontSize:9,fontWeight:700}}>Script Reqd</span><span style={{fontSize:10,color:C.muted}}>= requires test script link</span>
+              <span style={{background:"#dcfce7",color:"#166534",border:"1px solid #86efac",borderRadius:4,padding:"1px 6px",fontSize:9,fontWeight:700}}>Covered</span><span style={{fontSize:10,color:C.muted}}>= has linked scenarios</span>
             </span>
           </div>
         )}
