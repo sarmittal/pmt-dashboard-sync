@@ -2645,9 +2645,10 @@ function ReqTraceabilityTab({ req, test }) {
     });
   });
 
-  // Exclude PM Experience "3 - Leadership" / "6 - E&P"
+  // Exclude PM Experience "3 - Leadership" / "6 - E&P" AND rows with no Req ID (parent/section rows)
   const EXCL_EXP = ["3 - leadership", "3-leadership", "6 - e&p", "6-e&p"];
   const baseRows = reqRows.filter(r => {
+    if (!String(r[reqK?.reqId]||"").trim()) return false; // skip blank/parent rows
     const v = String(r[reqK?.pmExperience]||"").toLowerCase().trim();
     return !EXCL_EXP.some(e => v.includes(e));
   });
@@ -2735,16 +2736,17 @@ function ReqTraceabilityTab({ req, test }) {
     return v.includes("script") && !v.includes("scenario");
   };
 
-  // KPI counts — only scenario-type rows can be gaps
-  const scriptRows = filtered.filter(r => isTestScript(r));
-  const scenTypeRows= filtered.filter(r => !isTestScript(r));
-  const covCnt  = scenTypeRows.filter(r=>(scensByReqId[String(r[reqK?.reqId]||"")]?.length||0)>0).length;
-  const gapCnt  = scenTypeRows.filter(r=>(scensByReqId[String(r[reqK?.reqId]||"")]?.length||0)===0).length;
-  const totEst  = filtered.reduce((s,r)=>{
+  // KPI counts
+  const _scriptTypeVal = r => String(r[reqK?.testScriptType]||"").trim();
+  const scenarioMapped  = filtered.filter(r => /scenario/i.test(_scriptTypeVal(r))).length;
+  const scriptMapped    = filtered.filter(r => /script/i.test(_scriptTypeVal(r)) && !/scenario/i.test(_scriptTypeVal(r))).length;
+  const pendingMapping  = filtered.filter(r => { const v=_scriptTypeVal(r); return !v||v==="nan"||v==="None"; }).length;
+  const totEst = filtered.reduce((s,r)=>{
     const sc=scensByReqId[String(r[reqK?.reqId]||"")]||[];
     return s+sc.reduce((ss,t)=>ss+(parseFloat(t[tK?.estCases])||0),0);
   },0);
-  const covPct = scenTypeRows.length ? Math.round(covCnt/scenTypeRows.length*100) : 0;
+  const scenPct   = filtered.length ? Math.round(scenarioMapped/filtered.length*100) : 0;
+  const scriptPct = filtered.length ? Math.round(scriptMapped/filtered.length*100)   : 0;
 
   const TH = ({children,style={}}) => (
     <th style={{padding:"7px 8px",fontWeight:700,fontSize:10,color:"#fff",background:C.navy,
@@ -2771,15 +2773,15 @@ function ReqTraceabilityTab({ req, test }) {
 
       {/* KPI row */}
       <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:12}}>
-        <KpiCard label="Total Requirements"      value={filtered.length} color={C.navyLight} />
-        <KpiCard label="Scenario Type — Covered" value={covCnt}  color={C.complete}
-          sub={`${covPct}% of ${scenTypeRows.length} scenario-type reqs`}
-          subColor={covPct>=80?C.complete:covPct>=50?"#d97706":C.delayed} />
-        <KpiCard label="Scenario Gap"            value={gapCnt}  color={gapCnt>0?C.delayed:C.complete}
-          sub={gapCnt>0?"Requires test scenario link":undefined} />
-        <KpiCard label="Test Script Type"        value={scriptRows.length} color="#6d28d9"
-          sub={scriptRows.length>0?"Requires test script link":undefined} />
-        <KpiCard label="Est. Test Cases"         value={totEst}  color={C.navyLight}
+        <KpiCard label="Total Requirements"              value={filtered.length} color={C.navyLight} />
+        <KpiCard label="Mapped to Test Scenarios"        value={scenarioMapped}  color={C.complete}
+          sub={`${scenPct}% of total user stories`}
+          subColor={scenPct>=80?C.complete:scenPct>=50?"#d97706":C.delayed} />
+        <KpiCard label="Scenarios Pending Mapping"       value={pendingMapping}  color={pendingMapping>0?C.delayed:C.complete}
+          sub={pendingMapping>0?"No test approach assigned":undefined} />
+        <KpiCard label="Mapped to Test Scripts"          value={scriptMapped}    color="#6d28d9"
+          sub={`${scriptPct}% of total user stories`} />
+        <KpiCard label="Est. Test Cases"                 value={totEst}          color={C.navyLight}
           sub={test?"":"Upload Test Scenarios file"} />
       </div>
 
