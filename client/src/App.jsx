@@ -2923,6 +2923,14 @@ function ReqTraceabilityTab({ req, test }) {
           <table style={{borderCollapse:"collapse",fontSize:11,tableLayout:"fixed",
             width:"100%",minWidth:28+Object.values(colConfig).reduce((s,c)=>s+c.w,0)}}>
             <thead style={{position:"sticky",top:0,zIndex:2}}>
+              {/* Group header row */}
+              <tr>
+                <th style={{width:28,background:C.navy,borderRight:"1px solid rgba(255,255,255,0.1)"}}/>
+                <th colSpan={8} style={{padding:"4px 8px",background:"#1e3a5f",color:"#93c5fd",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.08em",textAlign:"center",borderRight:"2px solid rgba(255,255,255,0.25)"}}>Design</th>
+                <th colSpan={2} style={{padding:"4px 8px",background:"#1e3a5f",color:"#86efac",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.08em",textAlign:"center",borderRight:"2px solid rgba(255,255,255,0.25)"}}>Build</th>
+                <th colSpan={5} style={{padding:"4px 8px",background:"#1e3a5f",color:"#fcd34d",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.08em",textAlign:"center",borderRight:"none"}}>Test</th>
+              </tr>
+              {/* Column header row */}
               <tr>
                 <th style={{width:28,padding:"7px 8px",background:C.navy,borderRight:"1px solid rgba(255,255,255,0.1)"}}></th>
                 <TH colKey="covStatus">Coverage Status</TH>
@@ -2932,9 +2940,9 @@ function ReqTraceabilityTab({ req, test }) {
                 <TH colKey="bizReq">Business Requirement</TH>
                 <TH colKey="story">User Story</TH>
                 <TH colKey="acceptance">Acceptance Criteria</TH>
+                <TH colKey="reviewStatus" style={{borderRight:"2px solid rgba(255,255,255,0.25)"}}>Review Status</TH>
                 <TH colKey="tags">Tags</TH>
-                <TH colKey="buildStatus" style={{textAlign:"center"}}>Build Status</TH>
-                <TH colKey="reviewStatus">Review Status</TH>
+                <TH colKey="buildStatus" style={{textAlign:"center",borderRight:"2px solid rgba(255,255,255,0.25)"}}>Build Status</TH>
                 <TH colKey="scriptType">Test Script / Scenario</TH>
                 <TH colKey="scenCount" style={{textAlign:"center"}}>Scen #</TH>
                 <TH colKey="estCases" style={{textAlign:"center"}}>Est. Cases</TH>
@@ -3016,9 +3024,9 @@ function ReqTraceabilityTab({ req, test }) {
                       {td(<span style={{lineHeight:1.5,fontSize:11,wordBreak:"break-word"}}>{_fieldVal(r[reqK?.bizReq])}</span>)}
                       {td(<span style={{lineHeight:1.5,fontSize:11,wordBreak:"break-word"}}>{_fieldVal(r[reqK?.story])}</span>)}
                       {td(<span style={{lineHeight:1.5,fontSize:11,color:C.muted,wordBreak:"break-word"}}>{_fieldVal(r[reqK?.acceptance])}</span>)}
+                      {td(_reviewBadge(r),{verticalAlign:"middle",borderRight:"2px solid #cbd5e1"})}
                       {td(tagPills)}
-                      {td(_buildBadge(r),{textAlign:"center",verticalAlign:"middle"})}
-                      {td(_reviewBadge(r),{verticalAlign:"middle"})}
+                      {td(_buildBadge(r),{textAlign:"center",verticalAlign:"middle",borderRight:"2px solid #cbd5e1"})}
                       {td(<span style={{fontSize:10,color:C.text}}>{_fieldVal(r[reqK?.testScriptType])}</span>)}
                       {td(<span style={{fontWeight:700,color:C.navyLight}}>{scens.length||"0"}</span>,{textAlign:"center",verticalAlign:"middle"})}
                       {td(<span style={{fontWeight:estSum>0?700:400,color:estSum>0?C.navyLight:C.muted}}>{estSum||"—"}</span>,{textAlign:"center",verticalAlign:"middle"})}
