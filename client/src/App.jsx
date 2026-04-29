@@ -3136,18 +3136,6 @@ function ReqTraceabilityTab({ req, test }) {
             </tbody>
           </table>
         </div>
-        {filtered.length>0&&(
-          <div style={{padding:"7px 14px",borderTop:`1px solid ${C.border}`,background:"#f8fafc",fontSize:10,color:C.muted,display:"flex",gap:16,flexWrap:"wrap",alignItems:"center"}}>
-            <span>Showing <strong style={{color:C.text}}>{filtered.length}</strong> requirements</span>
-            <span>Scenarios mapped: <strong style={{color:scenPct>=80?C.complete:scenPct>=50?"#d97706":C.delayed}}>{scenarioMapped}</strong> ({scenPct}%) · Scripts: <strong style={{color:"#6d28d9"}}>{scriptMapped}</strong> ({scriptPct}%) · Pending: <strong style={{color:pendingMapping>0?C.delayed:C.muted}}>{pendingMapping}</strong></span>
-            <span>Total est. cases: <strong style={{color:C.navyLight}}>{totEst}</strong></span>
-            <span style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:10}}>
-              <span style={{background:"#fee2e2",color:"#b91c1c",border:"1px solid #fca5a5",borderRadius:4,padding:"1px 6px",fontSize:9,fontWeight:700}}>No Scenario</span><span style={{fontSize:10,color:C.muted}}>= scenario gap</span>
-              <span style={{background:"#f5f3ff",color:"#6d28d9",border:"1px solid #c4b5fd",borderRadius:4,padding:"1px 6px",fontSize:9,fontWeight:700}}>Script Reqd</span><span style={{fontSize:10,color:C.muted}}>= requires test script link</span>
-              <span style={{background:"#dcfce7",color:"#166534",border:"1px solid #86efac",borderRadius:4,padding:"1px 6px",fontSize:9,fontWeight:700}}>Covered</span><span style={{fontSize:10,color:C.muted}}>= has linked scenarios</span>
-            </span>
-          </div>
-        )}
       </div>
     </div>
   );
