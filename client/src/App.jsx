@@ -1247,10 +1247,10 @@ export default function App() {
             {id:"cr",             icon:"↔", label:"Change Requests"},
             {id:"scorecard",      icon:"◉", label:"Component Scorecard"},
             {id:"testing",        icon:"✓", label:"Test Scenarios"},
-            {id:"testvariations", icon:"⎇", label:"Test Variations"},
+            {id:"testvariations", icon:"⎇", label:"Test Variations", wip:true},
             {id:"traceability",   icon:"⊞", label:"Req Traceability"},
             {id:"backlog",        icon:"☰", label:"Backlog"},
-          ].map(({id,icon,label}) => (
+          ].map(({id,icon,label,wip}) => (
             <div key={id}>
               <button onClick={()=>setTab(id)} style={{
                 display:"flex", alignItems:"center", gap:9, width:"100%", padding:"8px 10px",
@@ -1262,7 +1262,8 @@ export default function App() {
                 borderLeft: `3px solid ${tab===id ? C.gold : "transparent"}`,
               }}>
                 <span style={{fontSize:12,width:16,textAlign:"center",flexShrink:0}}>{icon}</span>
-                {label}
+                <span style={{flex:1}}>{label}</span>
+                {wip && <span style={{fontSize:8,fontWeight:700,color:"#fbbf24",background:"rgba(251,191,36,0.15)",borderRadius:3,padding:"1px 4px",flexShrink:0}}>WIP</span>}
               </button>
               {id==="workplan" && (
                 <SubNav items={[
@@ -1290,21 +1291,8 @@ export default function App() {
           ))}
         </nav>
 
-        {/* Data Status — compact dot row */}
-        <div style={{ padding:"6px 12px", borderTop:"1px solid rgba(255,255,255,0.08)", display:"flex", alignItems:"center", gap:5, flexWrap:"wrap" }}>
-          {[["wp","WP",wp],["raid","RAID",raid],["req","REQ",req],["test","TEST",test],["cap","CAP",cap]].map(([key,label,state]) => (
-            <span key={key} title={label} style={{ display:"flex", alignItems:"center", gap:3, fontSize:9, color:state?"rgba(255,255,255,0.65)":"rgba(255,255,255,0.25)", fontWeight:state?600:400 }}>
-              <span style={{ width:5, height:5, borderRadius:"50%", background:state?"#22c55e":"#374151", display:"inline-block", flexShrink:0 }} />
-              {label}
-            </span>
-          ))}
-          {syncMeta && <span style={{ fontSize:9, color:"rgba(255,255,255,0.22)", marginLeft:"auto" }}>{syncMeta.lastSync?.slice(0,10)}</span>}
-          {!syncMeta && !isLoading && <span style={{ fontSize:9, color:"#f59e0b" }}>⚠</span>}
-          {isLoading && <span style={{ fontSize:9, color:"#60a5fa" }}>⏳</span>}
-        </div>
-
         {/* Refresh + Upload */}
-        <div style={{ padding:"8px 10px 14px" }}>
+        <div style={{ padding:"8px 10px 12px", borderTop:"1px solid rgba(255,255,255,0.08)" }}>
           <button
             disabled={refreshing}
             onClick={async()=>{
@@ -1329,11 +1317,12 @@ export default function App() {
             {key:"test", label:"Test Scenarios",state:test},
             {key:"cap",  label:"Capacity",      state:cap},
           ].map(({key,label,state}) => (
-            <label key={key} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", cursor:"pointer",
+            <label key={key} style={{ display:"flex", alignItems:"center", gap:6, cursor:"pointer",
               padding:"4px 8px", borderRadius:5, background:"rgba(255,255,255,0.05)",
               border:"1px solid rgba(255,255,255,0.07)", marginBottom:3 }}>
-              <span style={{ fontSize:10, color:state?"rgba(255,255,255,0.58)":"rgba(255,255,255,0.35)" }}>{label}</span>
-              <span style={{ fontSize:9, color:state?"#22c55e":"rgba(255,255,255,0.28)" }}>{state?"✓ Loaded":"Upload"}</span>
+              <span style={{ width:5, height:5, borderRadius:"50%", background:state?"#22c55e":"#374151", flexShrink:0 }} />
+              <span style={{ fontSize:10, color:state?"rgba(255,255,255,0.58)":"rgba(255,255,255,0.35)", flex:1 }}>{label}</span>
+              <span style={{ fontSize:9, color:state?"#22c55e":"rgba(255,255,255,0.28)" }}>{state?"✓":"Upload"}</span>
               <input type="file" accept=".xlsx,.xls,.csv" style={{display:"none"}} onChange={e=>{if(e.target.files[0])load(key,e.target.files[0]);}} />
             </label>
           ))}
