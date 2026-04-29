@@ -387,6 +387,23 @@ function parseRequirements(sheets) {
   };
 }
 
+function parseEcClasses(rows) {
+  if (!rows?.length) return null;
+  const split = s => String(s||"").split(",").map(v=>v.trim()).filter(Boolean);
+  return rows
+    .map(r => ({
+      id:          String(r["Class ID"]           || "").trim(),
+      dim:         String(r["Dimension"]           || "").trim(),
+      label:       String(r["Label"]              || "").trim(),
+      experiences: split(r["Experiences"]),
+      regions:     split(r["Regions"]) .length ? split(r["Regions"])  : ["All"],
+      businesses:  split(r["Businesses"]).length ? split(r["Businesses"]) : ["All"],
+      keyDiff:     String(r["Key Differentiator"] || "").trim(),
+      active:      r["Active"] !== false && String(r["Active"]).toLowerCase() !== "false",
+    }))
+    .filter(c => c.id && c.dim && c.label);
+}
+
 function parseTestScenarios(sheets) {
   const key = Object.keys(sheets)[0];
   const rows = sheets[key]; if (!rows?.length) return null;
@@ -1065,6 +1082,7 @@ export default function App() {
   const [req, setReq] = useState(null);
   const [cap, setCap] = useState(null);
   const [test, setTest] = useState(null);
+  const [ec,   setEc]   = useState(null);
   const [fnames, setFnames] = useState({});
   const [rawSheets, setRawSheets] = useState({});
   const [storageLoaded, setStorageLoaded] = useState(false);
@@ -1082,6 +1100,7 @@ export default function App() {
     if (apiJson.req?.length)  { const s={"03. PMT - Requirements Repository":apiJson.req}; setReq(parseRequirements(s)); setRawSheets(p=>({...p,req:s})); }
     if (apiJson.cap?.length)  { const s={"07. SAP Tech Sprint Capacity Management":apiJson.cap}; setCap(parseCapacity(s)); setRawSheets(p=>({...p,cap:s})); }
     if (apiJson.test?.length) { const s={"110. Test Scenarios":apiJson.test}; setTest(parseTestScenarios(s)); setRawSheets(p=>({...p,test:s})); }
+    if (apiJson.ec?.length)   { const parsed = parseEcClasses(apiJson.ec); if (parsed?.length) setEc(parsed); }
     if (apiJson.meta)         setSyncMeta({ lastSync: apiJson.meta.lastSync, source: "smartsheet" });
     if (apiJson.columnOptions) {
       Object.keys(apiJson.columnOptions).forEach(k => {
@@ -1276,7 +1295,7 @@ export default function App() {
         {tab === "backlog"      && <BacklogTab raid={raid} />}
         {tab === "scorecard"    && <ScorecardTab wp={wp} raid={raid} req={req} openModal={openModal} />}
         {tab === "testing"         && <TestScenariosTab data={test} wp={wp} req={req} />}
-        {tab === "testvariations"  && <TestVariationsTab data={test} />}
+        {tab === "testvariations"  && <TestVariationsTab data={test} ecFromSmartsheet={ec} />}
         {tab === "traceability"    && <ReqTraceabilityTab req={req} test={test} />}
       </div>
 
@@ -6528,12 +6547,19 @@ function TestScenariosTab({ data, wp, req }) {
 }
 
 // ─── TEST VARIATIONS TAB ─────────────────────────────────────────────────────
-function TestVariationsTab({ data }) {
+function TestVariationsTab({ data, ecFromSmartsheet }) {
   const [subTab, setSubTab] = useState("variations");
+  // Smartsheet is source of truth when available; fall back to localStorage then built-in defaults
   const [ecClasses, setEcClasses] = useState(() => {
+    if (ecFromSmartsheet?.length) return ecFromSmartsheet;
     try { const s = localStorage.getItem("pmt3_ec_classes"); return s ? JSON.parse(s) : EC_CLASSES_DEFAULT; }
     catch { return EC_CLASSES_DEFAULT; }
   });
+
+  // Sync when Smartsheet data arrives (e.g. after a Refresh)
+  useEffect(() => {
+    if (ecFromSmartsheet?.length) setEcClasses(ecFromSmartsheet);
+  }, [ecFromSmartsheet]);
   const [assignments, setAssignments] = useState(() => {
     try { const s = localStorage.getItem("pmt3_ec_assignments"); return s ? JSON.parse(s) : {}; }
     catch { return {}; }
