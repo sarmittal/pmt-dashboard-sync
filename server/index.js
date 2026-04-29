@@ -18,12 +18,26 @@ dotenv.config({ path: resolve(dirname(_ftu(import.meta.url)), "../.env") });
 import express from "express";
 import cors from "cors";
 import path from "path";
+import fs from "fs";
 import { fileURLToPath } from "url";
+import multer from "multer";
 import { fetchAllSheets, updateRow, EDITABLE } from "./smartsheet.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app  = express();
 const PORT = process.env.PORT || 3001;
+
+const UPLOADS_DIR = path.join(__dirname, "../uploads");
+if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+
+const storage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, UPLOADS_DIR),
+  filename: (_req, file, cb) => {
+    const safe = file.originalname.replace(/[^a-zA-Z0-9._\-() ]/g, "_");
+    cb(null, safe);
+  },
+});
+const upload = multer({ storage, limits: { fileSize: 50 * 1024 * 1024 } });
 
 const TOKEN = process.env.SMARTSHEET_TOKEN;
 
@@ -56,6 +70,36 @@ async function doRefresh() {
 
 // ── Routes ────────────────────────────────────────────────────────────────────
 
+
+// POST /api/workbooks  — upload one or more workbook files
+app.post("/api/workbooks", upload.array("files", 20), (req, res) => {
+  if (!req.files?.length) return res.status(400).json({ error: "No files received" });
+  const saved = req.files.map(f => ({
+    name: f.originalname,
+    saved: f.filename,
+    size: f.size,
+    uploadedAt: new Date().toISOString(),
+  }));
+  console.log("[server] Workbooks uploaded:", saved.map(f => f.name).join(", "));
+  res.json({ ok: true, files: saved });
+});
+
+// GET /api/workbooks — list uploaded workbooks
+app.get("/api/workbooks", (_req, res) => {
+  const files = fs.readdirSync(UPLOADS_DIR).map(name => {
+    const stat = fs.statSync(path.join(UPLOADS_DIR, name));
+    return { name, size: stat.size, uploadedAt: stat.mtime.toISOString() };
+  }).sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt));
+  res.json({ files });
+});
+
+// DELETE /api/workbooks/:name — remove a workbook
+app.delete("/api/workbooks/:name", (req, res) => {
+  const file = path.join(UPLOADS_DIR, path.basename(req.params.name));
+  if (!fs.existsSync(file)) return res.status(404).json({ error: "File not found" });
+  fs.unlinkSync(file);
+  res.json({ ok: true });
+});
 
 app.get("/api/health", (_req, res) => {
   res.json({

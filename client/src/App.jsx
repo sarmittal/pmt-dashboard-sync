@@ -913,6 +913,7 @@ const TABS = [
   { id: "testing",       label: "Test Scenarios" },
   { id: "traceability",  label: "Req Traceability" },
   { id: "backlog",       label: "Backlog" },
+  { id: "workbooks",     label: "Workbooks" },
 ];
 
 // ─── STORAGE ─────────────────────────────────────────────────────────────────
@@ -1240,6 +1241,7 @@ export default function App() {
         {tab === "scorecard"    && <ScorecardTab wp={wp} raid={raid} req={req} openModal={openModal} />}
         {tab === "testing"      && <TestScenariosTab data={test} wp={wp} req={req} />}
         {tab === "traceability" && <ReqTraceabilityTab req={req} test={test} />}
+        {tab === "workbooks"    && <WorkbooksTab />}
       </div>
 
       {modal && <Modal title={modal.title} rows={modal.rows} columns={modal.columns} onClose={() => setModal(null)} />}
@@ -3188,6 +3190,107 @@ function ReqTraceabilityTab({ req, test }) {
             </tbody>
           </table>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── WORKBOOKS TAB ───────────────────────────────────────────────────────────
+function WorkbooksTab() {
+  const [files, setFiles]       = useState([]);
+  const [uploading, setUploading] = useState(false);
+  const [msg, setMsg]           = useState(null);
+  const inputRef                = useRef(null);
+  const API = "/api/workbooks";
+
+  const load = () =>
+    fetch(API).then(r => r.json()).then(d => setFiles(d.files || [])).catch(() => {});
+
+  useEffect(() => { load(); }, []);
+
+  const upload = async e => {
+    const chosen = Array.from(e.target.files || []);
+    if (!chosen.length) return;
+    setUploading(true); setMsg(null);
+    const fd = new FormData();
+    chosen.forEach(f => fd.append("files", f));
+    try {
+      const res = await fetch(API, { method:"POST", body:fd });
+      const data = await res.json();
+      if (data.ok) { setMsg({ ok:true, text:`${data.files.length} file(s) uploaded successfully.` }); load(); }
+      else setMsg({ ok:false, text: data.error || "Upload failed." });
+    } catch { setMsg({ ok:false, text:"Upload failed — server not reachable." }); }
+    finally { setUploading(false); if(inputRef.current) inputRef.current.value=""; }
+  };
+
+  const remove = async name => {
+    await fetch(`${API}/${encodeURIComponent(name)}`, { method:"DELETE" });
+    load();
+  };
+
+  const fmt = bytes => bytes < 1024*1024 ? `${(bytes/1024).toFixed(0)} KB` : `${(bytes/1024/1024).toFixed(1)} MB`;
+  const fmtDate = d => new Date(d).toLocaleString();
+
+  return (
+    <div style={{display:"flex",flexDirection:"column",gap:16,maxWidth:900}}>
+      <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:8,padding:"20px 24px",boxShadow:"0 1px 3px rgba(0,0,0,0.06)"}}>
+        <div style={{fontSize:14,fontWeight:700,color:C.navy,marginBottom:6}}>Upload Workbooks & Specs</div>
+        <div style={{fontSize:12,color:C.muted,marginBottom:16}}>
+          Upload Excel or CSV files — SF config workbooks, BTP lean specs, dashboard workbooks. Files are stored on the server and never pushed to GitHub.
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:12}}>
+          <input ref={inputRef} type="file" multiple accept=".xlsx,.xls,.csv,.pdf"
+            onChange={upload} style={{display:"none"}} id="wb-upload"/>
+          <label htmlFor="wb-upload" style={{
+            background: uploading ? "#94a3b8" : C.navy, color:"#fff",
+            borderRadius:6, padding:"8px 20px", fontSize:12, fontWeight:600,
+            cursor: uploading ? "not-allowed" : "pointer", userSelect:"none"
+          }}>
+            {uploading ? "Uploading…" : "Choose Files"}
+          </label>
+          <span style={{fontSize:11,color:C.muted}}>Excel, CSV or PDF · max 50 MB per file · multiple files allowed</span>
+        </div>
+        {msg && (
+          <div style={{marginTop:12,padding:"8px 14px",borderRadius:6,fontSize:12,
+            background: msg.ok ? "#dcfce7" : "#fee2e2",
+            color: msg.ok ? "#166534" : "#b91c1c",
+            border: `1px solid ${msg.ok ? "#86efac" : "#fca5a5"}`}}>
+            {msg.text}
+          </div>
+        )}
+      </div>
+
+      <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden",boxShadow:"0 1px 3px rgba(0,0,0,0.06)"}}>
+        <div style={{padding:"12px 16px",background:C.navy,color:"#fff",fontSize:12,fontWeight:700}}>
+          Uploaded Files ({files.length})
+        </div>
+        {files.length === 0 ? (
+          <div style={{padding:32,textAlign:"center",color:C.muted,fontSize:13}}>No files uploaded yet.</div>
+        ) : (
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+            <thead>
+              <tr style={{background:"#f8fafc"}}>
+                {["File Name","Size","Uploaded At",""].map(h => (
+                  <th key={h} style={{padding:"8px 14px",textAlign:"left",color:C.muted,fontWeight:600,
+                    borderBottom:`1px solid ${C.border}`,fontSize:11}}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {files.map((f,i) => (
+                <tr key={f.name} style={{background: i%2===0 ? C.white : "#f9fafb",borderBottom:`1px solid ${C.border}`}}>
+                  <td style={{padding:"9px 14px",fontWeight:600,color:C.navy}}>{f.name}</td>
+                  <td style={{padding:"9px 14px",color:C.muted}}>{fmt(f.size)}</td>
+                  <td style={{padding:"9px 14px",color:C.muted}}>{fmtDate(f.uploadedAt)}</td>
+                  <td style={{padding:"9px 14px",textAlign:"right"}}>
+                    <span onClick={()=>remove(f.name)}
+                      style={{color:"#b91c1c",cursor:"pointer",fontSize:11,fontWeight:600}}>Remove</span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
     </div>
   );
