@@ -3239,7 +3239,7 @@ function WorkbooksTab() {
           Upload Excel or CSV files — SF config workbooks, BTP lean specs, dashboard workbooks. Files are stored on the server and never pushed to GitHub.
         </div>
         <div style={{display:"flex",alignItems:"center",gap:12}}>
-          <input ref={inputRef} type="file" multiple accept=".xlsx,.xls,.csv,.pdf"
+          <input ref={inputRef} type="file" multiple accept=".xlsx,.xls,.csv,.pdf,.doc,.docx"
             onChange={upload} style={{display:"none"}} id="wb-upload"/>
           <label htmlFor="wb-upload" style={{
             background: uploading ? "#94a3b8" : C.navy, color:"#fff",
@@ -3248,7 +3248,7 @@ function WorkbooksTab() {
           }}>
             {uploading ? "Uploading…" : "Choose Files"}
           </label>
-          <span style={{fontSize:11,color:C.muted}}>Excel, CSV or PDF · max 50 MB per file · multiple files allowed</span>
+          <span style={{fontSize:11,color:C.muted}}>Excel, CSV, PDF or Word · max 50 MB per file · multiple files allowed</span>
         </div>
         {msg && (
           <div style={{marginTop:12,padding:"8px 14px",borderRadius:6,fontSize:12,

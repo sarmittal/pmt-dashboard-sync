@@ -37,7 +37,15 @@ const storage = multer.diskStorage({
     cb(null, safe);
   },
 });
-const upload = multer({ storage, limits: { fileSize: 50 * 1024 * 1024 } });
+const ALLOWED_EXT = new Set([".xlsx",".xls",".csv",".pdf",".doc",".docx"]);
+const upload = multer({
+  storage,
+  limits: { fileSize: 50 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    cb(null, ALLOWED_EXT.has(ext));
+  },
+});
 
 const TOKEN = process.env.SMARTSHEET_TOKEN;
 
