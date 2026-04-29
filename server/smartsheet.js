@@ -56,6 +56,14 @@ const KEEP = {
     "Functional Build Status", "Tech Build Status",
     "Build Management Comments", "User Story Derived Status", "Priority",
     "Test Script/Test Scenario",
+    // Traceability tab — build approach & tags
+    "Tags",
+    "SF", "SF Design POV", "SF Configuration Workbook Reference",
+    "BTP", "BTP Design POV",
+    "CI", "CI/API POV",
+    "AI", "AI POV",
+    "Tech lean Spec Reference",
+    "SNOW POV",
   ],
   test: null, // keep all — many reviewer/feedback/due-date columns needed for redesigned tab
   cap: null, // keep all

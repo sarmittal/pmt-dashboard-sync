@@ -2825,9 +2825,10 @@ function ReqTraceabilityTab({ req, test }) {
               )}
               {filtered.map((r,i)=>{
                 const id       = String(r[reqK?.reqId]||"").trim()||String(i);
+                const rowKey   = `${i}_${id}`; // unique even when same reqId repeats across experiences
                 const scens    = scensByReqId[id]||[];
                 const estSum   = scens.reduce((s,t)=>s+(parseFloat(t[tK?.estCases])||0),0);
-                const isOpen   = expanded.has(id);
+                const isOpen   = expanded.has(rowKey);
                 const isScript = isTestScript(r);
                 // Gap = scenario-type req with no linked scenarios; test-script rows are never gaps
                 const gap      = !isScript && scens.length===0;
@@ -2836,9 +2837,9 @@ function ReqTraceabilityTab({ req, test }) {
                   <td style={{padding:"7px 8px",verticalAlign:"top",borderRight:`1px solid ${C.border}`,overflow:"hidden",textOverflow:"ellipsis",...style}}>{children}</td>
                 );
                 return (
-                  <React.Fragment key={id}>
+                  <React.Fragment key={rowKey}>
                     <tr style={{background:rowBg,borderBottom:isOpen?`2px solid #93c5fd`:`1px solid ${C.border}`,cursor:"pointer"}}
-                      onClick={()=>_toggle(id)}>
+                      onClick={()=>_toggle(rowKey)}>
                       <td style={{padding:"7px 8px",textAlign:"center",color:isOpen?C.navyLight:C.muted,fontWeight:700,borderRight:`1px solid ${C.border}`}}>{isOpen?"▾":"▸"}</td>
                       {td(<span style={{fontWeight:700,color:C.navyLight,whiteSpace:"nowrap"}}>{id||"—"}</span>)}
                       {td(<span style={{fontSize:10,color:C.muted,whiteSpace:"nowrap"}}>{_fieldVal(r[reqK?.pmExperience])}</span>)}
@@ -2905,7 +2906,7 @@ function ReqTraceabilityTab({ req, test }) {
                                   <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
                                     {scens.map(sc=>{
                                       const scId  = String(sc[tK?.id]||"").trim();
-                                      const scKey = `${id}__${scId}`;
+                                      const scKey = `${rowKey}__${scId}`;
                                       const scOpen= expandedSc.has(scKey);
                                       return (
                                         <button key={scKey} onClick={e=>{e.stopPropagation();_toggleSc(scKey);}} style={{
@@ -2924,7 +2925,7 @@ function ReqTraceabilityTab({ req, test }) {
                                     })}
                                   </div>
                                   {/* Expanded detail panels — render below all bubbles, full width */}
-                                  {scens.filter(sc=>expandedSc.has(`${id}__${String(sc[tK?.id]||"").trim()}`)).map(sc=>{
+                                  {scens.filter(sc=>expandedSc.has(`${rowKey}__${String(sc[tK?.id]||"").trim()}`)).map(sc=>{
                                     const scId = String(sc[tK?.id]||"").trim();
                                     return (
                                       <div key={`det_${scId}`} style={{width:"100%",background:"#fff",border:`1px solid #bfdbfe`,borderRadius:6,padding:"12px 16px",display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:"10px 24px",boxShadow:"0 2px 6px rgba(30,64,175,0.08)"}}>
