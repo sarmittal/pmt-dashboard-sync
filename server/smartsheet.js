@@ -1,7 +1,7 @@
 /**
  * Smartsheet API client — fetches all 5 PMT sheets and returns
  * the same JSON shape the dashboard expects:
- *   { meta, wp, raid, req, test, cap }
+ *   { meta, wp, raid, req, test, cap, ec }
  *
  * Write-back:
  *   updateRow(sheetKey, rowId, updates, token)
@@ -19,6 +19,7 @@ export const SHEETS = {
   req:  "1761775495106436",
   test: "2362069488717700",
   cap:  "1662804185534340",
+  ec:   "1093126390239108",
 };
 
 // Columns allowed for write-back per sheet.
@@ -66,7 +67,8 @@ const KEEP = {
     "SNOW POV",
   ],
   test: null, // keep all — many reviewer/feedback/due-date columns needed for redesigned tab
-  cap: null, // keep all
+  cap:  null, // keep all
+  ec:   null, // keep all — EC Classes sheet, small number of rows
 };
 
 async function fetchRowAttachments(sheetId, token) {
