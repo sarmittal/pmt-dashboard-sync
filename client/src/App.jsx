@@ -1079,6 +1079,7 @@ async function clearAll() {
 // ─── APP ─────────────────────────────────────────────────────────────────────
 export default function App() {
   const [tab, setTab] = useState("executive");
+  const [wpSubTab, setWpSubTab] = useState("workstream");
   const [modal, setModal] = useState(null);
   const [wp, setWp] = useState(null);
   const [raid, setRaid] = useState(null);
@@ -1226,18 +1227,42 @@ export default function App() {
             {id:"traceability",   icon:"⊞", label:"Req Traceability"},
             {id:"backlog",        icon:"☰", label:"Backlog"},
           ].map(({id,icon,label}) => (
-            <button key={id} onClick={()=>setTab(id)} style={{
-              display:"flex", alignItems:"center", gap:9, width:"100%", padding:"8px 10px",
-              borderRadius:7, border:"none", cursor:"pointer",
-              background: tab===id ? "rgba(255,255,255,0.12)" : "transparent",
-              color: tab===id ? "#fff" : "rgba(255,255,255,0.55)",
-              fontSize:12, fontWeight: tab===id ? 700 : 400,
-              textAlign:"left", transition:"all .12s",
-              borderLeft: `3px solid ${tab===id ? C.gold : "transparent"}`,
-            }}>
-              <span style={{fontSize:12,width:16,textAlign:"center",flexShrink:0}}>{icon}</span>
-              {label}
-            </button>
+            <div key={id}>
+              <button onClick={()=>setTab(id)} style={{
+                display:"flex", alignItems:"center", gap:9, width:"100%", padding:"8px 10px",
+                borderRadius:7, border:"none", cursor:"pointer",
+                background: tab===id ? "rgba(255,255,255,0.12)" : "transparent",
+                color: tab===id ? "#fff" : "rgba(255,255,255,0.55)",
+                fontSize:12, fontWeight: tab===id ? 700 : 400,
+                textAlign:"left", transition:"all .12s",
+                borderLeft: `3px solid ${tab===id ? C.gold : "transparent"}`,
+              }}>
+                <span style={{fontSize:12,width:16,textAlign:"center",flexShrink:0}}>{icon}</span>
+                {label}
+              </button>
+              {id==="workplan" && tab==="workplan" && (
+                <div style={{marginLeft:28,marginTop:2,marginBottom:2,display:"flex",flexDirection:"column",gap:1}}>
+                  {[
+                    {id:"workstream", label:"Workstream Status"},
+                    {id:"sapbuild",   label:"SAP Config & Build"},
+                    {id:"ep",         label:"E&P"},
+                  ].map(st => (
+                    <button key={st.id} onClick={()=>setWpSubTab(st.id)} style={{
+                      display:"flex", alignItems:"center", gap:7, width:"100%", padding:"5px 10px",
+                      borderRadius:5, border:"none", cursor:"pointer",
+                      background: wpSubTab===st.id ? "rgba(255,255,255,0.1)" : "transparent",
+                      color: wpSubTab===st.id ? "#fff" : "rgba(255,255,255,0.45)",
+                      fontSize:11, fontWeight: wpSubTab===st.id ? 600 : 400,
+                      textAlign:"left", transition:"all .12s",
+                      borderLeft: `2px solid ${wpSubTab===st.id ? C.gold+"99" : "transparent"}`,
+                    }}>
+                      <span style={{width:6,height:6,borderRadius:"50%",background:wpSubTab===st.id?"#e2c97e":"rgba(255,255,255,0.25)",flexShrink:0}}/>
+                      {st.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           ))}
         </nav>
 
@@ -1301,7 +1326,7 @@ export default function App() {
       {/* ── Main Content ────────────────────────────────────────────────────── */}
       <main style={{ flex:1, minWidth:0, background:C.bg, padding:"18px 20px" }}>
         {tab==="executive"       && <ExecutiveSummaryTab wp={wp} raid={raid} req={req} cap={cap} openModal={openModal} />}
-        {tab==="workplan"        && <WorkplanTab wp={wp} raid={raid} openModal={openModal} />}
+        {tab==="workplan"        && <WorkplanTab wp={wp} raid={raid} openModal={openModal} subTab={wpSubTab} setSubTab={setWpSubTab} />}
         {tab==="raid"            && <RaidAnalysisTab raid={raid} />}
         {tab==="cr"              && <ChangeRequestTab raid={raid} cap={cap} />}
         {tab==="backlog"         && <BacklogTab raid={raid} />}
@@ -8689,8 +8714,7 @@ function ScorecardTab({ wp, raid, req, openModal }) {
 }
 
 // ─── WORKPLAN TAB ────────────────────────────────────────────────────────────
-function WorkplanTab({ wp, raid, openModal }) {
-  const [subTab, setSubTab] = useState("workstream");
+function WorkplanTab({ wp, raid, openModal, subTab, setSubTab }) {
   const [wpModal, setWpModal] = useState(null);
   const [wsFilter, setWsFilter] = useState("All");
   const [sapFilter, setSapFilter] = useState("All");
@@ -8806,25 +8830,7 @@ function WorkplanTab({ wp, raid, openModal }) {
   ];
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-
-      {/* Sub-tab bar */}
-      <div style={{ background: "#43978F", borderBottom: `1px solid #357a73`, marginBottom: 16 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 4, paddingLeft: 8 }}>
-          {SUB_TABS.map(st => (
-            <button key={st.id} onClick={() => setSubTab(st.id)} style={{
-              padding: "7px 18px", border: "none", cursor: "pointer", transition: "all .15s",
-              fontSize: 14, fontWeight: subTab === st.id ? 700 : 500, letterSpacing: "0.04em",
-              borderRadius: 20, margin: "5px 0",
-              background: subTab === st.id ? "rgba(255,255,255,0.92)" : "transparent",
-              color: subTab === st.id ? "#2d6b65" : "rgba(255,255,255,0.75)",
-              boxShadow: subTab === st.id ? "0 1px 4px rgba(0,0,0,0.15)" : "none",
-            }}>{st.label}</button>
-          ))}
-        </div>
-      </div>
-
-      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
 
         {/* ── Workstream Status sub-tab ──────────────────────────────────────── */}
         {subTab === "workstream" && (
@@ -9077,8 +9083,6 @@ function WorkplanTab({ wp, raid, openModal }) {
             )}
           </>
         )}
-
-      </div>
 
       {wpModal && <WorkplanDrillModal title={wpModal.title} rows={wpModal.rows} initialFilter={wpModal.initialFilter} onClose={() => setWpModal(null)} />}
     </div>
