@@ -1104,6 +1104,7 @@ export default function App() {
   const [wpSubTab,      setWpSubTab]      = useState("workstream");
   const [testSubTab,    setTestSubTab]    = useState("metrics");
   const [testVarSubTab, setTestVarSubTab] = useState("variations");
+  const [sidebarExp,    setSidebarExp]    = useState(new Set());
   const [modal, setModal] = useState(null);
   const [wp, setWp] = useState(null);
   const [raid, setRaid] = useState(null);
@@ -1243,7 +1244,11 @@ export default function App() {
           {[
             { header:"Project Management", items:[
               {id:"executive",      icon:"◈", label:"Executive Summary"},
-              {id:"workplan",       icon:"📋", label:"Workplan"},
+              {id:"workplan",       icon:"📋", label:"Workplan", subItems:[
+                {id:"workstream",label:"Workstream Status"},
+                {id:"sapbuild",  label:"SAP Config & Build"},
+                {id:"ep",        label:"E&P"},
+              ]},
               {id:"raid",           icon:"⚠",  label:"RAID Analysis"},
               {id:"cr",             icon:"↔",  label:"CR Analysis"},
             ]},
@@ -1251,8 +1256,17 @@ export default function App() {
               {id:"scorecard",      icon:"◉", label:"Component Scorecard"},
             ]},
             { header:"Testing", items:[
-              {id:"testing",        icon:"✓", label:"Test Scenarios"},
-              {id:"testvariations", icon:"⎇", label:"Test Variations", wip:true},
+              {id:"testing",        icon:"✓", label:"Test Scenarios", subItems:[
+                {id:"metrics",   label:"Overall Metrics"},
+                {id:"review",    label:"Review Status"},
+                {id:"scenarios", label:"Test Scenarios"},
+              ]},
+              {id:"testvariations", icon:"⎇", label:"Test Variations", wip:true, subItems:[
+                {id:"variations", label:"Variations"},
+                {id:"dimensions", label:"EC Dimensions"},
+                {id:"review",     label:"Review"},
+                {id:"coverage",   label:"Coverage"},
+              ]},
             ]},
             { header:"Other", items:[
               {id:"traceability",   icon:"⊞", label:"Req Traceability"},
@@ -1263,45 +1277,49 @@ export default function App() {
               <div style={{fontSize:9,fontWeight:700,color:"rgba(255,255,255,0.28)",textTransform:"uppercase",letterSpacing:"0.09em",padding:"8px 10px 3px"}}>
                 {header}
               </div>
-              {items.map(({id,icon,label,wip}) => (
-                <div key={id}>
-                  <button onClick={()=>setTab(id)} style={{
-                    display:"flex", alignItems:"center", gap:9, width:"100%", padding:"7px 10px",
-                    borderRadius:7, border:"none", cursor:"pointer",
-                    background: tab===id ? "rgba(255,255,255,0.12)" : "transparent",
-                    color: tab===id ? "#fff" : "rgba(255,255,255,0.55)",
-                    fontSize:12, fontWeight: tab===id ? 700 : 400,
-                    textAlign:"left", transition:"all .12s",
-                    borderLeft: `3px solid ${tab===id ? C.gold : "transparent"}`,
-                  }}>
-                    <span style={{fontSize:12,width:16,textAlign:"center",flexShrink:0}}>{icon}</span>
-                    <span style={{flex:1}}>{label}</span>
-                    {wip && <span style={{fontSize:8,fontWeight:700,color:"#fbbf24",background:"rgba(251,191,36,0.15)",borderRadius:3,padding:"1px 4px",flexShrink:0}}>WIP</span>}
-                  </button>
-                  {id==="workplan" && (
-                    <SubNav items={[
-                      {id:"workstream",label:"Workstream Status"},
-                      {id:"sapbuild",  label:"SAP Config & Build"},
-                      {id:"ep",        label:"E&P"},
-                    ]} active={wpSubTab} onSelect={v=>{setWpSubTab(v);setTab("workplan");}} />
-                  )}
-                  {id==="testing" && (
-                    <SubNav items={[
-                      {id:"metrics",   label:"Overall Metrics"},
-                      {id:"review",    label:"Review Status"},
-                      {id:"scenarios", label:"Test Scenarios"},
-                    ]} active={testSubTab} onSelect={v=>{setTestSubTab(v);setTab("testing");}} />
-                  )}
-                  {id==="testvariations" && (
-                    <SubNav items={[
-                      {id:"variations", label:"Variations"},
-                      {id:"dimensions", label:"EC Dimensions"},
-                      {id:"review",     label:"Review"},
-                      {id:"coverage",   label:"Coverage"},
-                    ]} active={testVarSubTab} onSelect={v=>{setTestVarSubTab(v);setTab("testvariations");}} />
-                  )}
-                </div>
-              ))}
+              {items.map(({id,icon,label,wip,subItems}) => {
+                const isActive  = tab === id;
+                const isExp     = sidebarExp.has(id);
+                const hasChildren = !!subItems?.length;
+                const handleClick = () => {
+                  if (hasChildren) {
+                    if (isExp) {
+                      setSidebarExp(p => { const n=new Set(p); n.delete(id); return n; });
+                    } else {
+                      setSidebarExp(p => new Set([...p, id]));
+                      setTab(id);
+                      if (id==="workplan")       setWpSubTab("workstream");
+                      if (id==="testing")        setTestSubTab("metrics");
+                      if (id==="testvariations") setTestVarSubTab("variations");
+                    }
+                  } else {
+                    setTab(id);
+                  }
+                };
+                const subState = id==="workplan" ? wpSubTab : id==="testing" ? testSubTab : testVarSubTab;
+                const setSubState = id==="workplan" ? setWpSubTab : id==="testing" ? setTestSubTab : setTestVarSubTab;
+                return (
+                  <div key={id}>
+                    <button onClick={handleClick} style={{
+                      display:"flex", alignItems:"center", gap:9, width:"100%", padding:"7px 10px",
+                      borderRadius:7, border:"none", cursor:"pointer",
+                      background: isActive ? "rgba(255,255,255,0.12)" : "transparent",
+                      color: isActive ? "#fff" : "rgba(255,255,255,0.55)",
+                      fontSize:12, fontWeight: isActive ? 700 : 400,
+                      textAlign:"left", transition:"all .12s",
+                      borderLeft: `3px solid ${isActive ? C.gold : "transparent"}`,
+                    }}>
+                      <span style={{fontSize:12,width:16,textAlign:"center",flexShrink:0}}>{icon}</span>
+                      <span style={{flex:1}}>{label}</span>
+                      {wip && <span style={{fontSize:8,fontWeight:700,color:"#fbbf24",background:"rgba(251,191,36,0.15)",borderRadius:3,padding:"1px 4px",flexShrink:0}}>WIP</span>}
+                      {hasChildren && <span style={{fontSize:9,color:"rgba(255,255,255,0.35)",flexShrink:0,transition:"transform .15s",display:"inline-block",transform:isExp?"rotate(90deg)":"rotate(0deg)"}}>▶</span>}
+                    </button>
+                    {hasChildren && isExp && (
+                      <SubNav items={subItems} active={subState} onSelect={v=>{setSubState(v);setTab(id);}} />
+                    )}
+                  </div>
+                );
+              })}
             </div>
           ))}
         </nav>
@@ -3722,7 +3740,7 @@ function BacklogTab({ raid }) {
         </div>
 
         {/* Table */}
-        <div>
+        <div style={{overflowX:"auto"}}>
           <table style={{borderCollapse:"collapse",fontSize:11,tableLayout:"fixed",width:"100%"}}>
             <thead>
               <tr style={{background:"#162f50"}}>
@@ -4181,7 +4199,7 @@ function RaidAnalysisTab({ raid }) {
             </div>
 
             {/* Table */}
-            <div>
+            <div style={{overflowX:"auto"}}>
               <table style={{ borderCollapse:"collapse", fontSize:11, tableLayout:"fixed", width:"100%" }}>
                 <thead>
                   <tr style={{ background:"#162f50" }}>
