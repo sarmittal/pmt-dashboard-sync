@@ -2893,7 +2893,7 @@ function ReqTraceabilityTab({ req, test }) {
 
       {/* Table */}
       <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden",boxShadow:"0 1px 3px rgba(0,0,0,0.06)"}}>
-        <div style={{overflowX:"auto"}}>
+        <div style={{overflowX:"auto",overflowY:"auto",maxHeight:"calc(100vh - 280px)"}}>
           <table style={{width:"100%",borderCollapse:"collapse",fontSize:11,tableLayout:"fixed"}}>
             <colgroup>
               <col style={{width:28}}/>  {/* expand */}
@@ -3106,32 +3106,35 @@ function ReqTraceabilityTab({ req, test }) {
                   </React.Fragment>
                 );
               })}
-              {/* Subtotal row */}
-              {filtered.length>0&&<tr style={{background:"#eef4ff",borderBottom:`2px solid ${C.navyLight}`}}>
-                <td style={{padding:"6px 8px",textAlign:"center",color:C.navy,fontSize:9,fontWeight:800,letterSpacing:"0.05em",borderRight:`1px solid ${C.border}`}}>∑</td>
-                <td style={{padding:"6px 8px",borderRight:`1px solid ${C.border}`}}>
-                  <div style={{display:"flex",flexWrap:"wrap",gap:3}}>
-                    <span style={{fontSize:9,fontWeight:700,color:"#166534"}}>{stCovered} cvd</span>
-                    <span style={{fontSize:9,fontWeight:700,color:"#b91c1c"}}>{stGap} gap</span>
-                    <span style={{fontSize:9,fontWeight:700,color:"#6d28d9"}}>{stScript} scr</span>
-                  </div>
-                </td>
-                <td style={{padding:"6px 8px",textAlign:"center",fontWeight:800,fontSize:11,color:C.navyLight,borderRight:`1px solid ${C.border}`}}>{filtered.length}</td>
-                <td style={{padding:"6px 8px",borderRight:`1px solid ${C.border}`}}/>
-                <td style={{padding:"6px 8px",borderRight:`1px solid ${C.border}`}}/>
-                <td style={{padding:"6px 8px",borderRight:`1px solid ${C.border}`}}/>
-                <td style={{padding:"6px 8px",borderRight:`1px solid ${C.border}`}}/>
-                <td style={{padding:"6px 8px",borderRight:`1px solid ${C.border}`}}/>
-                <td style={{padding:"6px 8px",borderRight:`1px solid ${C.border}`}}/>
-                <td style={{padding:"6px 8px",borderRight:`1px solid ${C.border}`}}/>
-                <td style={{padding:"6px 8px",borderRight:`1px solid ${C.border}`}}/>
-                <td style={{padding:"6px 8px",borderRight:`1px solid ${C.border}`}}/>
-                <td style={{padding:"6px 8px",textAlign:"center",fontWeight:800,fontSize:11,color:C.navyLight,borderRight:`1px solid ${C.border}`}}>{stScens}</td>
-                <td style={{padding:"6px 8px",textAlign:"center",fontWeight:800,fontSize:11,color:C.navyLight,borderRight:`1px solid ${C.border}`}}>{stEst||"—"}</td>
-                <td style={{padding:"6px 8px",borderRight:`1px solid ${C.border}`}}/>
-                <td style={{padding:"6px 8px"}}/>
-              </tr>}
             </tbody>
+            {filtered.length>0&&(
+              <tfoot>
+                <tr style={{background:"#eef4ff",borderTop:`2px solid ${C.navyLight}`,position:"sticky",bottom:0,zIndex:1}}>
+                  <td style={{padding:"6px 8px",textAlign:"center",color:C.navy,fontSize:9,fontWeight:800,letterSpacing:"0.05em",borderRight:`1px solid ${C.border}`}}>∑</td>
+                  <td style={{padding:"6px 8px",borderRight:`1px solid ${C.border}`}}>
+                    <div style={{display:"flex",flexWrap:"wrap",gap:3}}>
+                      <span style={{fontSize:9,fontWeight:700,color:"#166534"}}>{stCovered} cvd</span>
+                      <span style={{fontSize:9,fontWeight:700,color:"#b91c1c"}}>{stGap} gap</span>
+                      <span style={{fontSize:9,fontWeight:700,color:"#6d28d9"}}>{stScript} scr</span>
+                    </div>
+                  </td>
+                  <td style={{padding:"6px 8px",textAlign:"center",fontWeight:800,fontSize:11,color:C.navyLight,borderRight:`1px solid ${C.border}`}}>{filtered.length}</td>
+                  <td style={{padding:"6px 8px",borderRight:`1px solid ${C.border}`}}/>
+                  <td style={{padding:"6px 8px",borderRight:`1px solid ${C.border}`}}/>
+                  <td style={{padding:"6px 8px",borderRight:`1px solid ${C.border}`}}/>
+                  <td style={{padding:"6px 8px",borderRight:`1px solid ${C.border}`}}/>
+                  <td style={{padding:"6px 8px",borderRight:`1px solid ${C.border}`}}/>
+                  <td style={{padding:"6px 8px",borderRight:`1px solid ${C.border}`}}/>
+                  <td style={{padding:"6px 8px",borderRight:`1px solid ${C.border}`}}/>
+                  <td style={{padding:"6px 8px",borderRight:`1px solid ${C.border}`}}/>
+                  <td style={{padding:"6px 8px",borderRight:`1px solid ${C.border}`}}/>
+                  <td style={{padding:"6px 8px",textAlign:"center",fontWeight:800,fontSize:11,color:C.navyLight,borderRight:`1px solid ${C.border}`}}>{stScens}</td>
+                  <td style={{padding:"6px 8px",textAlign:"center",fontWeight:800,fontSize:11,color:C.navyLight,borderRight:`1px solid ${C.border}`}}>{stEst||"—"}</td>
+                  <td style={{padding:"6px 8px",borderRight:`1px solid ${C.border}`}}/>
+                  <td style={{padding:"6px 8px"}}/>
+                </tr>
+              </tfoot>
+            )}
           </table>
         </div>
         {filtered.length>0&&(
