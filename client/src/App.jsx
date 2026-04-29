@@ -913,7 +913,6 @@ const TABS = [
   { id: "testing",       label: "Test Scenarios" },
   { id: "traceability",  label: "Req Traceability" },
   { id: "backlog",       label: "Backlog" },
-  { id: "workbooks",     label: "Workbooks" },
 ];
 
 // ─── STORAGE ─────────────────────────────────────────────────────────────────
@@ -1241,7 +1240,6 @@ export default function App() {
         {tab === "scorecard"    && <ScorecardTab wp={wp} raid={raid} req={req} openModal={openModal} />}
         {tab === "testing"      && <TestScenariosTab data={test} wp={wp} req={req} />}
         {tab === "traceability" && <ReqTraceabilityTab req={req} test={test} />}
-        {tab === "workbooks"    && <WorkbooksTab />}
       </div>
 
       {modal && <Modal title={modal.title} rows={modal.rows} columns={modal.columns} onClose={() => setModal(null)} />}
