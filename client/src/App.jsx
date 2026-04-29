@@ -5220,13 +5220,12 @@ function TestScenariosTab({ data, wp, req, subTab, setSubTab }) {
   const [spModal,   setSpModal]   = useState(null);
   const [drillModal,    setDrillModal]    = useState(null);
   // Scenarios sub-tab state
-  const [scenExpanded,  setScenExpanded]  = useState(new Set());
+  const [scenDrawer,    setScenDrawer]    = useState(null);
   const [scenActiveReq, setScenActiveReq] = useState({});
   const [scenSpF,       setScenSpF]       = useState("ALL");
   const [scenPersonaF,  setScenPersonaF]  = useState("ALL");
   const [scenSitF,      setScenSitF]      = useState("ALL");
   const [scenFlagF,     setScenFlagF]     = useState({ del:"ALL", dup:"ALL", openFb:"ALL", manual:"ALL" });
-  const [scenReviewRow, setScenReviewRow] = useState(null);
   const [scenColW,      setScenColW]      = useState({});
   const [untaggedModal,  setUntaggedModal]  = useState(null);
   const [taggedModal,    setTaggedModal]    = useState(null);
@@ -6433,7 +6432,6 @@ function TestScenariosTab({ data, wp, req, subTab, setSubTab }) {
                background:"transparent", borderRight:"2px solid rgba(255,255,255,0.25)" }} />
   );
 
-  const _toggleScen  = id => setScenExpanded(prev => { const n=new Set(prev); n.has(id)?n.delete(id):n.add(id); return n; });
   const _toggleReq   = (scenId, reqId) => setScenActiveReq(prev => {
     const cur = prev[scenId] instanceof Set ? new Set(prev[scenId]) : new Set();
     cur.has(reqId) ? cur.delete(reqId) : cur.add(reqId);
@@ -6482,7 +6480,7 @@ function TestScenariosTab({ data, wp, req, subTab, setSubTab }) {
   ].filter(t => t.statusKey || t.feedbackKey || t.dueDateKey);
 
   const scenariosSubTab = (
-    <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+    <div style={{ display:"flex", flexDirection:"column", gap:12, paddingRight: scenDrawer ? 464 : 0, transition:"padding .2s" }}>
       {/* Filter bar */}
       <div style={{ background:"#f8fafc", border:`1px solid ${C.border}`, borderRadius:8, padding:"10px 14px", display:"flex", flexDirection:"column", gap:8 }}>
         <div style={{ fontSize:10, fontWeight:700, color:C.text, textTransform:"uppercase", letterSpacing:"0.06em" }}>Filters</div>
@@ -6651,124 +6649,54 @@ function TestScenariosTab({ data, wp, req, subTab, setSubTab }) {
                 );
               })()}
               {_scenFiltered.map((r, i) => {
-                const scenId      = String(r[K.id]||i);
-                const isOpen      = scenExpanded.has(scenId);
-                const tagIds      = _splitUSIds(r[K.similarUSIds]);
-                const activeReqIds = scenActiveReq[scenId] instanceof Set ? scenActiveReq[scenId] : new Set();
+                const scenId   = String(r[K.id]||i);
+                const isSelected = scenDrawer && String(scenDrawer[K.id]||"") === scenId;
                 const isDel    = isTruthy(r[K.toBeDeleted]);
                 const isDup    = isTruthy(r[K.dupDataMiningNA]);
                 const isOpenFb = isTruthy(r[K.openFeedbackFlag]);
                 const isManual = isTruthy(r[K.manualNotTech]);
-                const rowBg = isDel ? "#fef2f2" : isDup ? "#fef6ec" : isOpenFb ? "#fefce8" : i%2===0 ? C.white : "#f9fafb";
-                const flagBorder = isDel ? "2px solid #fca5a5" : isDup ? "2px solid #fcd34d" : isOpenFb ? "2px solid #fef08a" : `1px solid ${C.border}`;
+                const tagIds   = _splitUSIds(r[K.similarUSIds]);
+                const rowBg = isSelected ? "#eef4ff" : isDel ? "#fef2f2" : isDup ? "#fef6ec" : isOpenFb ? "#fefce8" : i%2===0 ? C.white : "#f9fafb";
+                const flagBorder = isSelected ? `2px solid ${C.navyLight}` : isDel ? "2px solid #fca5a5" : isDup ? "2px solid #fcd34d" : isOpenFb ? "2px solid #fef08a" : `1px solid ${C.border}`;
                 return (
-                  <React.Fragment key={scenId}>
-                    <tr style={{ background:rowBg, borderBottom:isOpen?`1px solid #93c5fd`:flagBorder, verticalAlign:"top", cursor:"pointer" }}
-                      onClick={() => _toggleScen(scenId)}>
-                      <td style={{ padding:"8px 10px", textAlign:"center", color:isOpen?C.navyLight:C.muted, fontWeight:700, width:scenColW["expand"]||36 }}>{isOpen?"▾":"▸"}</td>
-                      <td style={{ padding:"8px 6px", textAlign:"center", borderRight:`1px solid ${C.border}`, width:scenColW["del"]||75 }}>
-                        {isDel ? <span style={{ background:"#fee2e2", color:"#b91c1c", borderRadius:3, padding:"1px 5px", fontSize:10, fontWeight:700 }}>✓</span> : <span style={{ color:C.muted }}>—</span>}
-                      </td>
-                      <td style={{ padding:"8px 6px", textAlign:"center", borderRight:`1px solid ${C.border}`, width:scenColW["dup"]||75 }}>
-                        {isDup ? <span style={{ background:"#fde8cc", color:"#92400e", borderRadius:3, padding:"1px 5px", fontSize:10, fontWeight:700 }}>✓</span> : <span style={{ color:C.muted }}>—</span>}
-                      </td>
-                      <td style={{ padding:"8px 6px", textAlign:"center", borderRight:`1px solid ${C.border}`, width:scenColW["openFb"]||75 }}>
-                        {isOpenFb ? <span style={{ background:"#fef9c3", color:"#854d0e", borderRadius:3, padding:"1px 5px", fontSize:10, fontWeight:700 }}>✓</span> : <span style={{ color:C.muted }}>—</span>}
-                      </td>
-                      <td style={{ padding:"8px 10px", fontWeight:700, color:C.navyLight, whiteSpace:"nowrap", borderRight:`1px solid ${C.border}`, width:scenColW["id"]||90 }}>{String(r[K.id]||"—")}</td>
-                      <td style={{ padding:"8px 10px", color:C.text, wordBreak:"break-word", borderRight:`1px solid ${C.border}`, width:scenColW["scen"]||220 }}>{String(r[K.name]||"—")}</td>
-                      <td style={{ padding:"8px 10px", color:C.muted, wordBreak:"break-word", borderRight:`1px solid ${C.border}`, width:scenColW["sp"]||130 }}>{String(r[K.subprocess]||"—")}</td>
-                      <td style={{ padding:"8px 10px", color:C.text, wordBreak:"break-word", borderRight:`1px solid ${C.border}`, width:scenColW["det"]||180 }}>{String(r[K.additionalDetails]||"—")}</td>
-                      <td style={{ padding:"8px 10px", color:C.muted, wordBreak:"break-word", maxWidth:scenColW["pers"]||120, borderRight:`1px solid ${C.border}`, width:scenColW["pers"]||120 }}>{String(r[K.persona]||"—")}</td>
-                      <td style={{ padding:"8px 10px", textAlign:"center", fontWeight:700, color:C.text, borderRight:`1px solid ${C.border}`, width:scenColW["est"]||65 }}>{r[K.estCases]||"—"}</td>
-                      <td style={{ padding:"8px 10px", color:C.muted, whiteSpace:"nowrap", borderRight:`1px solid ${C.border}`, width:scenColW["sit"]||100 }}>{String(r[K.sitPlan]||"—")}</td>
-                      <td style={{ padding:"8px 10px", textAlign:"center", borderRight:`1px solid ${C.border}`, width:scenColW["owner"]||120 }}>{_statusBadge(r[K.ownerReviewCompleted])}</td>
-                      <td style={{ padding:"8px 10px", textAlign:"center", borderRight:`1px solid ${C.border}`, width:scenColW["func"]||100 }}>{_statusBadge(r[K.funcStatus])}</td>
-                      <td style={{ padding:"8px 10px", textAlign:"center", borderRight:`1px solid ${C.border}`, width:scenColW["tech"]||100 }}>{_statusBadge(r[K.techStatus])}</td>
-                      <td style={{ padding:"8px 10px", textAlign:"center", borderRight:`1px solid ${C.border}`, width:scenColW["sd"]||90 }}>{_statusBadge(r[K.sdStatus])}</td>
-                      <td style={{ padding:"8px 10px", textAlign:"center", borderRight:`1px solid ${C.border}`, width:scenColW["pmtsd"]||90 }}>{_statusBadge(r[K.pmtStatus])}</td>
-                      <td style={{ padding:"8px 10px", textAlign:"center", borderRight:`1px solid ${C.border}`, width:scenColW["dt"]||70 }}>{_statusBadge(r[K.dtStatus])}</td>
-                      <td style={{ padding:"8px 10px", textAlign:"center", borderRight:`1px solid ${C.border}`, width:scenColW["da"]||90 }}>{_statusBadge(r[K.daStatus])}</td>
-                      <td style={{ padding:"8px 10px", textAlign:"center", borderRight:`1px solid ${C.border}`, width:scenColW["tagUs"]||80 }} onClick={e=>e.stopPropagation()}>
-                        {tagIds.length > 0
-                          ? <span onClick={()=>_toggleScen(scenId)} style={{ background:"#eff6ff", color:"#1d4ed8", borderRadius:4, padding:"2px 8px", fontSize:10, fontWeight:700, cursor:"pointer" }}>{tagIds.length}</span>
-                          : <span style={{ color:C.muted }}>—</span>}
-                      </td>
-                      <td style={{ padding:"8px 10px", textAlign:"center", borderRight:`1px solid ${C.border}`, width:scenColW["man"]||55 }}>
-                        {isManual ? <span style={{ background:"#dbeafe", color:"#1e40af", borderRadius:3, padding:"1px 5px", fontSize:10, fontWeight:700 }}>✓</span> : <span style={{ color:C.muted }}>—</span>}
-                      </td>
-                      <td style={{ padding:"8px 10px", textAlign:"center", width:scenColW["rev"]||110 }} onClick={e=>e.stopPropagation()}>
-                        <span onClick={()=>setScenReviewRow(r)}
-                          style={{ color:C.navyLight, fontSize:10, fontWeight:700, cursor:"pointer", textDecoration:"underline dotted", whiteSpace:"nowrap" }}>
-                          Details ↗
-                        </span>
-                      </td>
-                    </tr>
-                    {isOpen && (
-                      <tr style={{ background:"#f0f6ff", borderBottom:`2px solid #93c5fd` }}>
-                        <td colSpan={21} style={{ padding:"12px 16px 14px 52px" }}>
-                          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:16, marginBottom: tagIds.length ? 14 : 0 }}>
-                            <div>
-                              <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:4 }}>Applicable Experience</div>
-                              <div style={{ fontSize:11, color:C.text, lineHeight:1.5 }}>{String(r[K.applicableExperience]||"—")}</div>
-                            </div>
-                            <div>
-                              <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:4 }}>Applicable Business</div>
-                              <div style={{ fontSize:11, color:C.text, lineHeight:1.5 }}>{String(r[K.applicableBusiness]||"—")}</div>
-                            </div>
-                            <div>
-                              <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:4 }}>Applicable Region</div>
-                              <div style={{ fontSize:11, color:C.text, lineHeight:1.5 }}>{String(r[K.applicableRegion]||"—")}</div>
-                            </div>
-                          </div>
-                          {tagIds.length > 0 && (
-                            <div>
-                              <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:6 }}>Tagged User Stories ({tagIds.length})</div>
-                              <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
-                                {tagIds.map(usId => {
-                                  const isActive = activeReqIds.has(usId);
-                                  return (
-                                    <span key={usId} onClick={()=>_toggleReq(scenId, usId)}
-                                      style={{ background:isActive?"#1d4ed8":"#eff6ff", color:isActive?"#fff":"#1d4ed8",
-                                        border:`1px solid ${isActive?"#1d4ed8":"#93c5fd"}`,
-                                        borderRadius:4, padding:"3px 9px", fontSize:11, fontWeight:700,
-                                        cursor:"pointer", transition:"all .12s" }}>
-                                      {usId}
-                                    </span>
-                                  );
-                                })}
-                              </div>
-                              {Array.from(activeReqIds).map(activeReqId => {
-                                const reqRow = reqById[activeReqId];
-                                return (
-                                  <div key={activeReqId} style={{ marginTop:10, background:C.white, border:`1px solid #93c5fd`, borderRadius:6, padding:"10px 14px" }}>
-                                    {reqRow ? (
-                                      <div style={{ display:"grid", gridTemplateColumns:"120px 1fr 1fr", gap:12, alignItems:"start" }}>
-                                        <div>
-                                          <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:4 }}>Req ID</div>
-                                          <div style={{ fontSize:12, fontWeight:700, color:C.navyLight }}>{String(reqRow[reqK?.reqId]||activeReqId)}</div>
-                                        </div>
-                                        <div>
-                                          <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:4 }}>User Story</div>
-                                          <div style={{ fontSize:11, color:C.text, lineHeight:1.5 }}>{String(reqRow[reqK?.story]||"—")}</div>
-                                        </div>
-                                        <div>
-                                          <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:4 }}>Acceptance Criteria</div>
-                                          <div style={{ fontSize:11, color:C.muted, lineHeight:1.5 }}>{String(reqRow[reqK?.acceptance]||"—")}</div>
-                                        </div>
-                                      </div>
-                                    ) : (
-                                      <div style={{ fontSize:11, color:C.muted, fontStyle:"italic" }}>No requirement data found for ID: {activeReqId}</div>
-                                    )}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </td>
-                      </tr>
-                    )}
-                  </React.Fragment>
+                  <tr key={scenId} style={{ background:rowBg, borderBottom:flagBorder, verticalAlign:"top", cursor:"pointer" }}
+                    onClick={() => setScenDrawer(isSelected ? null : r)}>
+                    <td style={{ padding:"8px 10px", textAlign:"center", color:isSelected?C.navyLight:C.muted, fontWeight:700, width:scenColW["expand"]||28 }}>{isSelected?"▶":"·"}</td>
+                    <td style={{ padding:"8px 6px", textAlign:"center", borderRight:`1px solid ${C.border}`, width:scenColW["del"]||46 }}>
+                      {isDel ? <span style={{ background:"#fee2e2", color:"#b91c1c", borderRadius:3, padding:"1px 5px", fontSize:10, fontWeight:700 }}>✓</span> : <span style={{ color:C.muted }}>—</span>}
+                    </td>
+                    <td style={{ padding:"8px 6px", textAlign:"center", borderRight:`1px solid ${C.border}`, width:scenColW["dup"]||46 }}>
+                      {isDup ? <span style={{ background:"#fde8cc", color:"#92400e", borderRadius:3, padding:"1px 5px", fontSize:10, fontWeight:700 }}>✓</span> : <span style={{ color:C.muted }}>—</span>}
+                    </td>
+                    <td style={{ padding:"8px 6px", textAlign:"center", borderRight:`1px solid ${C.border}`, width:scenColW["openFb"]||46 }}>
+                      {isOpenFb ? <span style={{ background:"#fef9c3", color:"#854d0e", borderRadius:3, padding:"1px 5px", fontSize:10, fontWeight:700 }}>✓</span> : <span style={{ color:C.muted }}>—</span>}
+                    </td>
+                    <td style={{ padding:"8px 10px", fontWeight:700, color:C.navyLight, whiteSpace:"nowrap", borderRight:`1px solid ${C.border}`, width:scenColW["id"]||60 }}>{String(r[K.id]||"—")}</td>
+                    <td style={{ padding:"8px 10px", color:C.text, wordBreak:"break-word", borderRight:`1px solid ${C.border}`, width:scenColW["scen"]||100 }}>{String(r[K.name]||"—")}</td>
+                    <td style={{ padding:"8px 10px", color:C.muted, wordBreak:"break-word", borderRight:`1px solid ${C.border}`, width:scenColW["sp"]||65 }}>{String(r[K.subprocess]||"—")}</td>
+                    <td style={{ padding:"8px 10px", color:C.text, wordBreak:"break-word", borderRight:`1px solid ${C.border}`, width:scenColW["det"]||72 }}>{String(r[K.additionalDetails]||"—")}</td>
+                    <td style={{ padding:"8px 10px", color:C.muted, wordBreak:"break-word", borderRight:`1px solid ${C.border}`, width:scenColW["pers"]||60 }}>{String(r[K.persona]||"—")}</td>
+                    <td style={{ padding:"8px 10px", textAlign:"center", fontWeight:700, color:C.text, borderRight:`1px solid ${C.border}`, width:scenColW["est"]||44 }}>{r[K.estCases]||"—"}</td>
+                    <td style={{ padding:"8px 10px", color:C.muted, whiteSpace:"nowrap", borderRight:`1px solid ${C.border}`, width:scenColW["sit"]||56 }}>{String(r[K.sitPlan]||"—")}</td>
+                    <td style={{ padding:"8px 10px", textAlign:"center", borderRight:`1px solid ${C.border}`, width:scenColW["owner"]||70 }}>{_statusBadge(r[K.ownerReviewCompleted])}</td>
+                    <td style={{ padding:"8px 10px", textAlign:"center", borderRight:`1px solid ${C.border}`, width:scenColW["func"]||60 }}>{_statusBadge(r[K.funcStatus])}</td>
+                    <td style={{ padding:"8px 10px", textAlign:"center", borderRight:`1px solid ${C.border}`, width:scenColW["tech"]||60 }}>{_statusBadge(r[K.techStatus])}</td>
+                    <td style={{ padding:"8px 10px", textAlign:"center", borderRight:`1px solid ${C.border}`, width:scenColW["sd"]||72 }}>{_statusBadge(r[K.sdStatus])}</td>
+                    <td style={{ padding:"8px 10px", textAlign:"center", borderRight:`1px solid ${C.border}`, width:scenColW["pmtsd"]||58 }}>{_statusBadge(r[K.pmtStatus])}</td>
+                    <td style={{ padding:"8px 10px", textAlign:"center", borderRight:`1px solid ${C.border}`, width:scenColW["dt"]||44 }}>{_statusBadge(r[K.dtStatus])}</td>
+                    <td style={{ padding:"8px 10px", textAlign:"center", borderRight:`1px solid ${C.border}`, width:scenColW["da"]||58 }}>{_statusBadge(r[K.daStatus])}</td>
+                    <td style={{ padding:"8px 10px", textAlign:"center", borderRight:`1px solid ${C.border}`, width:scenColW["tagUs"]||48 }}>
+                      {tagIds.length > 0
+                        ? <span style={{ background:"#eff6ff", color:"#1d4ed8", borderRadius:4, padding:"2px 8px", fontSize:10, fontWeight:700 }}>{tagIds.length}</span>
+                        : <span style={{ color:C.muted }}>—</span>}
+                    </td>
+                    <td style={{ padding:"8px 10px", textAlign:"center", borderRight:`1px solid ${C.border}`, width:scenColW["man"]||46 }}>
+                      {isManual ? <span style={{ background:"#dbeafe", color:"#1e40af", borderRadius:3, padding:"1px 5px", fontSize:10, fontWeight:700 }}>✓</span> : <span style={{ color:C.muted }}>—</span>}
+                    </td>
+                    <td style={{ padding:"8px 10px", textAlign:"center", width:scenColW["rev"]||58 }}>
+                      <span style={{ color:C.navyLight, fontSize:10, fontWeight:700, whiteSpace:"nowrap" }}>↗</span>
+                    </td>
+                  </tr>
                 );
               })}
             </tbody>
@@ -6779,58 +6707,133 @@ function TestScenariosTab({ data, wp, req, subTab, setSubTab }) {
         </div>
       </Card>
 
-      {/* Review Comments popup modal */}
-      {scenReviewRow && (() => {
-        const rr = scenReviewRow;
+      {/* Right-side drawer */}
+      {scenDrawer && (() => {
+        const dr = scenDrawer;
+        const drId = String(dr[K.id]||"—");
+        const tagIds = _splitUSIds(dr[K.similarUSIds]);
+        const activeReqIds = scenActiveReq[drId] instanceof Set ? scenActiveReq[drId] : new Set();
+        const sectionLabel = txt => (
+          <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.07em", marginBottom:8, paddingBottom:4, borderBottom:`1px solid ${C.border}` }}>{txt}</div>
+        );
+        const field = (label, val) => (
+          <div key={label}>
+            <div style={{ fontSize:10, fontWeight:700, color:C.muted, marginBottom:2 }}>{label}</div>
+            <div style={{ fontSize:11, color:C.text, lineHeight:1.5, wordBreak:"break-word" }}>{val||"—"}</div>
+          </div>
+        );
         return (
-          <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center" }} onClick={()=>setScenReviewRow(null)}>
-            <div style={{ background:C.white, borderRadius:10, width:"92%", maxWidth:1100, maxHeight:"88vh", display:"flex", flexDirection:"column", boxShadow:"0 24px 60px rgba(0,0,0,0.35)" }} onClick={e=>e.stopPropagation()}>
-              <div style={{ background:C.navy, padding:"12px 18px", borderRadius:"10px 10px 0 0", display:"flex", justifyContent:"space-between", alignItems:"center", flexShrink:0 }}>
-                <div>
-                  <span style={{ color:"#fff", fontWeight:700, fontSize:13 }}>Review Comments — {String(rr[K.id]||"—")}</span>
-                  <span style={{ color:"rgba(255,255,255,0.6)", fontSize:11, marginLeft:10 }}>{String(rr[K.name]||"").slice(0,60)}{(rr[K.name]||"").length>60?"…":""}</span>
+          <div style={{ position:"fixed", right:0, top:0, bottom:0, width:460, background:C.white, zIndex:500,
+            boxShadow:"-4px 0 28px rgba(0,0,0,0.13)", display:"flex", flexDirection:"column",
+            borderLeft:"2px solid #e2e8f0", overflow:"hidden" }}>
+            {/* Header */}
+            <div style={{ background:C.navy, padding:"13px 18px", display:"flex", alignItems:"flex-start", justifyContent:"space-between", flexShrink:0 }}>
+              <div>
+                <div style={{ color:"#fff", fontWeight:700, fontSize:13, marginBottom:3 }}>
+                  Scenario Detail
+                  <span style={{ marginLeft:10, background:"rgba(255,255,255,0.18)", borderRadius:4, padding:"2px 8px", fontSize:11 }}>{drId}</span>
                 </div>
-                <button onClick={()=>setScenReviewRow(null)} style={{ background:"rgba(255,255,255,0.15)", border:"none", color:"#fff", borderRadius:5, padding:"5px 14px", cursor:"pointer", fontSize:13, fontWeight:600 }}>✕</button>
+                <div style={{ color:"rgba(255,255,255,0.65)", fontSize:11, lineHeight:1.4 }}>{String(dr[K.name]||"").slice(0,80)}{(String(dr[K.name]||"")).length>80?"…":""}</div>
               </div>
-              <div style={{ overflowY:"auto", flex:1, padding:16 }}>
-                <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))", gap:12 }}>
+              <button onClick={() => setScenDrawer(null)}
+                style={{ background:"rgba(255,255,255,0.15)", border:"none", color:"#fff", borderRadius:6, padding:"4px 12px", cursor:"pointer", fontSize:13, fontWeight:700, flexShrink:0, marginLeft:10 }}>✕</button>
+            </div>
+
+            {/* Body */}
+            <div style={{ flex:1, overflowY:"auto", padding:"16px 18px", display:"flex", flexDirection:"column", gap:18 }}>
+
+              {/* Section 1 — Scenario Info */}
+              <div>
+                {sectionLabel("Scenario Details")}
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"10px 16px" }}>
+                  {field("Sub Process", String(dr[K.subprocess]||""))}
+                  {field("Persona",     String(dr[K.persona]||""))}
+                  {field("Target SIT",  String(dr[K.sitPlan]||""))}
+                  {field("Est. Cases",  String(dr[K.estCases]||""))}
+                </div>
+                <div style={{ marginTop:10, display:"flex", flexDirection:"column", gap:8 }}>
+                  {field("Applicable Experience", String(dr[K.applicableExperience]||""))}
+                  {field("Applicable Business",   String(dr[K.applicableBusiness]||""))}
+                  {field("Applicable Region",     String(dr[K.applicableRegion]||""))}
+                  {field("Additional Details",    String(dr[K.additionalDetails]||""))}
+                </div>
+              </div>
+
+              {/* Section 2 — Tagged User Stories */}
+              {tagIds.length > 0 && (
+                <div>
+                  {sectionLabel(`Tagged User Stories (${tagIds.length})`)}
+                  <div style={{ display:"flex", flexWrap:"wrap", gap:5, marginBottom:8 }}>
+                    {tagIds.map(usId => {
+                      const isActive = activeReqIds.has(usId);
+                      return (
+                        <span key={usId} onClick={() => _toggleReq(drId, usId)}
+                          style={{ background:isActive?"#1d4ed8":"#eff6ff", color:isActive?"#fff":"#1d4ed8",
+                            border:`1px solid ${isActive?"#1d4ed8":"#93c5fd"}`,
+                            borderRadius:4, padding:"3px 9px", fontSize:11, fontWeight:700,
+                            cursor:"pointer", transition:"all .12s" }}>
+                          {usId}
+                        </span>
+                      );
+                    })}
+                  </div>
+                  {Array.from(activeReqIds).map(activeReqId => {
+                    const reqRow = reqById[activeReqId];
+                    return (
+                      <div key={activeReqId} style={{ background:"#f8fafc", border:`1px solid #93c5fd`, borderRadius:6, padding:"10px 12px", marginBottom:6 }}>
+                        {reqRow ? (<>
+                          <div style={{ fontSize:10, fontWeight:700, color:C.navyLight, marginBottom:6 }}>{String(reqRow[reqK?.reqId]||activeReqId)}</div>
+                          <div style={{ fontSize:11, color:C.text, lineHeight:1.5, marginBottom:4 }}>{String(reqRow[reqK?.story]||"—")}</div>
+                          <div style={{ fontSize:10, color:C.muted, lineHeight:1.5, fontStyle:"italic" }}>{String(reqRow[reqK?.acceptance]||"—")}</div>
+                        </>) : (
+                          <div style={{ fontSize:11, color:C.muted, fontStyle:"italic" }}>Not found: {activeReqId}</div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Section 3 — Review Status */}
+              <div>
+                {sectionLabel("Review Status")}
+                <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
                   {REVIEW_TEAMS_ALL.map(t => {
-                    const status   = String(rr[t.statusKey]||"").replace(/^\d+\.\s*/,"").trim();
-                    const reviewer = String(rr[t.reviewerKey]||"").trim();
-                    const feedback = String(rr[t.feedbackKey]||"").trim();
-                    const dueDate  = String(rr[t.dueDateKey]||"").trim();
+                    const status   = String(dr[t.statusKey]||"").replace(/^\d+\.\s*/,"").trim();
+                    const reviewer = String(dr[t.reviewerKey]||"").trim();
+                    const feedback = String(dr[t.feedbackKey]||"").trim();
+                    const dueDate  = String(dr[t.dueDateKey]||"").trim();
                     const sl = status.toLowerCase();
                     const [sbg,scol,sbrd] = sl.includes("reviewed, request") ? ["#fef3c7","#92400e","#fcd34d"]
                       : sl.includes("reviewed")         ? ["#dcfce7","#166534","#86efac"]
                       : sl.includes("ready for review") || sl.includes("updated, ready") ? ["#dbeafe","#1e40af","#93c5fd"]
                       : sl.includes("not applicable")   ? ["#f1f5f9","#64748b","#cbd5e1"]
                       : ["#f8fafc","#475569","#e2e8f0"];
+                    if (!status && !reviewer && !dueDate && !feedback) return null;
                     return (
-                      <div key={t.label} style={{ border:`1px solid ${C.border}`, borderRadius:7, padding:"10px 12px", background:C.white }}>
-                        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
-                          <span style={{ fontWeight:700, fontSize:12, color:C.text }}>{t.label}</span>
+                      <div key={t.label} style={{ border:`1px solid ${C.border}`, borderRadius:7, padding:"9px 12px", background:C.white }}>
+                        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
+                          <span style={{ fontWeight:700, fontSize:11, color:C.text }}>{t.label}</span>
                           {status
-                            ? <span style={{ background:sbg, color:scol, border:`1px solid ${sbrd}`, borderRadius:4, padding:"2px 8px", fontSize:10, fontWeight:600 }}>{status.length>22?status.slice(0,21)+"…":status}</span>
+                            ? <span style={{ background:sbg, color:scol, border:`1px solid ${sbrd}`, borderRadius:4, padding:"2px 8px", fontSize:10, fontWeight:600 }}>{status.length>26?status.slice(0,25)+"…":status}</span>
                             : <span style={{ color:C.muted, fontSize:10 }}>No status</span>}
                         </div>
-                        <div style={{ display:"grid", gridTemplateColumns:"auto 1fr", gap:"4px 8px", fontSize:11 }}>
+                        <div style={{ display:"grid", gridTemplateColumns:"auto 1fr", gap:"3px 8px", fontSize:11 }}>
                           {reviewer && <><span style={{ color:C.muted, fontWeight:600 }}>Reviewer</span><span style={{ color:C.text }}>{reviewer}</span></>}
                           {dueDate  && <><span style={{ color:C.muted, fontWeight:600 }}>Due Date</span><span style={{ color:C.text }}>{dueDate}</span></>}
                         </div>
                         {feedback && (
-                          <div style={{ marginTop:8, paddingTop:8, borderTop:`1px dashed ${C.border}` }}>
-                            <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.05em", marginBottom:3 }}>Feedback</div>
-                            <div style={{ fontSize:11, color:C.text, lineHeight:1.55, whiteSpace:"pre-wrap" }}>{feedback}</div>
+                          <div style={{ marginTop:6, paddingTop:6, borderTop:`1px dashed ${C.border}` }}>
+                            <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.05em", marginBottom:2 }}>Feedback</div>
+                            <div style={{ fontSize:11, color:C.text, lineHeight:1.5, whiteSpace:"pre-wrap" }}>{feedback}</div>
                           </div>
-                        )}
-                        {!reviewer && !dueDate && !feedback && (
-                          <div style={{ fontSize:11, color:C.muted, fontStyle:"italic", marginTop:4 }}>No details recorded</div>
                         )}
                       </div>
                     );
                   })}
                 </div>
               </div>
+
             </div>
           </div>
         );
