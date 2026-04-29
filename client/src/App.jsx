@@ -2272,19 +2272,20 @@ function CRKpiCard({ lbl, rows, hours, builtCount, textCol, bg, borderC, showCom
   return (
     <div onClick={() => rows.length && onClick()}
       onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
-      style={{ background:bg, border:`1.5px solid ${borderC}`, borderRadius:8, padding:"16px 18px",
+      style={{ background:bg, border:`1.5px solid ${borderC}`, borderRadius:7, padding:"10px 14px",
+        borderTop:`3px solid ${borderC}`,
         cursor:rows.length?"pointer":"default",
         boxShadow:hover&&rows.length?"0 4px 14px rgba(0,0,0,0.12)":"0 1px 3px rgba(0,0,0,0.06)",
-        transform:hover&&rows.length?"translateY(-1px)":"none", transition:"box-shadow .15s, transform .15s" }}>
-      <div style={{ fontSize:10, fontWeight:700, color:textCol, textTransform:"uppercase", letterSpacing:"0.07em", marginBottom:6 }}>{lbl}</div>
-      <div style={{ fontSize:30, fontWeight:800, color:textCol, lineHeight:1 }}>{rows.length}</div>
-      <div style={{ fontSize:11, color:textCol, opacity:0.85, marginTop:5, fontWeight:600 }}>
+        transition:"box-shadow .15s" }}>
+      <div style={{ fontSize:10, fontWeight:600, color:textCol, textTransform:"uppercase", letterSpacing:"0.07em", marginBottom:3, opacity:0.85 }}>{lbl}</div>
+      <div style={{ fontSize:26, fontWeight:800, color:textCol, lineHeight:1 }}>{rows.length}</div>
+      <div style={{ fontSize:10, color:textCol, opacity:0.75, marginTop:3, fontWeight:600 }}>
         {hours > 0 ? `${hours.toLocaleString()} hrs` : "—"}
         {showCompletion && builtCount != null && (
-          <span style={{ marginLeft:6, opacity:0.75 }}>| {builtCount} Build completed</span>
+          <span style={{ marginLeft:6, opacity:0.7 }}>· {builtCount} built</span>
         )}
       </div>
-      {rows.length > 0 && <div style={{ fontSize:10, color:textCol, opacity:0.6, marginTop:4 }}>Click to drill down →</div>}
+      {rows.length > 0 && <div style={{ color:textCol, fontSize:10, marginTop:2, opacity:0.55 }}>Click for details →</div>}
     </div>
   );
 }
