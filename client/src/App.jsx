@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useRef } from "react";
+import React, { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import * as XLSX from "xlsx";
 
 // ─── THEME ───────────────────────────────────────────────────────────────────
@@ -664,9 +664,9 @@ function KpiCard({ label, value, color, sub, subColor, onClick }) {
   );
 }
 
-function Card({ children, style }) {
+const Card = React.memo(function Card({ children, style }) {
   return <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 8, padding: 16, boxShadow: "0 1px 3px rgba(0,0,0,0.06)", ...style }}>{children}</div>;
-}
+});
 
 function SecTitle({ title, color }) {
   return (
@@ -862,14 +862,14 @@ function EditableCell({ sheet, rowId, colName, value, multiline = false, options
   );
 }
 
-function Empty({ label }) {
+const Empty = React.memo(function Empty({ label }) {
   return (
     <div style={{ textAlign: "center", padding: "60px", color: C.muted }}>
       <div style={{ fontSize: 40, marginBottom: 10 }}>📂</div>
       <div style={{ fontSize: 13 }}>{label}</div>
     </div>
   );
-}
+});
 
 const WP_COLS = ["Task Name", "Activity Grp - Lvl 1", "Activity Grp - Lvl 3", "Default Status", "% Complete", "Finish", "Primary Owner"];
 
@@ -2608,174 +2608,181 @@ function BacklogChartDrillModal({ title, rows, K, teamKey, colConfig, COL_KEYS, 
 }
 
 // ─── REQ TRACEABILITY TAB ────────────────────────────────────────────────────
+// Module-level constants — defined once, never recreated on render
+const REQ_EXCL_EXP = ["3 - leadership", "3-leadership", "6 - e&p", "6-e&p"];
+const PILL_COLORS  = [["#e0e7ff","#4338ca"],["#dcfce7","#166534"],["#fef3c7","#92400e"],["#fae8ff","#86198f"],["#ffedd5","#c2410c"]];
+const BUILD_STATUS_META = {
+  blocked:    {bg:"#fee2e2",c:"#b91c1c",br:"#fca5a5",l:"Blocked"},
+  inProgress: {bg:"#fef3c7",c:"#92400e",br:"#fcd34d",l:"In Progress"},
+  partial:    {bg:"#dbeafe",c:"#1e40af",br:"#93c5fd",l:"Partial"},
+  complete:   {bg:"#dcfce7",c:"#166534",br:"#86efac",l:"Complete"},
+  notStarted: {bg:"#f1f5f9",c:"#64748b",br:"#cbd5e1",l:"Not Started"},
+  na:         {bg:"#f1f5f9",c:"#64748b",br:"#cbd5e1",l:"N/A"},
+};
+const _STATUS_RANK = {blocked:5,inProgress:4,partial:3,notStarted:2,complete:1,na:0};
+const _isTruthy = v => v === true || v === 1 || String(v).trim() === "1";
+const _splitIds = v => Array.from(new Set(String(v||"").split(/[\n,;]/).map(s=>s.trim()).filter(Boolean)));
+const _fieldVal  = v => { const s=String(v||"").trim(); return (!s||s==="nan"||s==="None")?"—":s; };
+function _toBucket(s) {
+  const v=String(s||"").toLowerCase();
+  if(!v||v==="nan") return null;
+  if(v.includes("block"))    return "blocked";
+  if(v.includes("progress")) return "inProgress";
+  if(v.includes("partial"))  return "partial";
+  if(v.includes("complet"))  return "complete";
+  if(v.includes("n/a")||v==="na") return "na";
+  return "notStarted";
+}
+function _statusBucketOf(r, reqK) {
+  const fb=_toBucket(r[reqK?.funcBuildStatus]), tb=_toBucket(r[reqK?.techBuildStatus]);
+  return fb&&tb ? ((_STATUS_RANK[fb]||0)>=(_STATUS_RANK[tb]||0)?fb:tb) : fb||tb||"notStarted";
+}
+function _covKeyOf(r, reqK, scensByReqId) {
+  const ts=String(r[reqK?.testScriptType]||"").toLowerCase();
+  if(ts.includes("script")&&!ts.includes("scenario")) return "script";
+  return (scensByReqId[String(r[reqK?.reqId]||"").trim()]?.length||0)>0 ? "covered" : "gap";
+}
+
 function ReqTraceabilityTab({ req, test }) {
   const reqK = req?.keys;
   const tK   = test?.keys;
 
-  const [expFilter,    setExpFilter]    = useState("ALL"); // PM Experience
-  const [spFilter,     setSpFilter]     = useState("ALL"); // Sub Process
-  const [buildFilter,  setBuildFilter]  = useState("ALL"); // Build Status bucket
-  const [covFilter,    setCovFilter]    = useState("ALL"); // Coverage Status
-  const [tagFilter,    setTagFilter]    = useState("ALL"); // Tag
-  const [reviewFilter, setReviewFilter] = useState("ALL"); // Review Status
+  const [expFilter,    setExpFilter]    = useState("ALL");
+  const [spFilter,     setSpFilter]     = useState("ALL");
+  const [buildFilter,  setBuildFilter]  = useState("ALL");
+  const [covFilter,    setCovFilter]    = useState("ALL");
+  const [tagFilter,    setTagFilter]    = useState("ALL");
+  const [reviewFilter, setReviewFilter] = useState("ALL");
   const [search,       setSearch]       = useState("");
   const [expanded,     setExpanded]     = useState(new Set());
   const [expandedSc,   setExpandedSc]   = useState(new Set());
 
+  // ── Stable derived data — recomputes only when source data changes ─────────
+  const reqRows  = useMemo(() => req?.items || [], [req]);
+  const testRows = useMemo(() => test?.activeRows || test?.allRows || [], [test]);
+
+  const activeTestRows = useMemo(() =>
+    testRows.filter(r =>
+      !_isTruthy(r[tK?.toBeDeleted]) &&
+      !_isTruthy(r[tK?.dupDataMiningNA]) &&
+      !_isTruthy(r[tK?.openFeedbackFlag])
+    ), [testRows, tK]);
+
+  const scensByReqId = useMemo(() => {
+    const map = {};
+    activeTestRows.forEach(r => {
+      _splitIds(r[tK?.similarUSIds]).forEach(id => {
+        if (!map[id]) map[id] = [];
+        if (!map[id].includes(r)) map[id].push(r);
+      });
+    });
+    return map;
+  }, [activeTestRows, tK]);
+
+  const baseRows = useMemo(() => reqRows.filter(r => {
+    if (!String(r[reqK?.reqId]||"").trim()) return false;
+    const v = String(r[reqK?.pmExperience]||"").toLowerCase().trim();
+    return !REQ_EXCL_EXP.some(e => v.includes(e));
+  }), [reqRows, reqK]);
+
+  const allExps = useMemo(() =>
+    Array.from(new Set(baseRows.map(r=>String(r[reqK?.pmExperience]||"").trim()).filter(Boolean))).sort(),
+  [baseRows, reqK]);
+  const allSPs = useMemo(() =>
+    Array.from(new Set(baseRows.map(r=>String(r[reqK?.component]||"").trim()).filter(Boolean))).sort(),
+  [baseRows, reqK]);
+  const allTags = useMemo(() =>
+    Array.from(new Set(baseRows.flatMap(r=>String(r[reqK?.tags]||"").split(/[\n,;]+/).map(t=>t.trim()).filter(Boolean)))).sort(),
+  [baseRows, reqK]);
+  const allReviewStatuses = useMemo(() =>
+    Array.from(new Set(baseRows.map(r=>String(r[reqK?.derivedStatus]||"").trim()).filter(Boolean))).sort(),
+  [baseRows, reqK]);
+
+  // Single pass over baseRows for filter bar counts (replaces N×baseRows scans per render)
+  const baseRowCounts = useMemo(() => {
+    const byExp={}, bySP={}, byBuild={}, byCov={}, byTag={}, byReview={};
+    for (const r of baseRows) {
+      const exp=String(r[reqK?.pmExperience]||"").trim(); if(exp) byExp[exp]=(byExp[exp]||0)+1;
+      const sp =String(r[reqK?.component]||"").trim();    if(sp)  bySP[sp]  =(bySP[sp] ||0)+1;
+      const b=_statusBucketOf(r,reqK);  byBuild[b]=(byBuild[b]||0)+1;
+      const c=_covKeyOf(r,reqK,scensByReqId); byCov[c]=(byCov[c]||0)+1;
+      String(r[reqK?.tags]||"").split(/[\n,;]+/).map(t=>t.trim()).filter(Boolean)
+        .forEach(t=>{ byTag[t]=(byTag[t]||0)+1; });
+      const rv=String(r[reqK?.derivedStatus]||"").trim(); if(rv) byReview[rv]=(byReview[rv]||0)+1;
+    }
+    return {byExp,bySP,byBuild,byCov,byTag,byReview};
+  }, [baseRows, scensByReqId, reqK]);
+
+  // ── Filtered rows — recomputes when filters or data changes ───────────────
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase();
+    return baseRows.filter(r => {
+      if (expFilter    !=="ALL" && String(r[reqK?.pmExperience]||"").trim()   !==expFilter)    return false;
+      if (spFilter     !=="ALL" && String(r[reqK?.component]||"").trim()      !==spFilter)     return false;
+      if (buildFilter  !=="ALL" && _statusBucketOf(r,reqK)                    !==buildFilter)  return false;
+      if (covFilter    !=="ALL" && _covKeyOf(r,reqK,scensByReqId)             !==covFilter)    return false;
+      if (reviewFilter !=="ALL" && String(r[reqK?.derivedStatus]||"").trim()  !==reviewFilter) return false;
+      if (tagFilter    !=="ALL") {
+        const tags=String(r[reqK?.tags]||"").split(/[\n,;]+/).map(t=>t.trim());
+        if (!tags.includes(tagFilter)) return false;
+      }
+      if (q) {
+        const id=String(r[reqK?.reqId]||"").toLowerCase();
+        const st=String(r[reqK?.story]||"").toLowerCase();
+        const bq=String(r[reqK?.bizReq]||"").toLowerCase();
+        if (!id.includes(q)&&!st.includes(q)&&!bq.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [baseRows, expFilter, spFilter, buildFilter, covFilter, tagFilter, reviewFilter, search, scensByReqId, reqK]);
+
+  // ── Single-pass stats — replaces 8 separate array scans per render ─────────
+  const stats = useMemo(() => {
+    let scenarioMapped=0,scriptMapped=0,pendingMapping=0,stCovered=0,stGap=0,stScript=0,stScens=0,totEst=0;
+    for (const r of filtered) {
+      const tv=String(r[reqK?.testScriptType]||"").trim();
+      if      (/scenario/i.test(tv))         scenarioMapped++;
+      else if (/script/i.test(tv))           scriptMapped++;
+      else if (!tv||tv==="nan"||tv==="None") pendingMapping++;
+      const cov=_covKeyOf(r,reqK,scensByReqId);
+      if      (cov==="covered") stCovered++;
+      else if (cov==="gap")     stGap++;
+      else                      stScript++;
+      const sc=scensByReqId[String(r[reqK?.reqId]||"").trim()]||[];
+      stScens+=sc.length;
+      totEst +=sc.reduce((s,t)=>s+(parseFloat(t[tK?.estCases])||0),0);
+    }
+    const n=filtered.length;
+    return {scenarioMapped,scriptMapped,pendingMapping,stCovered,stGap,stScript,stScens,totEst,
+      scenPct:n?Math.round(scenarioMapped/n*100):0, scriptPct:n?Math.round(scriptMapped/n*100):0};
+  }, [filtered, scensByReqId, reqK, tK]);
+
   if (!req) return <Empty label="Upload Requirements file to view Req Traceability." />;
 
-  const isTruthy = v => v === true || v === 1 || String(v).trim() === "1";
-  const splitIds = v => Array.from(new Set(String(v||"").split(/[\n,;]/).map(s=>s.trim()).filter(Boolean)));
+  const {scenarioMapped,scriptMapped,pendingMapping,stCovered,stGap,stScript,stScens,totEst,scenPct,scriptPct} = stats;
 
-  const reqRows  = req.items || [];
-  const testRows = test?.activeRows || test?.allRows || [];
-
-  // Active test scenarios: exclude flagged (deleted / dup / open feedback)
-  const activeTestRows = testRows.filter(r =>
-    !isTruthy(r[tK?.toBeDeleted]) &&
-    !isTruthy(r[tK?.dupDataMiningNA]) &&
-    !isTruthy(r[tK?.openFeedbackFlag])
-  );
-
-  // Reverse lookup: reqId → active test scenario rows (via similarUSIds column)
-  const scensByReqId = {};
-  activeTestRows.forEach(r => {
-    splitIds(r[tK?.similarUSIds]).forEach(id => {
-      if (!scensByReqId[id]) scensByReqId[id] = [];
-      if (!scensByReqId[id].includes(r)) scensByReqId[id].push(r);
-    });
-  });
-
-  // Exclude PM Experience "3 - Leadership" / "6 - E&P" AND rows with no Req ID (parent/section rows)
-  const EXCL_EXP = ["3 - leadership", "3-leadership", "6 - e&p", "6-e&p"];
-  const baseRows = reqRows.filter(r => {
-    if (!String(r[reqK?.reqId]||"").trim()) return false; // skip blank/parent rows
-    const v = String(r[reqK?.pmExperience]||"").toLowerCase().trim();
-    return !EXCL_EXP.some(e => v.includes(e));
-  });
-
-  const allExps = Array.from(new Set(baseRows.map(r=>String(r[reqK?.pmExperience]||"").trim()).filter(Boolean))).sort();
-  const allSPs  = Array.from(new Set(baseRows.map(r=>String(r[reqK?.component]||"").trim()).filter(Boolean))).sort();
-  const allTags = Array.from(new Set(
-    baseRows.flatMap(r=>String(r[reqK?.tags]||"").split(/[\n,;]+/).map(t=>t.trim()).filter(Boolean))
-  )).sort();
-  const allReviewStatuses = Array.from(new Set(
-    baseRows.map(r=>String(r[reqK?.derivedStatus]||"").trim()).filter(Boolean)
-  )).sort();
-
-  // Build status bucket (worst of func+tech) — shared by filter + badge
-  const _statusBucket = r => {
-    const RANK = {blocked:5,inProgress:4,partial:3,notStarted:2,complete:1,na:0};
-    const toB = s => {
-      const v=String(s||"").toLowerCase();
-      if(!v||v==="nan") return null;
-      if(v.includes("block"))    return "blocked";
-      if(v.includes("progress")) return "inProgress";
-      if(v.includes("partial"))  return "partial";
-      if(v.includes("complet"))  return "complete";
-      if(v.includes("n/a")||v==="na") return "na";
-      return "notStarted";
-    };
-    const fb=toB(r[reqK?.funcBuildStatus]), tb=toB(r[reqK?.techBuildStatus]);
-    return fb&&tb ? ((RANK[fb]||0)>=(RANK[tb]||0)?fb:tb) : fb||tb||"notStarted";
-  };
-
-  // Coverage status key per row
-  const _covKey = r => {
-    const isScript = String(r[reqK?.testScriptType]||"").toLowerCase();
-    if (isScript.includes("script") && !isScript.includes("scenario")) return "script";
-    const id = String(r[reqK?.reqId]||"").trim();
-    return (scensByReqId[id]?.length||0) > 0 ? "covered" : "gap";
-  };
-
-  const filtered = baseRows.filter(r => {
-    const exp  = String(r[reqK?.pmExperience]||"").trim();
-    const sp   = String(r[reqK?.component]||"").trim();
-    const id   = String(r[reqK?.reqId]||"").trim();
-    const q    = search.toLowerCase();
-    const tags = String(r[reqK?.tags]||"").split(/[\n,;]+/).map(t=>t.trim()).filter(Boolean);
-    return (
-      (expFilter  ==="ALL"||exp===expFilter) &&
-      (spFilter   ==="ALL"||sp===spFilter) &&
-      (buildFilter==="ALL"||_statusBucket(r)===buildFilter) &&
-      (covFilter  ==="ALL"||_covKey(r)===covFilter) &&
-      (tagFilter    ==="ALL"||tags.includes(tagFilter)) &&
-      (reviewFilter ==="ALL"||String(r[reqK?.derivedStatus]||"").trim()===reviewFilter) &&
-      (!q||id.toLowerCase().includes(q)||String(r[reqK?.story]||"").toLowerCase().includes(q)||String(r[reqK?.bizReq]||"").toLowerCase().includes(q))
-    );
-  });
-
+  const _statusBucket = r => _statusBucketOf(r, reqK);
+  const _covKey       = r => _covKeyOf(r, reqK, scensByReqId);
   const _toggle   = id => setExpanded  (p => { const n=new Set(p); n.has(id)?n.delete(id):n.add(id); return n; });
   const _toggleSc = id => setExpandedSc(p => { const n=new Set(p); n.has(id)?n.delete(id):n.add(id); return n; });
 
-  // Build status badge — reuses _statusBucket (defined earlier)
-  const BUILD_STATUS_META = {
-    blocked:    {bg:"#fee2e2",c:"#b91c1c",br:"#fca5a5",l:"Blocked"},
-    inProgress: {bg:"#fef3c7",c:"#92400e",br:"#fcd34d",l:"In Progress"},
-    partial:    {bg:"#dbeafe",c:"#1e40af",br:"#93c5fd",l:"Partial"},
-    complete:   {bg:"#dcfce7",c:"#166534",br:"#86efac",l:"Complete"},
-    notStarted: {bg:"#f1f5f9",c:"#64748b",br:"#cbd5e1",l:"Not Started"},
-    na:         {bg:"#f1f5f9",c:"#64748b",br:"#cbd5e1",l:"N/A"},
-  };
   const _buildBadge = r => {
-    const b = _statusBucket(r);
-    const s = BUILD_STATUS_META[b]||BUILD_STATUS_META.notStarted;
+    const b=_statusBucket(r), s=BUILD_STATUS_META[b]||BUILD_STATUS_META.notStarted;
     return <span style={{background:s.bg,color:s.c,border:`1px solid ${s.br}`,borderRadius:4,padding:"2px 7px",fontSize:10,fontWeight:600,whiteSpace:"nowrap"}}>{s.l}</span>;
   };
-
   const _reviewBadge = r => {
-    const raw = String(r[reqK?.derivedStatus]||"").trim();
-    if (!raw||raw==="nan"||raw==="None") return <span style={{color:C.muted,fontSize:10}}>—</span>;
-    const v = raw.toLowerCase();
-    const [bg,c,br] = v.includes("requested")
-      ? ["#fef3c7","#92400e","#fcd34d"]
-      : v.includes("reviewed")
-      ? ["#dcfce7","#166534","#86efac"]
-      : v.includes("ready")
-      ? ["#dbeafe","#1e40af","#93c5fd"]
-      : v.includes("not applicable")||v.includes("n/a")
-      ? ["#f1f5f9","#64748b","#cbd5e1"]
-      : ["#f8fafc","#475569","#e2e8f0"];
-    const label = raw.replace(/^\d+\.\s*/, "");
-    return <span style={{background:bg,color:c,border:`1px solid ${br}`,borderRadius:4,padding:"2px 6px",fontSize:9,fontWeight:700,whiteSpace:"nowrap",display:"inline-block"}}>{label}</span>;
+    const raw=String(r[reqK?.derivedStatus]||"").trim();
+    if(!raw||raw==="nan"||raw==="None") return <span style={{color:C.muted,fontSize:10}}>—</span>;
+    const v=raw.toLowerCase();
+    const [bg,c,br]=v.includes("requested")?["#fef3c7","#92400e","#fcd34d"]:v.includes("reviewed")?["#dcfce7","#166534","#86efac"]:v.includes("ready")?["#dbeafe","#1e40af","#93c5fd"]:v.includes("not applicable")||v.includes("n/a")?["#f1f5f9","#64748b","#cbd5e1"]:["#f8fafc","#475569","#e2e8f0"];
+    return <span style={{background:bg,color:c,border:`1px solid ${br}`,borderRadius:4,padding:"2px 6px",fontSize:9,fontWeight:700,whiteSpace:"nowrap",display:"inline-block"}}>{raw.replace(/^\d+\.\s*/,"")}</span>;
   };
-
   const _pill = (label, active, count, onClick) => (
-    <button key={label} onClick={onClick} style={{
-      padding:"3px 10px",borderRadius:20,border:`1.5px solid ${active?C.navyLight:C.border}`,
-      background:active?C.navyLight:C.white,color:active?"#fff":C.text,
-      fontSize:10,fontWeight:active?700:400,cursor:"pointer",display:"flex",alignItems:"center",gap:4
-    }}>
+    <button key={label} onClick={onClick} style={{padding:"3px 10px",borderRadius:20,border:`1.5px solid ${active?C.navyLight:C.border}`,background:active?C.navyLight:C.white,color:active?"#fff":C.text,fontSize:10,fontWeight:active?700:400,cursor:"pointer",display:"flex",alignItems:"center",gap:4}}>
       {label}{count!=null&&<span style={{background:active?"rgba(255,255,255,0.25)":"#f1f5f9",color:active?"#fff":C.muted,borderRadius:10,padding:"0 5px",fontSize:10,fontWeight:700}}>{count}</span>}
     </button>
   );
-
-  const _fieldVal = v => { const s=String(v||"").trim(); return (!s||s==="nan"||s==="None")?"—":s; };
-
-  // Determine coverage approach per row
-  const isTestScript = r => {
-    const v = String(r[reqK?.testScriptType]||"").toLowerCase().trim();
-    return v.includes("script") && !v.includes("scenario");
-  };
-
-  // KPI counts
-  const _scriptTypeVal = r => String(r[reqK?.testScriptType]||"").trim();
-  const scenarioMapped  = filtered.filter(r => /scenario/i.test(_scriptTypeVal(r))).length;
-  const scriptMapped    = filtered.filter(r => /script/i.test(_scriptTypeVal(r)) && !/scenario/i.test(_scriptTypeVal(r))).length;
-  const pendingMapping  = filtered.filter(r => { const v=_scriptTypeVal(r); return !v||v==="nan"||v==="None"; }).length;
-  const totEst = filtered.reduce((s,r)=>{
-    const sc=scensByReqId[String(r[reqK?.reqId]||"")]||[];
-    return s+sc.reduce((ss,t)=>ss+(parseFloat(t[tK?.estCases])||0),0);
-  },0);
-  const scenPct   = filtered.length ? Math.round(scenarioMapped/filtered.length*100) : 0;
-  const scriptPct = filtered.length ? Math.round(scriptMapped/filtered.length*100)   : 0;
-
-  // Subtotal row values
-  const stCovered = filtered.filter(r=>_covKey(r)==="covered").length;
-  const stGap     = filtered.filter(r=>_covKey(r)==="gap").length;
-  const stScript  = filtered.filter(r=>_covKey(r)==="script").length;
-  const stScens   = filtered.reduce((s,r)=>s+(scensByReqId[String(r[reqK?.reqId]||"").trim()]?.length||0),0);
-  const stEst     = totEst;
+  const isTestScript = r => { const v=String(r[reqK?.testScriptType]||"").toLowerCase().trim(); return v.includes("script")&&!v.includes("scenario"); };
 
   const TH = ({children,style={}}) => (
     <th style={{padding:"7px 8px",fontWeight:700,fontSize:10,color:"#fff",background:C.navy,
@@ -2826,14 +2833,14 @@ function ReqTraceabilityTab({ req, test }) {
           <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
             <span style={{fontSize:10,fontWeight:700,color:C.text,minWidth:90}}>Experience</span>
             {_pill("All",expFilter==="ALL",baseRows.length,()=>setExpFilter("ALL"))}
-            {allExps.map(v=>_pill(v,expFilter===v,baseRows.filter(r=>String(r[reqK?.pmExperience]||"").trim()===v).length,()=>setExpFilter(expFilter===v?"ALL":v)))}
+            {allExps.map(v=>_pill(v,expFilter===v,baseRowCounts.byExp[v]||0,()=>setExpFilter(expFilter===v?"ALL":v)))}
           </div>
         )}
         {allSPs.length>0&&(
           <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
             <span style={{fontSize:10,fontWeight:700,color:C.text,minWidth:90}}>Sub Process</span>
             {_pill("All",spFilter==="ALL",baseRows.length,()=>setSpFilter("ALL"))}
-            {allSPs.map(v=>_pill(v,spFilter===v,baseRows.filter(r=>String(r[reqK?.component]||"").trim()===v).length,()=>setSpFilter(spFilter===v?"ALL":v)))}
+            {allSPs.map(v=>_pill(v,spFilter===v,baseRowCounts.bySP[v]||0,()=>setSpFilter(spFilter===v?"ALL":v)))}
           </div>
         )}
 
@@ -2843,17 +2850,16 @@ function ReqTraceabilityTab({ req, test }) {
           <span style={{fontSize:10,fontWeight:700,color:C.text,minWidth:90}}>Build Status</span>
           {_pill("All",buildFilter==="ALL",null,()=>setBuildFilter("ALL"))}
           {Object.entries(BUILD_STATUS_META).map(([key,{l}])=>
-            _pill(l, buildFilter===key, baseRows.filter(r=>_statusBucket(r)===key).length, ()=>setBuildFilter(buildFilter===key?"ALL":key))
+            _pill(l, buildFilter===key, baseRowCounts.byBuild[key]||0, ()=>setBuildFilter(buildFilter===key?"ALL":key))
           )}
         </div>
         {allReviewStatuses.length>0&&(
           <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
             <span style={{fontSize:10,fontWeight:700,color:C.text,minWidth:90}}>Review Status</span>
             {_pill("All",reviewFilter==="ALL",null,()=>setReviewFilter("ALL"))}
-            {allReviewStatuses.map(v=>{
-              const cnt = baseRows.filter(r=>String(r[reqK?.derivedStatus]||"").trim()===v).length;
-              return _pill(v.replace(/^\d+\.\s*/,""), reviewFilter===v, cnt, ()=>setReviewFilter(reviewFilter===v?"ALL":v));
-            })}
+            {allReviewStatuses.map(v=>
+              _pill(v.replace(/^\d+\.\s*/,""), reviewFilter===v, baseRowCounts.byReview[v]||0, ()=>setReviewFilter(reviewFilter===v?"ALL":v))
+            )}
           </div>
         )}
 
@@ -2874,7 +2880,7 @@ function ReqTraceabilityTab({ req, test }) {
             }}>
               {label}
               <span style={{background:covFilter===key?"rgba(0,0,0,0.08)":"#f1f5f9",color:covFilter===key?c:C.muted,borderRadius:10,padding:"0 5px",fontSize:10,fontWeight:700}}>
-                {baseRows.filter(r=>_covKey(r)===key).length}
+                {baseRowCounts.byCov[key]||0}
               </span>
             </button>
           ))}
@@ -2883,10 +2889,7 @@ function ReqTraceabilityTab({ req, test }) {
           <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
             <span style={{fontSize:10,fontWeight:700,color:C.text,minWidth:90}}>Tags</span>
             {_pill("All",tagFilter==="ALL",null,()=>setTagFilter("ALL"))}
-            {allTags.map(v=>{
-              const cnt = baseRows.filter(r=>String(r[reqK?.tags]||"").split(/[\n,;]+/).map(t=>t.trim()).includes(v)).length;
-              return _pill(v,tagFilter===v,cnt,()=>setTagFilter(tagFilter===v?"ALL":v));
-            })}
+            {allTags.map(v=>_pill(v,tagFilter===v,baseRowCounts.byTag[v]||0,()=>setTagFilter(tagFilter===v?"ALL":v)))}
           </div>
         )}
       </div>
@@ -2980,7 +2983,6 @@ function ReqTraceabilityTab({ req, test }) {
                 const tagPills = (() => {
                   const raw = String(r[reqK?.tags]||"").trim();
                   if (!raw||raw==="nan"||raw==="None") return <span style={{color:C.muted,fontSize:10}}>—</span>;
-                  const PILL_COLORS = [["#e0e7ff","#4338ca"],["#dcfce7","#166534"],["#fef3c7","#92400e"],["#fae8ff","#86198f"],["#ffedd5","#c2410c"]];
                   return (
                     <div style={{display:"flex",flexWrap:"wrap",gap:2}}>
                       {raw.split(/[\n,;]+/).map(t=>t.trim()).filter(Boolean).map((t,ti)=>{
