@@ -903,16 +903,53 @@ function ActivityTable({ rows }) {
   );
 }
 
+// ─── EC CLASS DATA (seeded from workbook analysis) ───────────────────────────
+const ALL_REGIONS = ["US","USI","ADMX","Costa Rica","Innowake"];
+const ALL_BUSINESSES_BY_EXP = {
+  "Professional Services": ["Consulting Services","Tax","Audit & Assurance","Enterprise Solutions"],
+  "Operations": ["Operations"],
+  "Project": ["Project"],
+  "Intern": ["Intern"],
+  "Leadership": ["Leadership"],
+  "E&P": ["E&P"],
+};
+const EC_CLASSES_DEFAULT = [
+  { id:"SF-1",    dim:"PA Form",             label:"CS Performance Assessment",           active:true, experiences:["Professional Services"], regions:["All"], businesses:["Consulting Services"],    keyDiff:"5 rating dims; no Internal Client section; Audit Quality = conditional" },
+  { id:"SF-2",    dim:"PA Form",             label:"Tax Performance Assessment",          active:true, experiences:["Professional Services"], regions:["All"], businesses:["Tax"],                   keyDiff:"5 dims; conditional Audit Quality; adds Tax accreditation/CPA/EA/CE in YE form" },
+  { id:"SF-3",    dim:"PA Form",             label:"A&A Performance Assessment",          active:true, experiences:["Professional Services"], regions:["All"], businesses:["Audit & Assurance"],     keyDiff:"5 dims; Audit Quality = REQUIRED (not conditional); Q5B field on PMR dashboard" },
+  { id:"SF-4",    dim:"PA Form",             label:"ES Performance Assessment",           active:true, experiences:["Professional Services"], regions:["All"], businesses:["Enterprise Solutions"],  keyDiff:"5 dims; adds unique Internal Client Section 5 with email capture; AQ = conditional" },
+  { id:"SF-5",    dim:"PA Form",             label:"PS Firm Contribution",                active:true, experiences:["Professional Services"], regions:["All"], businesses:["All"],                   keyDiff:"Single shared FC form for all 4 PS sub-businesses" },
+  { id:"SF-10",   dim:"PA Form",             label:"Intern Performance Assessment",       active:true, experiences:["Intern"],                regions:["All"], businesses:["All"],                   keyDiff:"3 dims only; Offer & Staffing Decision section; no 2LR; no TL" },
+  { id:"SF-11",   dim:"PA Form",             label:"Project Performance Assessment",      active:true, experiences:["Project"],               regions:["All"], businesses:["All"],                   keyDiff:"2 dims; Staffing Question; Engagement Leader field" },
+  { id:"SF-12",   dim:"PA Form",             label:"Operations Performance Assessment",   active:true, experiences:["Operations"],            regions:["All"], businesses:["All"],                   keyDiff:"2 dims; Incident Reporting section; attestation field" },
+  { id:"SF-13",   dim:"PA Form",             label:"Operations Firm Contribution",        active:true, experiences:["Operations"],            regions:["All"], businesses:["All"],                   keyDiff:"Separate FC form; auto-complete triggered differently" },
+  { id:"ROUTE-1", dim:"Route Map",           label:"Standard 7-Step Route Map",          active:true, experiences:["Professional Services","Project","Operations"], regions:["All"], businesses:["All"], keyDiff:"7 steps: Request → TL Attest → TL Input → 2LR → TL Revision → Complete → Cancel" },
+  { id:"ROUTE-2", dim:"Route Map",           label:"Intern 5-Step Route Map",            active:true, experiences:["Intern"],                regions:["All"], businesses:["All"],                   keyDiff:"5 steps only — no 2LR step, no TL Revision step" },
+  { id:"IND-1",   dim:"Individual Dashboard",label:"PS Individual Dashboard",            active:true, experiences:["Professional Services"], regions:["All"], businesses:["All"],                   keyDiff:"5 PA dims on visualization; FC Summary + List; 2LR in popup" },
+  { id:"IND-2",   dim:"Individual Dashboard",label:"Project Individual Dashboard",       active:true, experiences:["Project"],               regions:["All"], businesses:["All"],                   keyDiff:"2 PA dims; no FC section" },
+  { id:"IND-3",   dim:"Individual Dashboard",label:"Operations Individual Dashboard",    active:true, experiences:["Operations"],            regions:["All"], businesses:["All"],                   keyDiff:"2 PA dims; FC Summary same structure as PS" },
+  { id:"COACH-1", dim:"Coach Dashboard",     label:"PS Coach Dashboard",                 active:true, experiences:["Professional Services"], regions:["All"], businesses:["All"],                   keyDiff:"5 dims; FC Summary + List; Performance Visual Group; ONL count" },
+  { id:"COACH-2", dim:"Coach Dashboard",     label:"Intern Coach Dashboard",             active:true, experiences:["Intern"],                regions:["All"], businesses:["All"],                   keyDiff:"Aggregate rating (3 dims); intern-specific PA popup; no FC" },
+  { id:"COACH-3", dim:"Coach Dashboard",     label:"Operations Coach Dashboard",         active:true, experiences:["Operations"],            regions:["All"], businesses:["All"],                   keyDiff:"2 dims; FC same structure as PS" },
+  { id:"PMR-1",   dim:"PMR Dashboard",       label:"PS PMR Dashboard",                   active:true, experiences:["Professional Services"], regions:["All"], businesses:["All"],                   keyDiff:"Q5B (A&A); Utilization; Sales; Margin/DNP; Tax/A&A accreditation; USI Integration %" },
+  { id:"PMR-2",   dim:"PMR Dashboard",       label:"Intern PMR Dashboard",               active:true, experiences:["Intern"],                regions:["All"], businesses:["All"],                   keyDiff:"Aggregate rating; Feedback Providers section; no FC" },
+  { id:"PMR-3",   dim:"PMR Dashboard",       label:"Project PMR Dashboard",              active:true, experiences:["Project"],               regions:["All"], businesses:["All"],                   keyDiff:"% CSH/TWH coverage; FC Completed/Impact; Late Time Reports; Resume Compliance" },
+  { id:"YE-1",    dim:"Year-End Form",       label:"PS Year-End Input Form",             active:true, experiences:["Professional Services"], regions:["All"], businesses:["All"],                   keyDiff:"All 101 TM + 59 Coach YE fields; Project/Intern/Ops not in scope" },
+  { id:"YE-1a",   dim:"Year-End Form",       label:"Tax + A&A CPA Sub-Class",            active:true, experiences:["Professional Services"], regions:["All"], businesses:["Tax","Audit & Assurance"], keyDiff:"Adds 15 CPA/licensure/accreditation fields on top of YE-1" },
+  { id:"REG-1",   dim:"Region Process",      label:"USI Non-Audit Intern Offer Decision",active:true, experiences:["Intern"],                regions:["USI"], businesses:["All"],                   keyDiff:"IN-010-130: separate subprocess for USI non-audit interns only" },
+];
+
 // ─── TABS ────────────────────────────────────────────────────────────────────
 const TABS = [
-  { id: "executive",   label: "Executive Summary" },
-  { id: "workplan",    label: "Workplan" },
-  { id: "raid",        label: "RAID Analysis" },
-  { id: "cr",          label: "Change Requests" },
-  { id: "scorecard",     label: "Component Scorecard" },
-  { id: "testing",       label: "Test Scenarios" },
-  { id: "traceability",  label: "Req Traceability" },
-  { id: "backlog",       label: "Backlog" },
+  { id: "executive",      label: "Executive Summary" },
+  { id: "workplan",       label: "Workplan" },
+  { id: "raid",           label: "RAID Analysis" },
+  { id: "cr",             label: "Change Requests" },
+  { id: "scorecard",      label: "Component Scorecard" },
+  { id: "testing",        label: "Test Scenarios" },
+  { id: "testvariations", label: "Test Variations" },
+  { id: "traceability",   label: "Req Traceability" },
+  { id: "backlog",        label: "Backlog" },
 ];
 
 // ─── STORAGE ─────────────────────────────────────────────────────────────────
@@ -1238,8 +1275,9 @@ export default function App() {
         {tab === "cr"           && <ChangeRequestTab raid={raid} cap={cap} />}
         {tab === "backlog"      && <BacklogTab raid={raid} />}
         {tab === "scorecard"    && <ScorecardTab wp={wp} raid={raid} req={req} openModal={openModal} />}
-        {tab === "testing"      && <TestScenariosTab data={test} wp={wp} req={req} />}
-        {tab === "traceability" && <ReqTraceabilityTab req={req} test={test} />}
+        {tab === "testing"         && <TestScenariosTab data={test} wp={wp} req={req} />}
+        {tab === "testvariations"  && <TestVariationsTab data={test} />}
+        {tab === "traceability"    && <ReqTraceabilityTab req={req} test={test} />}
       </div>
 
       {modal && <Modal title={modal.title} rows={modal.rows} columns={modal.columns} onClose={() => setModal(null)} />}
@@ -6489,7 +6527,685 @@ function TestScenariosTab({ data, wp, req }) {
   );
 }
 
+// ─── TEST VARIATIONS TAB ─────────────────────────────────────────────────────
+function TestVariationsTab({ data }) {
+  const [subTab, setSubTab] = useState("variations");
+  const [ecClasses, setEcClasses] = useState(() => {
+    try { const s = localStorage.getItem("pmt3_ec_classes"); return s ? JSON.parse(s) : EC_CLASSES_DEFAULT; }
+    catch { return EC_CLASSES_DEFAULT; }
+  });
+  const [assignments, setAssignments] = useState(() => {
+    try { const s = localStorage.getItem("pmt3_ec_assignments"); return s ? JSON.parse(s) : {}; }
+    catch { return {}; }
+  });
+  const [selectedId, setSelectedId] = useState(null);
+  const [search, setSearch] = useState("");
+  const [editingClass, setEditingClass] = useState(null);
+  const [showManualFor, setShowManualFor] = useState({});
 
+  useEffect(() => { try { localStorage.setItem("pmt3_ec_classes", JSON.stringify(ecClasses)); } catch(e) {} }, [ecClasses]);
+  useEffect(() => { try { localStorage.setItem("pmt3_ec_assignments", JSON.stringify(assignments)); } catch(e) {} }, [assignments]);
+
+  const scenarios = useMemo(() => data?.activeRows || [], [data]);
+  const K = data?.keys || {};
+  const getScenId = useCallback((r) => String(r[K.id] || r[K.name] || ""), [K]);
+
+  const filtered = useMemo(() =>
+    scenarios.filter(r => {
+      if (!search) return true;
+      const q = search.toLowerCase();
+      return String(r[K.id]||"").toLowerCase().includes(q)
+          || String(r[K.name]||"").toLowerCase().includes(q)
+          || String(r[K.subprocess]||"").toLowerCase().includes(q);
+    }),
+    [scenarios, search, K]
+  );
+
+  const expandClass = useCallback((cls) => {
+    const combos = [];
+    const regions = (cls.regions||["All"]).includes("All") ? ALL_REGIONS : cls.regions;
+    (cls.experiences||[]).forEach(exp => {
+      const bizList = (cls.businesses||["All"]).includes("All")
+        ? (ALL_BUSINESSES_BY_EXP[exp] || [exp])
+        : cls.businesses;
+      regions.forEach(reg => bizList.forEach(biz => combos.push({ experience:exp, region:reg, business:biz })));
+    });
+    return combos;
+  }, []);
+
+  const getCombos = useCallback((scenId) => {
+    const asgn = assignments[scenId] || {};
+    const combos = [];
+    (asgn.classes||[]).forEach(cid => {
+      const cls = ecClasses.find(c => c.id === cid);
+      if (cls) expandClass(cls).forEach(c => combos.push({ ...c, classId:cid }));
+    });
+    (asgn.manualCombos||[]).forEach(c => combos.push({ ...c, classId:"MANUAL" }));
+    return combos;
+  }, [assignments, ecClasses, expandClass]);
+
+  const toggleClass = useCallback((scenId, classId) => {
+    setAssignments(prev => {
+      const asgn = prev[scenId] || { classes:[], manualCombos:[] };
+      const classes = asgn.classes.includes(classId)
+        ? asgn.classes.filter(c => c !== classId)
+        : [...asgn.classes, classId];
+      return { ...prev, [scenId]: { ...asgn, classes } };
+    });
+  }, []);
+
+  const coverageStats = useMemo(() => {
+    const total = scenarios.length;
+    const assigned = scenarios.filter(r => {
+      const a = assignments[getScenId(r)];
+      return a && (a.classes?.length > 0 || a.manualCombos?.length > 0);
+    }).length;
+    const byClass = {};
+    ecClasses.forEach(c => { byClass[c.id] = 0; });
+    scenarios.forEach(r => {
+      (assignments[getScenId(r)]?.classes||[]).forEach(cid => {
+        if (byClass[cid] !== undefined) byClass[cid]++;
+      });
+    });
+    return { total, assigned, unassigned: total - assigned, byClass };
+  }, [scenarios, assignments, ecClasses, getScenId]);
+
+  const activeClasses = ecClasses.filter(c => c.active !== false);
+  const selectedRow = selectedId ? scenarios.find(r => getScenId(r) === selectedId) : null;
+  const selectedAsgn = selectedId ? (assignments[selectedId] || { classes:[], manualCombos:[] }) : null;
+
+  const SUB = [
+    { id:"variations", label:"Variations" },
+    { id:"dimensions", label:"EC Dimensions" },
+    { id:"review",     label:"Review" },
+    { id:"coverage",   label:"Coverage" },
+  ];
+
+  return (
+    <div style={{ fontFamily:"system-ui,sans-serif", fontSize:13, color:C.text }}>
+      <div style={{ background:C.navy, borderRadius:10, padding:"14px 20px", marginBottom:16, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+        <div>
+          <div style={{ color:"#fff", fontWeight:700, fontSize:16 }}>Test Variations</div>
+          <div style={{ color:"rgba(255,255,255,0.65)", fontSize:12, marginTop:2 }}>
+            Assign EC classes · auto-generate applicable combinations · {coverageStats.total} scenarios · {coverageStats.assigned} assigned · {coverageStats.unassigned} pending
+          </div>
+        </div>
+        {coverageStats.unassigned > 0 && (
+          <div style={{ background:"rgba(239,68,68,0.2)", color:"#fca5a5", borderRadius:6, padding:"5px 12px", fontSize:11, fontWeight:600 }}>
+            {coverageStats.unassigned} scenarios need EC assignment
+          </div>
+        )}
+      </div>
+
+      <div style={{ display:"flex", gap:2, marginBottom:16, borderBottom:`2px solid ${C.border}` }}>
+        {SUB.map(st => (
+          <button key={st.id} onClick={() => setSubTab(st.id)}
+            style={{ padding:"8px 18px", border:"none", cursor:"pointer", fontWeight:subTab===st.id?700:500,
+              fontSize:12, background:"transparent", marginBottom:-2,
+              borderBottom:subTab===st.id?`3px solid ${C.accent}`:"3px solid transparent",
+              color:subTab===st.id?C.accent:C.muted }}>
+            {st.label}
+          </button>
+        ))}
+      </div>
+
+      {subTab === "variations" && (
+        <div style={{ display:"flex", gap:16, height:"calc(100vh - 280px)", minHeight:500 }}>
+          <div style={{ width:280, flexShrink:0, display:"flex", flexDirection:"column", background:"#fff", borderRadius:10, border:`1px solid ${C.border}`, overflow:"hidden" }}>
+            <div style={{ padding:"10px 12px", borderBottom:`1px solid ${C.border}`, background:"#f8fafc" }}>
+              <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search scenarios..."
+                style={{ width:"100%", padding:"6px 10px", border:`1px solid ${C.border}`, borderRadius:6, fontSize:12, boxSizing:"border-box", outline:"none" }} />
+              <div style={{ marginTop:5, fontSize:11, color:C.muted }}>{filtered.length} of {scenarios.length}</div>
+            </div>
+            <div style={{ flex:1, overflowY:"auto" }}>
+              {filtered.map(r => {
+                const id = getScenId(r);
+                const asgn = assignments[id];
+                const hasClasses = asgn?.classes?.length > 0;
+                const isSel = selectedId === id;
+                return (
+                  <div key={id} onClick={() => setSelectedId(id)}
+                    style={{ padding:"9px 12px", cursor:"pointer", borderBottom:`1px solid ${C.border}`,
+                      background:isSel?"#eff6ff":"transparent",
+                      borderLeft:isSel?`3px solid ${C.accent}`:"3px solid transparent" }}>
+                    <div style={{ fontWeight:700, fontSize:10, color:C.accent }}>{r[K.id]||"—"}</div>
+                    <div style={{ fontSize:11, color:C.text, marginTop:2, lineHeight:1.4, display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical", overflow:"hidden" }}>
+                      {r[K.name]||"—"}
+                    </div>
+                    <div style={{ display:"flex", gap:3, marginTop:4, flexWrap:"wrap" }}>
+                      {hasClasses
+                        ? asgn.classes.map(cid => <span key={cid} style={{ background:"#dbeafe", color:"#1e40af", borderRadius:4, padding:"1px 6px", fontSize:10, fontWeight:600 }}>{cid}</span>)
+                        : <span style={{ color:"#fca5a5", fontSize:10 }}>no EC assigned</span>}
+                    </div>
+                  </div>
+                );
+              })}
+              {!filtered.length && <div style={{ padding:20, color:C.muted, textAlign:"center", fontSize:12 }}>No scenarios match</div>}
+            </div>
+          </div>
+
+          <div style={{ flex:1, overflowY:"auto" }}>
+            {!selectedRow
+              ? <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"100%", color:C.muted, fontSize:14 }}>
+                  Select a scenario to assign EC classes
+                </div>
+              : <ECAssignmentPanel
+                  row={selectedRow} K={K}
+                  ecClasses={activeClasses}
+                  asgn={selectedAsgn}
+                  expandClass={expandClass}
+                  onToggleClass={cid => toggleClass(selectedId, cid)}
+                  showManual={!!showManualFor[selectedId]}
+                  onToggleManual={() => setShowManualFor(p => ({ ...p, [selectedId]: !p[selectedId] }))}
+                  onSaveManual={combos => setAssignments(prev => {
+                    const a = prev[selectedId] || { classes:[], manualCombos:[] };
+                    return { ...prev, [selectedId]: { ...a, manualCombos:combos } };
+                  })}
+                />
+            }
+          </div>
+        </div>
+      )}
+
+      {subTab === "dimensions" && (
+        <ECDimensionsPanel
+          ecClasses={ecClasses}
+          editingClass={editingClass}
+          setEditingClass={setEditingClass}
+          onSave={cls => {
+            setEcClasses(prev => {
+              const idx = prev.findIndex(c => c.id === cls.id);
+              if (idx >= 0) { const n=[...prev]; n[idx]=cls; return n; }
+              return [...prev, cls];
+            });
+            setEditingClass(null);
+          }}
+          onDeactivate={id => setEcClasses(prev => prev.map(c => c.id===id ? {...c,active:false} : c))}
+          onReactivate={id => setEcClasses(prev => prev.map(c => c.id===id ? {...c,active:true} : c))}
+          onReset={() => { if (window.confirm("Reset all EC classes to defaults? Custom classes will be lost.")) setEcClasses(EC_CLASSES_DEFAULT); }}
+        />
+      )}
+
+      {subTab === "review" && (
+        <ECReviewPanel scenarios={scenarios} K={K} getScenId={getScenId} ecClasses={ecClasses} assignments={assignments} getCombos={getCombos} />
+      )}
+
+      {subTab === "coverage" && (
+        <ECCoveragePanel scenarios={scenarios} K={K} getScenId={getScenId} ecClasses={ecClasses} assignments={assignments} coverageStats={coverageStats} />
+      )}
+    </div>
+  );
+}
+
+function ECAssignmentPanel({ row, K, ecClasses, asgn, expandClass, onToggleClass, showManual, onToggleManual, onSaveManual }) {
+  const selected = asgn?.classes || [];
+  const dims = [...new Set(ecClasses.map(c => c.dim))];
+
+  const combosByClass = useMemo(() => {
+    const g = {};
+    selected.forEach(cid => {
+      const cls = ecClasses.find(c => c.id === cid);
+      if (cls) g[cid] = expandClass(cls);
+    });
+    return g;
+  }, [selected, ecClasses, expandClass]);
+
+  const totalCombos = Object.values(combosByClass).reduce((s,a) => s+a.length, 0);
+  const savings = totalCombos > 0 ? Math.round((1 - selected.length / totalCombos) * 100) : 0;
+
+  return (
+    <div style={{ background:"#fff", borderRadius:10, border:`1px solid ${C.border}`, overflow:"hidden" }}>
+      <div style={{ background:"#f8fafc", padding:"12px 16px", borderBottom:`1px solid ${C.border}`, display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
+        <div style={{ flex:1, minWidth:0 }}>
+          <div style={{ fontWeight:700, fontSize:11, color:C.accent }}>{row[K.id]||"—"}</div>
+          <div style={{ fontWeight:600, fontSize:14, color:C.text, marginTop:2 }}>{row[K.name]||"—"}</div>
+          <div style={{ fontSize:11, color:C.muted, marginTop:2 }}>{row[K.subprocess]||""}</div>
+        </div>
+        {totalCombos > 0 && (
+          <div style={{ textAlign:"right", flexShrink:0, marginLeft:16 }}>
+            <div style={{ fontSize:26, fontWeight:700, color:C.green, lineHeight:1 }}>{totalCombos}</div>
+            <div style={{ fontSize:11, color:C.muted }}>combinations</div>
+            <div style={{ fontSize:11, color:C.accent, marginTop:2, fontWeight:600 }}>{selected.length} test case{selected.length!==1?"s":""} needed</div>
+            {savings > 0 && <div style={{ fontSize:10, color:C.green, fontWeight:700, marginTop:1 }}>{savings}% rationalization</div>}
+          </div>
+        )}
+      </div>
+
+      <div style={{ padding:"14px 16px" }}>
+        <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:12 }}>
+          Dimension scope — which EC classes apply to this scenario?
+        </div>
+        {dims.map(dim => (
+          <div key={dim} style={{ marginBottom:12 }}>
+            <div style={{ fontSize:11, fontWeight:700, color:C.text, marginBottom:6 }}>{dim}</div>
+            <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+              {ecClasses.filter(c => c.dim===dim).map(cls => {
+                const sel = selected.includes(cls.id);
+                return (
+                  <button key={cls.id} onClick={() => onToggleClass(cls.id)} title={cls.keyDiff}
+                    style={{ padding:"5px 12px", border:`1.5px solid ${sel?C.accent:C.border}`, borderRadius:20,
+                      cursor:"pointer", fontSize:11, fontWeight:sel?700:500,
+                      background:sel?"#eff6ff":"#fff", color:sel?C.accent:C.muted }}>
+                    <span style={{ fontWeight:800, marginRight:4 }}>{cls.id}</span>{cls.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+
+        <div style={{ marginTop:12, paddingTop:12, borderTop:`1px solid ${C.border}` }}>
+          <button onClick={onToggleManual}
+            style={{ background:"transparent", border:`1px dashed ${C.border}`, borderRadius:6, color:C.muted, fontSize:11, cursor:"pointer", padding:"5px 12px" }}>
+            {showManual ? "Hide manual combinations ↑" : "No matching EC class? Add manual combinations ↓"}
+          </button>
+        </div>
+        {showManual && <ManualCombosPicker manualCombos={asgn?.manualCombos||[]} onSave={onSaveManual} />}
+      </div>
+
+      {totalCombos > 0 && (
+        <div style={{ borderTop:`1px solid ${C.border}`, padding:"14px 16px" }}>
+          <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:12 }}>
+            Applicable combinations · {totalCombos} total · {selected.length} test case{selected.length!==1?"s":""} needed
+          </div>
+          {Object.entries(combosByClass).map(([cid, combos]) => {
+            const cls = ecClasses.find(c => c.id===cid);
+            return (
+              <div key={cid} style={{ marginBottom:14 }}>
+                <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:6 }}>
+                  <span style={{ background:"#dbeafe", color:"#1e40af", borderRadius:4, padding:"2px 8px", fontSize:10, fontWeight:700 }}>{cid}</span>
+                  <span style={{ fontSize:11, fontWeight:600, color:C.text }}>{cls?.label}</span>
+                  <span style={{ fontSize:10, color:C.muted }}>— {combos.length} combinations · 1 test case</span>
+                </div>
+                <table style={{ width:"100%", borderCollapse:"collapse", fontSize:11 }}>
+                  <thead>
+                    <tr style={{ background:"#f8fafc" }}>
+                      {["Experience","Region","Business","Status"].map(h => (
+                        <th key={h} style={{ padding:"5px 8px", textAlign:"left", color:C.muted, fontWeight:600, borderBottom:`1px solid ${C.border}`, fontSize:10 }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {combos.map((c,i) => (
+                      <tr key={i} style={{ borderBottom:`1px solid ${C.border}` }}>
+                        <td style={{ padding:"5px 8px" }}>{c.experience}</td>
+                        <td style={{ padding:"5px 8px" }}>{c.region}</td>
+                        <td style={{ padding:"5px 8px" }}>{c.business}</td>
+                        <td style={{ padding:"5px 8px" }}>
+                          <span style={{ background:"#dcfce7", color:"#166534", borderRadius:4, padding:"1px 6px", fontSize:10, fontWeight:600 }}>Applicable</span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ManualCombosPicker({ manualCombos, onSave }) {
+  const EXPS = Object.keys(ALL_BUSINESSES_BY_EXP);
+  const [sel, setSel] = useState(() => {
+    const s = new Set();
+    manualCombos.forEach(c => s.add(`${c.experience}|${c.region}|${c.business}`));
+    return s;
+  });
+
+  const toggle = (exp, reg, biz) => {
+    const k = `${exp}|${reg}|${biz}`;
+    setSel(prev => { const n=new Set(prev); n.has(k)?n.delete(k):n.add(k); return n; });
+  };
+
+  return (
+    <div style={{ marginTop:12, padding:12, background:"#f8fafc", borderRadius:8, border:`1px solid ${C.border}` }}>
+      <div style={{ fontSize:11, fontWeight:600, color:C.text, marginBottom:10 }}>Manual combination selection</div>
+      <div style={{ overflowX:"auto" }}>
+        <table style={{ borderCollapse:"collapse", fontSize:11 }}>
+          <thead>
+            <tr>
+              <th style={{ padding:"4px 8px", textAlign:"left", color:C.muted, fontWeight:600, fontSize:10, minWidth:220 }}>Experience / Business</th>
+              {ALL_REGIONS.map(r => <th key={r} style={{ padding:"4px 8px", textAlign:"center", color:C.muted, fontWeight:600, fontSize:10 }}>{r}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {EXPS.flatMap(exp =>
+              (ALL_BUSINESSES_BY_EXP[exp]||[exp]).map(biz => (
+                <tr key={`${exp}-${biz}`} style={{ borderBottom:`1px solid ${C.border}` }}>
+                  <td style={{ padding:"4px 8px", whiteSpace:"nowrap" }}>
+                    <span style={{ fontSize:10, color:C.muted }}>{exp} / </span>
+                    <span style={{ fontWeight:500 }}>{biz}</span>
+                  </td>
+                  {ALL_REGIONS.map(reg => {
+                    const k = `${exp}|${reg}|${biz}`;
+                    return (
+                      <td key={reg} style={{ padding:"4px 8px", textAlign:"center" }}>
+                        <input type="checkbox" checked={sel.has(k)} onChange={() => toggle(exp,reg,biz)} style={{ cursor:"pointer" }} />
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+      <div style={{ marginTop:10, display:"flex", gap:8, alignItems:"center" }}>
+        <button onClick={() => onSave([...sel].map(k => { const [experience,region,business]=k.split("|"); return {experience,region,business}; }))}
+          style={{ padding:"6px 16px", background:C.accent, color:"#fff", border:"none", borderRadius:6, cursor:"pointer", fontSize:12, fontWeight:600 }}>
+          Save {sel.size} combinations
+        </button>
+        <span style={{ fontSize:11, color:C.muted }}>{sel.size} selected</span>
+      </div>
+    </div>
+  );
+}
+
+function ECDimensionsPanel({ ecClasses, editingClass, setEditingClass, onSave, onDeactivate, onReactivate, onReset }) {
+  const dims = [...new Set(ecClasses.map(c => c.dim))];
+  const [formState, setFormState] = useState(null);
+
+  const startEdit = cls => { setFormState({...cls}); setEditingClass(cls.id); };
+  const startNew  = ()  => { setFormState({ id:"", dim:"PA Form", label:"", experiences:[], regions:["All"], businesses:["All"], keyDiff:"", active:true }); setEditingClass("new"); };
+  const cancel    = ()  => { setEditingClass(null); setFormState(null); };
+
+  return (
+    <div>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
+        <div style={{ fontSize:12, color:C.muted }}>
+          {ecClasses.filter(c=>c.active!==false).length} active · {ecClasses.filter(c=>c.active===false).length} inactive
+        </div>
+        <div style={{ display:"flex", gap:8 }}>
+          <button onClick={onReset}
+            style={{ padding:"6px 12px", border:`1px solid ${C.border}`, borderRadius:6, background:"#fff", cursor:"pointer", fontSize:12, color:C.muted }}>
+            Reset to defaults
+          </button>
+          <button onClick={startNew}
+            style={{ padding:"6px 16px", background:C.accent, color:"#fff", border:"none", borderRadius:6, cursor:"pointer", fontSize:12, fontWeight:600 }}>
+            + Add EC Class
+          </button>
+        </div>
+      </div>
+
+      {editingClass && formState && (
+        <ECClassForm formState={formState} setFormState={setFormState} onSave={() => onSave(formState)} onCancel={cancel} />
+      )}
+
+      {dims.map(dim => (
+        <div key={dim} style={{ marginBottom:20 }}>
+          <div style={{ background:C.navy, color:"#fff", padding:"6px 14px", borderRadius:"8px 8px 0 0", fontSize:12, fontWeight:700 }}>{dim}</div>
+          <table style={{ width:"100%", borderCollapse:"collapse", background:"#fff", border:`1px solid ${C.border}`, borderTop:"none" }}>
+            <thead>
+              <tr style={{ background:"#f8fafc" }}>
+                {["ID","Label","Experiences","Businesses","Key Differentiator",""].map((h,i) => (
+                  <th key={i} style={{ padding:"7px 10px", textAlign:"left", fontSize:11, color:C.muted, fontWeight:600, borderBottom:`1px solid ${C.border}` }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {ecClasses.filter(c => c.dim===dim).map(cls => (
+                <tr key={cls.id} style={{ borderBottom:`1px solid ${C.border}`, opacity:cls.active===false?0.4:1 }}>
+                  <td style={{ padding:"7px 10px", fontWeight:700, color:C.accent, fontSize:11, whiteSpace:"nowrap" }}>{cls.id}</td>
+                  <td style={{ padding:"7px 10px", fontSize:12 }}>{cls.label}</td>
+                  <td style={{ padding:"7px 10px", fontSize:11, color:C.muted }}>{(cls.experiences||[]).join(", ")}</td>
+                  <td style={{ padding:"7px 10px", fontSize:11, color:C.muted }}>{(cls.businesses||[]).join(", ")}</td>
+                  <td style={{ padding:"7px 10px", fontSize:11, color:C.muted, maxWidth:260 }}>{cls.keyDiff}</td>
+                  <td style={{ padding:"7px 10px", whiteSpace:"nowrap" }}>
+                    <button onClick={() => startEdit(cls)}
+                      style={{ marginRight:6, padding:"3px 10px", border:`1px solid ${C.border}`, borderRadius:4, background:"#fff", cursor:"pointer", fontSize:11 }}>Edit</button>
+                    {cls.active!==false
+                      ? <button onClick={() => onDeactivate(cls.id)}
+                          style={{ padding:"3px 10px", border:"1px solid #fca5a5", borderRadius:4, background:"#fff", cursor:"pointer", fontSize:11, color:"#ef4444" }}>Deactivate</button>
+                      : <button onClick={() => onReactivate(cls.id)}
+                          style={{ padding:"3px 10px", border:`1px solid ${C.green}`, borderRadius:4, background:"#fff", cursor:"pointer", fontSize:11, color:C.green }}>Reactivate</button>
+                    }
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ECClassForm({ formState, setFormState, onSave, onCancel }) {
+  const EXPS = Object.keys(ALL_BUSINESSES_BY_EXP);
+  const ALL_BIZ = ["All","Consulting Services","Tax","Audit & Assurance","Enterprise Solutions","Operations","Project","Intern"];
+  const DIMS = ["PA Form","Route Map","Individual Dashboard","Coach Dashboard","PMR Dashboard","Year-End Form","Region Process","Other"];
+  const toggleArr = (arr, val) => (arr||[]).includes(val) ? arr.filter(v=>v!==val) : [...(arr||[]), val];
+
+  return (
+    <div style={{ background:"#f8fafc", border:`1px solid ${C.border}`, borderRadius:8, padding:16, marginBottom:16 }}>
+      <div style={{ fontWeight:700, fontSize:13, marginBottom:12 }}>{formState.id ? `Edit ${formState.id}` : "New EC Class"}</div>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12, marginBottom:12 }}>
+        <div>
+          <label style={{ fontSize:11, fontWeight:600, color:C.muted, display:"block", marginBottom:4 }}>Class ID</label>
+          <input value={formState.id||""} onChange={e => setFormState(p=>({...p,id:e.target.value}))}
+            placeholder="e.g. SF-14"
+            style={{ width:"100%", padding:"6px 8px", border:`1px solid ${C.border}`, borderRadius:6, fontSize:12, boxSizing:"border-box" }} />
+        </div>
+        <div>
+          <label style={{ fontSize:11, fontWeight:600, color:C.muted, display:"block", marginBottom:4 }}>Label</label>
+          <input value={formState.label||""} onChange={e => setFormState(p=>({...p,label:e.target.value}))}
+            placeholder="e.g. CS Performance Assessment"
+            style={{ width:"100%", padding:"6px 8px", border:`1px solid ${C.border}`, borderRadius:6, fontSize:12, boxSizing:"border-box" }} />
+        </div>
+        <div>
+          <label style={{ fontSize:11, fontWeight:600, color:C.muted, display:"block", marginBottom:4 }}>Dimension</label>
+          <select value={formState.dim||"PA Form"} onChange={e => setFormState(p=>({...p,dim:e.target.value}))}
+            style={{ width:"100%", padding:"6px 8px", border:`1px solid ${C.border}`, borderRadius:6, fontSize:12, boxSizing:"border-box" }}>
+            {DIMS.map(d => <option key={d}>{d}</option>)}
+          </select>
+        </div>
+      </div>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:12 }}>
+        <div>
+          <label style={{ fontSize:11, fontWeight:600, color:C.muted, display:"block", marginBottom:6 }}>Experiences</label>
+          <div style={{ display:"flex", flexWrap:"wrap", gap:5 }}>
+            {EXPS.map(e => {
+              const s = (formState.experiences||[]).includes(e);
+              return <button key={e} type="button" onClick={() => setFormState(p=>({...p,experiences:toggleArr(p.experiences,e)}))}
+                style={{ padding:"3px 10px", border:`1px solid ${s?C.accent:C.border}`, borderRadius:12,
+                  background:s?"#eff6ff":"#fff", color:s?C.accent:C.muted, cursor:"pointer", fontSize:11 }}>{e}</button>;
+            })}
+          </div>
+        </div>
+        <div>
+          <label style={{ fontSize:11, fontWeight:600, color:C.muted, display:"block", marginBottom:6 }}>Businesses</label>
+          <div style={{ display:"flex", flexWrap:"wrap", gap:5 }}>
+            {ALL_BIZ.map(b => {
+              const s = (formState.businesses||[]).includes(b);
+              return <button key={b} type="button" onClick={() => setFormState(p=>({...p,businesses:toggleArr(p.businesses,b)}))}
+                style={{ padding:"3px 10px", border:`1px solid ${s?C.accent:C.border}`, borderRadius:12,
+                  background:s?"#eff6ff":"#fff", color:s?C.accent:C.muted, cursor:"pointer", fontSize:11 }}>{b}</button>;
+            })}
+          </div>
+        </div>
+      </div>
+      <div style={{ marginBottom:12 }}>
+        <label style={{ fontSize:11, fontWeight:600, color:C.muted, display:"block", marginBottom:4 }}>Key Differentiator</label>
+        <input value={formState.keyDiff||""} onChange={e => setFormState(p=>({...p,keyDiff:e.target.value}))}
+          placeholder="What makes this class technically distinct from others?"
+          style={{ width:"100%", padding:"6px 8px", border:`1px solid ${C.border}`, borderRadius:6, fontSize:12, boxSizing:"border-box" }} />
+      </div>
+      <div style={{ display:"flex", gap:8 }}>
+        <button type="button" onClick={onSave}
+          style={{ padding:"6px 16px", background:C.accent, color:"#fff", border:"none", borderRadius:6, cursor:"pointer", fontSize:12, fontWeight:600 }}>Save</button>
+        <button type="button" onClick={onCancel}
+          style={{ padding:"6px 16px", border:`1px solid ${C.border}`, borderRadius:6, background:"#fff", cursor:"pointer", fontSize:12, color:C.muted }}>Cancel</button>
+      </div>
+    </div>
+  );
+}
+
+function ECReviewPanel({ scenarios, K, getScenId, ecClasses, assignments, getCombos }) {
+  const [filter, setFilter] = useState("all");
+
+  const rows = useMemo(() => scenarios.map(r => {
+    const id = getScenId(r);
+    const asgn = assignments[id] || {};
+    const classes = (asgn.classes||[]).map(cid => ecClasses.find(c => c.id===cid)).filter(Boolean);
+    return { id, name:r[K.name], subprocess:r[K.subprocess], classes, comboCount:getCombos(id).length, hasManual:(asgn.manualCombos||[]).length>0 };
+  }), [scenarios, K, getScenId, ecClasses, assignments, getCombos]);
+
+  const filtered = rows.filter(r =>
+    filter==="all" ? true :
+    filter==="assigned" ? (r.classes.length>0||r.hasManual) :
+    (r.classes.length===0 && !r.hasManual)
+  );
+
+  return (
+    <div>
+      <div style={{ display:"flex", gap:6, marginBottom:14 }}>
+        {[["all","All"],["assigned","Assigned"],["unassigned","Pending"]].map(([v,l]) => {
+          const cnt = rows.filter(r => v==="all"?true:v==="assigned"?(r.classes.length>0||r.hasManual):(r.classes.length===0&&!r.hasManual)).length;
+          return (
+            <button key={v} onClick={() => setFilter(v)}
+              style={{ padding:"5px 14px", border:`1px solid ${filter===v?C.accent:C.border}`, borderRadius:16,
+                background:filter===v?"#eff6ff":"#fff", color:filter===v?C.accent:C.muted, cursor:"pointer", fontSize:11, fontWeight:filter===v?700:500 }}>
+              {l} ({cnt})
+            </button>
+          );
+        })}
+      </div>
+      <table style={{ width:"100%", borderCollapse:"collapse", background:"#fff", border:`1px solid ${C.border}`, borderRadius:8, overflow:"hidden" }}>
+        <thead>
+          <tr style={{ background:"#f8fafc" }}>
+            {["Scenario ID","Name","Sub-Process","EC Classes","Combos",""].map((h,i) => (
+              <th key={i} style={{ padding:"8px 10px", textAlign:"left", fontSize:11, color:C.muted, fontWeight:600, borderBottom:`1px solid ${C.border}` }}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {filtered.map(r => (
+            <tr key={r.id} style={{ borderBottom:`1px solid ${C.border}` }}>
+              <td style={{ padding:"7px 10px", fontWeight:700, color:C.accent, fontSize:11, whiteSpace:"nowrap" }}>{r.id}</td>
+              <td style={{ padding:"7px 10px", fontSize:12, maxWidth:300 }}>{r.name}</td>
+              <td style={{ padding:"7px 10px", fontSize:11, color:C.muted }}>{r.subprocess}</td>
+              <td style={{ padding:"7px 10px" }}>
+                {r.classes.length>0
+                  ? <div style={{ display:"flex", flexWrap:"wrap", gap:3 }}>
+                      {r.classes.map(c => <span key={c.id} style={{ background:"#dbeafe", color:"#1e40af", borderRadius:4, padding:"2px 6px", fontSize:10, fontWeight:600 }}>{c.id}</span>)}
+                    </div>
+                  : <span style={{ color:"#fca5a5", fontSize:11 }}>Not assigned</span>}
+              </td>
+              <td style={{ padding:"7px 10px", textAlign:"center", fontSize:12, fontWeight:700, color:r.comboCount>0?C.green:C.muted }}>
+                {r.comboCount||"—"}
+              </td>
+              <td style={{ padding:"7px 10px" }}>
+                {r.hasManual && <span style={{ background:"#fef9c3", color:"#854d0e", borderRadius:4, padding:"2px 6px", fontSize:10, fontWeight:600 }}>Manual</span>}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function ECCoveragePanel({ scenarios, K, getScenId, ecClasses, assignments, coverageStats }) {
+  const activeClasses = ecClasses.filter(c => c.active!==false);
+  const dims = [...new Set(activeClasses.map(c => c.dim))];
+  const pct = (n,d) => d>0 ? Math.round(n/d*100) : 0;
+
+  const expCoverage = useMemo(() => {
+    const m = {};
+    scenarios.forEach(r => {
+      (assignments[getScenId(r)]?.classes||[]).forEach(cid => {
+        const cls = activeClasses.find(c => c.id===cid);
+        if (cls) (cls.experiences||[]).forEach(e => { m[e]=(m[e]||0)+1; });
+      });
+    });
+    return m;
+  }, [scenarios, assignments, activeClasses, getScenId]);
+
+  return (
+    <div>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:12, marginBottom:20 }}>
+        {[
+          { label:"Total Scenarios", value:coverageStats.total,    color:C.navy },
+          { label:"EC Assigned",     value:coverageStats.assigned,  color:C.green },
+          { label:"Pending",         value:coverageStats.unassigned, color:C.red },
+          { label:"Coverage",        value:`${pct(coverageStats.assigned,coverageStats.total)}%`, color:C.accent },
+        ].map(k => (
+          <div key={k.label} style={{ background:"#fff", borderRadius:8, padding:"14px 16px", border:`1px solid ${C.border}`, borderTop:`3px solid ${k.color}` }}>
+            <div style={{ fontSize:10, color:C.muted, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.06em" }}>{k.label}</div>
+            <div style={{ fontSize:28, fontWeight:700, color:k.color, marginTop:4 }}>{k.value}</div>
+          </div>
+        ))}
+      </div>
+
+      {dims.map(dim => (
+        <div key={dim} style={{ marginBottom:20 }}>
+          <div style={{ background:C.navy, color:"#fff", padding:"6px 14px", borderRadius:"8px 8px 0 0", fontSize:12, fontWeight:700 }}>{dim}</div>
+          <table style={{ width:"100%", borderCollapse:"collapse", background:"#fff", border:`1px solid ${C.border}`, borderTop:"none" }}>
+            <thead>
+              <tr style={{ background:"#f8fafc" }}>
+                {["Class","Label","Scenarios Using","Coverage","Experiences"].map((h,i) => (
+                  <th key={i} style={{ padding:"7px 10px", textAlign:"left", fontSize:11, color:C.muted, fontWeight:600, borderBottom:`1px solid ${C.border}` }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {activeClasses.filter(c => c.dim===dim).map(cls => {
+                const cnt = coverageStats.byClass[cls.id]||0;
+                const barPct = pct(cnt, coverageStats.total);
+                return (
+                  <tr key={cls.id} style={{ borderBottom:`1px solid ${C.border}` }}>
+                    <td style={{ padding:"7px 10px", fontWeight:700, color:C.accent, fontSize:11, whiteSpace:"nowrap" }}>{cls.id}</td>
+                    <td style={{ padding:"7px 10px", fontSize:12 }}>{cls.label}</td>
+                    <td style={{ padding:"7px 10px", textAlign:"center", fontWeight:700, fontSize:13, color:cnt>0?C.green:C.muted }}>{cnt||"—"}</td>
+                    <td style={{ padding:"7px 10px", minWidth:140 }}>
+                      <div style={{ background:"#f1f5f9", borderRadius:4, height:8, overflow:"hidden" }}>
+                        <div style={{ width:`${barPct}%`, height:"100%", background:cnt>0?C.green:"#e2e8f0", borderRadius:4 }} />
+                      </div>
+                      <div style={{ fontSize:10, color:C.muted, marginTop:2 }}>{barPct}%</div>
+                    </td>
+                    <td style={{ padding:"7px 10px", fontSize:11, color:C.muted }}>{(cls.experiences||[]).join(", ")}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      ))}
+
+      {Object.keys(expCoverage).length > 0 && (
+        <div style={{ marginBottom:20 }}>
+          <div style={{ background:"#475569", color:"#fff", padding:"6px 14px", borderRadius:"8px 8px 0 0", fontSize:12, fontWeight:700 }}>Coverage by Experience</div>
+          <table style={{ width:"100%", borderCollapse:"collapse", background:"#fff", border:`1px solid ${C.border}`, borderTop:"none" }}>
+            <thead>
+              <tr style={{ background:"#f8fafc" }}>
+                {["Experience","Scenario Uses","Bar"].map((h,i) => (
+                  <th key={i} style={{ padding:"7px 10px", textAlign:"left", fontSize:11, color:C.muted, fontWeight:600, borderBottom:`1px solid ${C.border}` }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {Object.entries(expCoverage).sort((a,b)=>b[1]-a[1]).map(([exp,cnt]) => (
+                <tr key={exp} style={{ borderBottom:`1px solid ${C.border}` }}>
+                  <td style={{ padding:"7px 10px", fontWeight:600, fontSize:12 }}>{exp}</td>
+                  <td style={{ padding:"7px 10px", textAlign:"center", fontWeight:700, fontSize:13, color:C.green }}>{cnt}</td>
+                  <td style={{ padding:"7px 10px", minWidth:200 }}>
+                    <div style={{ background:"#f1f5f9", borderRadius:4, height:8, overflow:"hidden" }}>
+                      <div style={{ width:`${pct(cnt,coverageStats.total)}%`, height:"100%", background:C.green, borderRadius:4 }} />
+                    </div>
+                    <div style={{ fontSize:10, color:C.muted, marginTop:2 }}>{pct(cnt,coverageStats.total)}%</div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ─── SCORECARD CLASSIC TAB (dark navy header, refined) ───────────────────────
 function ScClassicWpPill({ status, onClick }) {
