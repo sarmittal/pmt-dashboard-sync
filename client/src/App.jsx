@@ -1239,54 +1239,69 @@ export default function App() {
         </div>
 
         {/* Nav */}
-        <nav style={{ flex:1, padding:"10px 10px 6px", display:"flex", flexDirection:"column", gap:1 }}>
+        <nav style={{ flex:1, padding:"8px 10px 6px", display:"flex", flexDirection:"column", gap:0, overflowY:"auto" }}>
           {[
-            {id:"executive",      icon:"◈", label:"Executive Summary"},
-            {id:"workplan",       icon:"📋", label:"Workplan"},
-            {id:"raid",           icon:"⚠", label:"RAID Analysis"},
-            {id:"cr",             icon:"↔", label:"Change Requests"},
-            {id:"scorecard",      icon:"◉", label:"Component Scorecard"},
-            {id:"testing",        icon:"✓", label:"Test Scenarios"},
-            {id:"testvariations", icon:"⎇", label:"Test Variations", wip:true},
-            {id:"traceability",   icon:"⊞", label:"Req Traceability"},
-            {id:"backlog",        icon:"☰", label:"Backlog"},
-          ].map(({id,icon,label,wip}) => (
-            <div key={id}>
-              <button onClick={()=>setTab(id)} style={{
-                display:"flex", alignItems:"center", gap:9, width:"100%", padding:"8px 10px",
-                borderRadius:7, border:"none", cursor:"pointer",
-                background: tab===id ? "rgba(255,255,255,0.12)" : "transparent",
-                color: tab===id ? "#fff" : "rgba(255,255,255,0.55)",
-                fontSize:12, fontWeight: tab===id ? 700 : 400,
-                textAlign:"left", transition:"all .12s",
-                borderLeft: `3px solid ${tab===id ? C.gold : "transparent"}`,
-              }}>
-                <span style={{fontSize:12,width:16,textAlign:"center",flexShrink:0}}>{icon}</span>
-                <span style={{flex:1}}>{label}</span>
-                {wip && <span style={{fontSize:8,fontWeight:700,color:"#fbbf24",background:"rgba(251,191,36,0.15)",borderRadius:3,padding:"1px 4px",flexShrink:0}}>WIP</span>}
-              </button>
-              {id==="workplan" && (
-                <SubNav items={[
-                  {id:"workstream",label:"Workstream Status"},
-                  {id:"sapbuild",  label:"SAP Config & Build"},
-                  {id:"ep",        label:"E&P"},
-                ]} active={wpSubTab} onSelect={v=>{setWpSubTab(v);setTab("workplan");}} />
-              )}
-              {id==="testing" && (
-                <SubNav items={[
-                  {id:"metrics",   label:"Overall Metrics"},
-                  {id:"review",    label:"Review Status"},
-                  {id:"scenarios", label:"Test Scenarios"},
-                ]} active={testSubTab} onSelect={v=>{setTestSubTab(v);setTab("testing");}} />
-              )}
-              {id==="testvariations" && (
-                <SubNav items={[
-                  {id:"variations", label:"Variations"},
-                  {id:"dimensions", label:"EC Dimensions"},
-                  {id:"review",     label:"Review"},
-                  {id:"coverage",   label:"Coverage"},
-                ]} active={testVarSubTab} onSelect={v=>{setTestVarSubTab(v);setTab("testvariations");}} />
-              )}
+            { header:"Project Management", items:[
+              {id:"executive",      icon:"◈", label:"Executive Summary"},
+              {id:"workplan",       icon:"📋", label:"Workplan"},
+              {id:"raid",           icon:"⚠",  label:"RAID Analysis"},
+              {id:"cr",             icon:"↔",  label:"CR Analysis"},
+            ]},
+            { header:"Build", items:[
+              {id:"scorecard",      icon:"◉", label:"Component Scorecard"},
+            ]},
+            { header:"Testing", items:[
+              {id:"testing",        icon:"✓", label:"Test Scenarios"},
+              {id:"testvariations", icon:"⎇", label:"Test Variations", wip:true},
+            ]},
+            { header:"Other", items:[
+              {id:"traceability",   icon:"⊞", label:"Req Traceability"},
+              {id:"backlog",        icon:"☰", label:"Backlog"},
+            ]},
+          ].map(({header, items}) => (
+            <div key={header} style={{marginBottom:4}}>
+              <div style={{fontSize:9,fontWeight:700,color:"rgba(255,255,255,0.28)",textTransform:"uppercase",letterSpacing:"0.09em",padding:"8px 10px 3px"}}>
+                {header}
+              </div>
+              {items.map(({id,icon,label,wip}) => (
+                <div key={id}>
+                  <button onClick={()=>setTab(id)} style={{
+                    display:"flex", alignItems:"center", gap:9, width:"100%", padding:"7px 10px",
+                    borderRadius:7, border:"none", cursor:"pointer",
+                    background: tab===id ? "rgba(255,255,255,0.12)" : "transparent",
+                    color: tab===id ? "#fff" : "rgba(255,255,255,0.55)",
+                    fontSize:12, fontWeight: tab===id ? 700 : 400,
+                    textAlign:"left", transition:"all .12s",
+                    borderLeft: `3px solid ${tab===id ? C.gold : "transparent"}`,
+                  }}>
+                    <span style={{fontSize:12,width:16,textAlign:"center",flexShrink:0}}>{icon}</span>
+                    <span style={{flex:1}}>{label}</span>
+                    {wip && <span style={{fontSize:8,fontWeight:700,color:"#fbbf24",background:"rgba(251,191,36,0.15)",borderRadius:3,padding:"1px 4px",flexShrink:0}}>WIP</span>}
+                  </button>
+                  {id==="workplan" && (
+                    <SubNav items={[
+                      {id:"workstream",label:"Workstream Status"},
+                      {id:"sapbuild",  label:"SAP Config & Build"},
+                      {id:"ep",        label:"E&P"},
+                    ]} active={wpSubTab} onSelect={v=>{setWpSubTab(v);setTab("workplan");}} />
+                  )}
+                  {id==="testing" && (
+                    <SubNav items={[
+                      {id:"metrics",   label:"Overall Metrics"},
+                      {id:"review",    label:"Review Status"},
+                      {id:"scenarios", label:"Test Scenarios"},
+                    ]} active={testSubTab} onSelect={v=>{setTestSubTab(v);setTab("testing");}} />
+                  )}
+                  {id==="testvariations" && (
+                    <SubNav items={[
+                      {id:"variations", label:"Variations"},
+                      {id:"dimensions", label:"EC Dimensions"},
+                      {id:"review",     label:"Review"},
+                      {id:"coverage",   label:"Coverage"},
+                    ]} active={testVarSubTab} onSelect={v=>{setTestVarSubTab(v);setTab("testvariations");}} />
+                  )}
+                </div>
+              ))}
             </div>
           ))}
         </nav>
