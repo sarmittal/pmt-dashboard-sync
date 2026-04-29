@@ -1197,114 +1197,122 @@ export default function App() {
   }, []); // no deps needed — all setters are stable
 
   return (
-    <div style={{ minHeight: "100vh", background: C.bg, fontFamily: "'Segoe UI', Arial, sans-serif", color: C.text }}>
-      {/* Header */}
-      <div style={{ background: "#000", padding: "0 24px", display: "flex", alignItems: "center", justifyContent: "space-between", height: 50 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ width: 26, height: 26, background: C.gold, borderRadius: 5, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13 }}>⚡</div>
-          <span style={{ color: "#fff", fontWeight: 700, fontSize: 15 }}>Performance Management for TAM Dashboard</span>
-        </div>
-        <span style={{ color: "rgba(255,255,255,0.55)", fontSize: 12 }}>{today.toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}</span>
-      </div>
+    <div style={{ minHeight:"100vh", display:"flex", fontFamily:"'Segoe UI',Arial,sans-serif", color:C.text, background:C.bg }}>
 
-      {/* Upload Bar */}
-      <div style={{ background: "#eaecf2", borderBottom: `1px solid ${C.border}`, padding: "10px 24px" }}>
-        <div style={{ maxWidth: 1400, margin: "0 auto" }}>
+      {/* ── Left Sidebar ──────────────────────────────────────────────────── */}
+      <aside style={{ width:220, background:"#0f172a", display:"flex", flexDirection:"column", height:"100vh", position:"sticky", top:0, flexShrink:0, zIndex:100, overflowY:"auto" }}>
 
-          {/* Top row — status + actions */}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
-
-            {/* Left — data status */}
-            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-              {syncMeta ? (
-                <>
-                  <span style={{ fontSize: 10, fontWeight: 700, color: "#16a34a", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                    ✓ Smartsheet Data Loaded
-                  </span>
-                  <span style={{ fontSize: 10, color: C.muted }}>
-                    {syncMeta.source === "smartsheet" ? "via Smartsheet sync" : "via snapshot"} · {syncMeta.lastSync?.slice(0,10)}
-                  </span>
-                  {[["wp","Workplan",wp],["raid","RAID",raid],["req","Requirements",req],["test","Test Scenarios",test],["cap","Capacity",cap]].map(([key,label,state]) => (
-                    <span key={key} style={{ display:"flex", alignItems:"center", gap:3, fontSize:10 }}>
-                      <span style={{ width:6, height:6, borderRadius:"50%", background: state ? "#16a34a" : "#94a3b8", display:"inline-block" }} />
-                      <span style={{ color: state ? C.text : C.muted }}>{label}</span>
-                    </span>
-                  ))}
-                </>
-              ) : (
-                <>
-                  <span style={{ fontSize: 11, color: C.gold, fontWeight: 600 }}>
-                    ⚠ No data loaded — upload Smartsheet JSON or individual XLSX files below
-                  </span>
-                  {isLoading && <span style={{ fontSize: 11, color: C.accent }}>⏳ Loading from Smartsheet…</span>}
-                </>
-              )}
-            </div>
-
-            {/* Right — action buttons */}
-            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-
-              {/* Refresh from Smartsheet (API) */}
-              <button
-                disabled={refreshing}
-                onClick={async () => {
-                  setRefreshing(true);
-                  try {
-                    const r = await fetch("/api/refresh", { method: "POST" });
-                    if (!r.ok) { alert("Refresh failed: " + r.status); return; }
-                    const dataRes = await fetch("/api/data");
-                    if (dataRes.ok) {
-                      const apiJson = await dataRes.json();
-                      applyApiData(apiJson);
-                      setFnames({ wp:"Smartsheet", raid:"Smartsheet", req:"Smartsheet", test:"Smartsheet", cap:"Smartsheet" });
-                      alert("✅ Refreshed from Smartsheet!");
-                    }
-                  } catch(e) { alert("Refresh error: " + e.message); }
-                  finally { setRefreshing(false); }
-                }}
-                style={{ padding: "7px 14px", background: refreshing ? "#e2e8f0" : "#16a34a",
-                  border: "none", borderRadius: 6, cursor: refreshing ? "wait" : "pointer",
-                  color: refreshing ? C.muted : "#fff", fontSize: 11, fontWeight: 700 }}>
-                {refreshing ? "⏳ Refreshing…" : "🔄 Refresh from Smartsheet"}
-              </button>
+        {/* Logo */}
+        <div style={{ padding:"16px 16px 14px", borderBottom:"1px solid rgba(255,255,255,0.08)" }}>
+          <div style={{ display:"flex", alignItems:"center", gap:9 }}>
+            <div style={{ width:28, height:28, background:C.gold, borderRadius:6, display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, flexShrink:0 }}>⚡</div>
+            <div>
+              <div style={{ color:"#fff", fontWeight:700, fontSize:12.5, lineHeight:1.3 }}>PMT Dashboard</div>
+              <div style={{ color:"rgba(255,255,255,0.38)", fontSize:10 }}>{today.toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"})}</div>
             </div>
           </div>
-
         </div>
-      </div>
 
-      {/* Tab Bar */}
-      <div style={{ background: "#595959", borderBottom: `1px solid #444` }}>
-        <div style={{ maxWidth: 1400, margin: "0 auto", padding: "0 20px", display: "flex", alignItems: "center", gap: 4 }}>
-          {TABS.map(t => (
-            <button key={t.id} onClick={() => setTab(t.id)} style={{
-              padding: "8px 18px", border: "none", cursor: "pointer", transition: "all .15s",
-              fontSize: 14, fontWeight: tab === t.id ? 700 : 500, letterSpacing: "1px",
-              borderRadius: 20, margin: "6px 0",
-              background: tab === t.id ? "rgba(255,255,255,0.95)" : "transparent",
-              color: tab === t.id ? "#595959" : "rgba(255,255,255,0.72)",
-              boxShadow: tab === t.id ? "0 1px 4px rgba(0,0,0,0.18)" : "none",
-            }}>{t.label}</button>
+        {/* Nav */}
+        <nav style={{ flex:1, padding:"10px 10px 6px", display:"flex", flexDirection:"column", gap:1 }}>
+          {[
+            {id:"executive",      icon:"◈", label:"Executive Summary"},
+            {id:"workplan",       icon:"📋", label:"Workplan"},
+            {id:"raid",           icon:"⚠", label:"RAID Analysis"},
+            {id:"cr",             icon:"↔", label:"Change Requests"},
+            {id:"scorecard",      icon:"◉", label:"Component Scorecard"},
+            {id:"testing",        icon:"✓", label:"Test Scenarios"},
+            {id:"testvariations", icon:"⎇", label:"Test Variations"},
+            {id:"traceability",   icon:"⊞", label:"Req Traceability"},
+            {id:"backlog",        icon:"☰", label:"Backlog"},
+          ].map(({id,icon,label}) => (
+            <button key={id} onClick={()=>setTab(id)} style={{
+              display:"flex", alignItems:"center", gap:9, width:"100%", padding:"8px 10px",
+              borderRadius:7, border:"none", cursor:"pointer",
+              background: tab===id ? "rgba(255,255,255,0.12)" : "transparent",
+              color: tab===id ? "#fff" : "rgba(255,255,255,0.55)",
+              fontSize:12, fontWeight: tab===id ? 700 : 400,
+              textAlign:"left", transition:"all .12s",
+              borderLeft: `3px solid ${tab===id ? C.gold : "transparent"}`,
+            }}>
+              <span style={{fontSize:12,width:16,textAlign:"center",flexShrink:0}}>{icon}</span>
+              {label}
+            </button>
+          ))}
+        </nav>
+
+        {/* Data Status */}
+        <div style={{ padding:"10px 14px 6px", borderTop:"1px solid rgba(255,255,255,0.08)" }}>
+          <div style={{ fontSize:9, fontWeight:700, color:"rgba(255,255,255,0.32)", textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:6 }}>Data Sources</div>
+          {[["wp","Workplan",wp],["raid","RAID",raid],["req","Requirements",req],["test","Test Scenarios",test],["cap","Capacity",cap]].map(([key,label,state]) => (
+            <div key={key} style={{ display:"flex", alignItems:"center", gap:6, marginBottom:3 }}>
+              <span style={{ width:6, height:6, borderRadius:"50%", background:state?"#22c55e":"#475569", display:"inline-block", flexShrink:0 }} />
+              <span style={{ fontSize:10, color:state?"rgba(255,255,255,0.72)":"rgba(255,255,255,0.3)" }}>{label}</span>
+            </div>
+          ))}
+          {syncMeta && (
+            <div style={{ fontSize:9, color:"rgba(255,255,255,0.28)", marginTop:5 }}>
+              {syncMeta.source==="smartsheet"?"Smartsheet":"Snapshot"} · {syncMeta.lastSync?.slice(0,10)}
+            </div>
+          )}
+          {!syncMeta && !isLoading && (
+            <div style={{ fontSize:9, color:"#f59e0b", marginTop:4 }}>⚠ No data loaded</div>
+          )}
+          {isLoading && <div style={{ fontSize:9, color:"#60a5fa", marginTop:4 }}>⏳ Loading…</div>}
+        </div>
+
+        {/* Refresh + Upload */}
+        <div style={{ padding:"8px 10px 14px" }}>
+          <button
+            disabled={refreshing}
+            onClick={async()=>{
+              setRefreshing(true);
+              try {
+                const r = await fetch("/api/refresh",{method:"POST"});
+                if(!r.ok){alert("Refresh failed: "+r.status);return;}
+                const dataRes = await fetch("/api/data");
+                if(dataRes.ok){const apiJson=await dataRes.json();applyApiData(apiJson);setFnames({wp:"Smartsheet",raid:"Smartsheet",req:"Smartsheet",test:"Smartsheet",cap:"Smartsheet"});alert("✅ Refreshed!");}
+              } catch(e){alert("Refresh error: "+e.message);}
+              finally{setRefreshing(false);}
+            }}
+            style={{ width:"100%", padding:"7px 10px", background:refreshing?"#1e293b":"#166534",
+              border:"1px solid rgba(255,255,255,0.1)", borderRadius:7, cursor:refreshing?"wait":"pointer",
+              color:refreshing?"rgba(255,255,255,0.35)":"#fff", fontSize:11, fontWeight:700, marginBottom:8 }}>
+            {refreshing?"⏳ Refreshing…":"🔄 Refresh Smartsheet"}
+          </button>
+          {[
+            {key:"wp",   label:"Workplan",      state:wp},
+            {key:"raid", label:"RAID Log",      state:raid},
+            {key:"req",  label:"Requirements",  state:req},
+            {key:"test", label:"Test Scenarios",state:test},
+            {key:"cap",  label:"Capacity",      state:cap},
+          ].map(({key,label,state}) => (
+            <label key={key} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", cursor:"pointer",
+              padding:"4px 8px", borderRadius:5, background:"rgba(255,255,255,0.05)",
+              border:"1px solid rgba(255,255,255,0.07)", marginBottom:3 }}>
+              <span style={{ fontSize:10, color:state?"rgba(255,255,255,0.58)":"rgba(255,255,255,0.35)" }}>{label}</span>
+              <span style={{ fontSize:9, color:state?"#22c55e":"rgba(255,255,255,0.28)" }}>{state?"✓ Loaded":"Upload"}</span>
+              <input type="file" accept=".xlsx,.xls,.csv" style={{display:"none"}} onChange={e=>{if(e.target.files[0])load(key,e.target.files[0]);}} />
+            </label>
           ))}
         </div>
-      </div>
+      </aside>
 
-      {/* Content */}
-      <div style={{ maxWidth: "100%", margin: "0 auto", padding: "20px 16px" }}>
-        {tab === "executive"    && <ExecutiveSummaryTab wp={wp} raid={raid} req={req} cap={cap} openModal={openModal} />}
-        {tab === "workplan"     && <WorkplanTab wp={wp} raid={raid} openModal={openModal} />}
-        {tab === "raid"         && <RaidAnalysisTab raid={raid} />}
-        {tab === "cr"           && <ChangeRequestTab raid={raid} cap={cap} />}
-        {tab === "backlog"      && <BacklogTab raid={raid} />}
-        {tab === "scorecard"    && <ScorecardTab wp={wp} raid={raid} req={req} openModal={openModal} />}
-        {tab === "testing"         && <TestScenariosTab data={test} wp={wp} req={req} />}
-        {tab === "testvariations"  && <TestVariationsTab data={test} ecFromSmartsheet={ec} />}
-        {tab === "traceability"    && <ReqTraceabilityTab req={req} test={test} />}
-      </div>
+      {/* ── Main Content ────────────────────────────────────────────────────── */}
+      <main style={{ flex:1, minWidth:0, background:C.bg, padding:"18px 20px" }}>
+        {tab==="executive"       && <ExecutiveSummaryTab wp={wp} raid={raid} req={req} cap={cap} openModal={openModal} />}
+        {tab==="workplan"        && <WorkplanTab wp={wp} raid={raid} openModal={openModal} />}
+        {tab==="raid"            && <RaidAnalysisTab raid={raid} />}
+        {tab==="cr"              && <ChangeRequestTab raid={raid} cap={cap} />}
+        {tab==="backlog"         && <BacklogTab raid={raid} />}
+        {tab==="scorecard"       && <ScorecardTab wp={wp} raid={raid} req={req} openModal={openModal} />}
+        {tab==="testing"         && <TestScenariosTab data={test} wp={wp} req={req} />}
+        {tab==="testvariations"  && <TestVariationsTab data={test} ecFromSmartsheet={ec} />}
+        {tab==="traceability"    && <ReqTraceabilityTab req={req} test={test} />}
+      </main>
 
       {modal && <Modal title={modal.title} rows={modal.rows} columns={modal.columns} onClose={() => setModal(null)} />}
 
-      {/* Snapshot text modal — copy this and save as .json */}
       {snapshotText && (
         <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.6)", zIndex:2000, display:"flex", alignItems:"center", justifyContent:"center" }}
           onClick={() => setSnapshotText(null)}>
@@ -2922,7 +2930,7 @@ function ReqTraceabilityTab({ req, test }) {
   ];
 
   return (
-    <div style={{display:"flex",flexDirection:"column",gap:14}}>
+    <div style={{display:"flex",flexDirection:"column",gap:14,paddingRight: detailRow ? 464 : 0,transition:"padding .2s"}}>
 
       {/* KPI row */}
       <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:12}}>
@@ -3145,10 +3153,10 @@ function ReqTraceabilityTab({ req, test }) {
         const { r, scens, isScript, gap, estSum, tagPills } = detailRow;
         const reqId = String(r[reqK?.reqId]||"").trim();
         return (
-          <div onClick={()=>setDetailRow(null)}
-            style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.45)",zIndex:1000,display:"flex",alignItems:"flex-start",justifyContent:"center",overflowY:"auto",padding:"40px 24px"}}>
-            <div onClick={e=>e.stopPropagation()}
-              style={{background:C.white,borderRadius:10,boxShadow:"0 8px 40px rgba(0,0,0,0.22)",width:"100%",maxWidth:880,display:"flex",flexDirection:"column",overflow:"hidden"}}>
+          <div
+            style={{position:"fixed",right:0,top:0,bottom:0,width:460,background:C.white,zIndex:500,
+              boxShadow:"-4px 0 28px rgba(0,0,0,0.13)",display:"flex",flexDirection:"column",
+              borderLeft:"2px solid #e2e8f0",overflow:"hidden"}}>
 
               {/* Header */}
               <div style={{background:C.navy,padding:"14px 20px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
@@ -3296,7 +3304,6 @@ function ReqTraceabilityTab({ req, test }) {
                 </div>
 
               </div>
-            </div>
           </div>
         );
       })()}
