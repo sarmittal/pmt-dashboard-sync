@@ -2926,9 +2926,9 @@ function ReqTraceabilityTab({ req, test }) {
               {/* Group header row */}
               <tr>
                 <th style={{width:28,background:C.navy,borderRight:"1px solid rgba(255,255,255,0.1)"}}/>
-                <th colSpan={8} style={{padding:"4px 8px",background:"#1e3a5f",color:"#93c5fd",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.08em",textAlign:"center",borderRight:"2px solid rgba(255,255,255,0.25)"}}>Design</th>
-                <th colSpan={2} style={{padding:"4px 8px",background:"#1e3a5f",color:"#86efac",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.08em",textAlign:"center",borderRight:"2px solid rgba(255,255,255,0.25)"}}>Build</th>
-                <th colSpan={5} style={{padding:"4px 8px",background:"#1e3a5f",color:"#fcd34d",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.08em",textAlign:"center",borderRight:"none"}}>Test</th>
+                <th colSpan={8} style={{padding:"4px 8px",background:"#dbeafe",color:"#1e40af",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.08em",textAlign:"center",borderRight:"2px solid #93c5fd"}}>Design</th>
+                <th colSpan={2} style={{padding:"4px 8px",background:"#dcfce7",color:"#166534",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.08em",textAlign:"center",borderRight:"2px solid #86efac"}}>Build</th>
+                <th colSpan={5} style={{padding:"4px 8px",background:"#fef9c3",color:"#854d0e",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.08em",textAlign:"center",borderRight:"none"}}>Test</th>
               </tr>
               {/* Column header row */}
               <tr>
