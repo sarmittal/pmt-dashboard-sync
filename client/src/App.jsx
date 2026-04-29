@@ -3743,7 +3743,7 @@ function BacklogTab({ raid }) {
         {/* Table */}
         <div style={{overflowX:"auto"}}>
           <table style={{borderCollapse:"collapse",fontSize:11,tableLayout:"fixed",width:"100%"}}>
-            <thead>
+            <thead style={{ position:"sticky", top:0, zIndex:2 }}>
               <tr style={{background:"#162f50"}}>
                 {COL_KEYS.filter(([key])=>colConfig[key]?.visible).map(([key,label],idx,arr)=>(
                   <th key={key} style={{padding:"8px 10px",textAlign:"left",color:"#fff",fontWeight:700,fontSize:10,
@@ -4202,7 +4202,7 @@ function RaidAnalysisTab({ raid }) {
             {/* Table */}
             <div style={{overflowX:"auto"}}>
               <table style={{ borderCollapse:"collapse", fontSize:11, tableLayout:"fixed", width:"100%" }}>
-                <thead>
+                <thead style={{ position:"sticky", top:0, zIndex:2 }}>
                   <tr style={{ background:"#162f50" }}>
                     {[
                       ["raidId","RAID ID"], ["priority","Priority"], ["status","Status"], ["type","Type"], ["component","Component"],
@@ -6069,9 +6069,9 @@ function TestScenariosTab({ data, wp, req, subTab, setSubTab }) {
                 <col key={t.id+"-r"} style={{ width: rcw("rv-"+t.id+"-r",  70) }} />,
               ])}
             </colgroup>
-            <thead>
+            <thead style={{ position:"sticky", top:0, zIndex:3 }}>
               <tr style={{ background:C.navy }}>
-                <th style={{ padding:"8px 12px", textAlign:"left", color:"#fff", fontWeight:700, fontSize:10, position:"sticky", left:0, background:C.navy, borderRight:`1px solid rgba(255,255,255,0.15)`, zIndex:2, overflow:"hidden" }}>SubProcess / Component{rrh("rv-sp",160)}</th>
+                <th style={{ padding:"8px 12px", textAlign:"left", color:"#fff", fontWeight:700, fontSize:10, position:"sticky", left:0, background:C.navy, borderRight:`1px solid rgba(255,255,255,0.15)`, zIndex:4, overflow:"hidden" }}>SubProcess / Component{rrh("rv-sp",160)}</th>
                 <th style={{ padding:"8px 8px", textAlign:"center", color:"#a8d8ff", fontWeight:700, fontSize:10, borderRight:`1px solid rgba(255,255,255,0.1)`, position:"relative", overflow:"hidden" }}>User Stories{rrh("rv-us",60)}</th>
                 <th style={{ padding:"8px 8px", textAlign:"center", color:"#a8d8ff", fontWeight:700, fontSize:10, borderRight:`1px solid rgba(255,255,255,0.1)`, position:"relative", overflow:"hidden" }}>Relevant{rrh("rv-rel",70)}</th>
                 <th style={{ padding:"8px 8px", textAlign:"center", color:"#fcd34d", fontWeight:700, fontSize:10, borderRight:`1px solid rgba(255,255,255,0.1)`, position:"relative", overflow:"hidden" }}>Untagged US{rrh("rv-unt",75)}</th>
@@ -6269,9 +6269,9 @@ function TestScenariosTab({ data, wp, req, subTab, setSubTab }) {
       </div>
       <div style={{ overflowX:"auto" }}>
         <table style={{ width:"100%", borderCollapse:"collapse", fontSize:11 }}>
-          <thead>
+          <thead style={{ position:"sticky", top:0, zIndex:3 }}>
             <tr style={{ background:C.navy }}>
-              <th style={{ padding:"8px 14px", textAlign:"left", color:"#fff", fontWeight:700, fontSize:10, minWidth:200, position:"sticky", left:0, background:C.navy, borderRight:`1px solid rgba(255,255,255,0.15)`, zIndex:2 }}>SubProcess / Component</th>
+              <th style={{ padding:"8px 14px", textAlign:"left", color:"#fff", fontWeight:700, fontSize:10, minWidth:200, position:"sticky", left:0, background:C.navy, borderRight:`1px solid rgba(255,255,255,0.15)`, zIndex:4 }}>SubProcess / Component</th>
               <th style={{ padding:"8px 10px", textAlign:"center", color:"#a8d8ff", fontWeight:700, fontSize:10, borderRight:`1px solid rgba(255,255,255,0.1)`, minWidth:80 }}>User Stories</th>
               <th style={{ padding:"8px 10px", textAlign:"center", color:"#a8d8ff", fontWeight:700, fontSize:10, borderRight:`1px solid rgba(255,255,255,0.1)`, minWidth:100 }}>Relevant for Scenarios</th>
               <th style={{ padding:"8px 10px", textAlign:"center", color:"#fcd34d", fontWeight:700, fontSize:10, borderRight:`1px solid rgba(255,255,255,0.1)`, minWidth:90 }}>Untagged User Story</th>
@@ -7743,7 +7743,7 @@ function ScorecardClassicTab({ wp, raid, req, openModal }) {
       <Card style={{ padding:0 }}>
         <div style={{ overflowX:"auto" }}>
           <table style={{ width:"100%", borderCollapse:"collapse", fontSize:11 }}>
-            <thead>
+            <thead style={{ position:"sticky", top:0, zIndex:2 }}>
               <tr style={{ background:"#0a1f3d", borderBottom:"2px solid #2563eb" }}>
                 <th style={{ padding:"8px 12px", color:"#fff", fontWeight:700, fontSize:10, textAlign:"left", minWidth:170, position:"sticky", left:0, background:"#0f2744", zIndex:2 }}>Component</th>
                 <th colSpan={4} style={{ padding:"8px", color:"#fbbf24", fontWeight:700, fontSize:10, textAlign:"center", borderLeft:"1px solid rgba(255,255,255,0.2)" }}>RAID</th>
@@ -8466,7 +8466,7 @@ function ScorecardTab({ wp, raid, req, openModal }) {
       <Card style={{ padding:0 }}>
         <div style={{ overflowX:"auto" }}>
           <table style={{ width:"100%", borderCollapse:"collapse", fontSize:11 }}>
-            <thead>
+            <thead style={{ position:"sticky", top:0, zIndex:2 }}>
               {/* Group header row */}
               <tr style={{ background:"var(--color-background-primary, #fff)", borderBottom:"0.5px solid #e2e8f0" }}>
                 <th style={{ padding:"8px 10px", color:"transparent", fontSize:10, textAlign:"left", minWidth:150 }}> </th>
