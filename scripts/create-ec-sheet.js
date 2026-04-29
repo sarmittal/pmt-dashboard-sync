@@ -12,14 +12,20 @@
  *   4. Prints the new sheet ID — add it to server/smartsheet.js as SHEETS.ec
  */
 
-import dotenv from "dotenv";
-import { resolve, dirname } from "path";
+import { readFileSync } from "fs";
 import { fileURLToPath } from "url";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-dotenv.config({ path: resolve(__dirname, "../.env") });
-
-const TOKEN = process.env.SMARTSHEET_TOKEN;
+// Read token from .env without requiring dotenv package
+let TOKEN = process.env.SMARTSHEET_TOKEN;
+if (!TOKEN) {
+  try {
+    const envPath = new URL("../.env", import.meta.url);
+    const env = readFileSync(envPath, "utf8");
+    const m = env.match(/^SMARTSHEET_TOKEN=(.+)$/m);
+    if (m) TOKEN = m[1].trim();
+  } catch(e) {}
+}
+if (!TOKEN) { console.error("ERROR: SMARTSHEET_TOKEN not found in .env or environment"); process.exit(1); }
 const TEST_SHEET_ID = "2362069488717700"; // existing Test Scenarios sheet
 
 const BASE = "https://api.smartsheet.com/2.0";
