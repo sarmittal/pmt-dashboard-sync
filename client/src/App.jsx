@@ -797,7 +797,7 @@ const EditHeaderBadge = () => (
 
 // ── Editable cell — click to edit, saves to Smartsheet on blur/Enter ─────────
 // To add more editable columns: update EDITABLE in server/smartsheet.js only.
-function EditableCell({ sheet, rowId, colName, value, multiline = false, options: optionsProp = null, onSaved, renderDisplay }) {
+function EditableCell({ sheet, rowId, colName, value, multiline = false, multi = false, options: optionsProp = null, onSaved, renderDisplay }) {
   const [editing, setEditing]   = useState(false);
   const [draft,   setDraft]     = useState(value ?? "");
   const [saving,  setSaving]    = useState(false);
@@ -807,8 +807,9 @@ function EditableCell({ sheet, rowId, colName, value, multiline = false, options
 
   const startEdit = () => { setDraft(value ?? ""); setError(null); setEditing(true); };
 
-  const save = async () => {
-    const trimmed = typeof draft === "string" ? draft.trim() : String(draft ?? "").trim();
+  const save = async (overrideDraft) => {
+    const val = overrideDraft !== undefined ? overrideDraft : draft;
+    const trimmed = typeof val === "string" ? val.trim() : String(val ?? "").trim();
     if (trimmed === String(value ?? "").trim()) { setEditing(false); return; }
     setSaving(true);
     setError(null);
@@ -843,6 +844,52 @@ function EditableCell({ sheet, rowId, colName, value, multiline = false, options
       width: "100%", padding: "4px 6px", fontSize: 12, border: `1.5px solid ${C.navyLight}`,
       borderRadius: 4, outline: "none", fontFamily: "inherit", boxSizing: "border-box",
     };
+
+    // Multi-select checkbox dropdown
+    if (multi && options && options.length > 0) {
+      const selected = new Set(draft.split(/[,\n;]+/).map(s => s.trim()).filter(Boolean));
+      const toggle = opt => {
+        const next = new Set(selected);
+        next.has(opt) ? next.delete(opt) : next.add(opt);
+        setDraft([...next].join(", "));
+      };
+      const saveMulti = () => { save(draft); };
+      return (
+        <div style={{ position:"relative" }}>
+          <div style={{ border:`1.5px solid ${C.navyLight}`, borderRadius:4, background:C.white, padding:"2px 4px",
+            display:"flex", flexWrap:"wrap", gap:2, minHeight:28, cursor:"pointer", maxHeight:80, overflowY:"auto" }}
+            onClick={e => e.stopPropagation()}>
+            {selected.size > 0
+              ? [...selected].map((v,i) => <span key={i} style={{background:"#fef3c7",color:"#92400e",border:"1px solid #fcd34d",borderRadius:3,padding:"2px 5px",fontSize:10,whiteSpace:"nowrap"}}>{v}</span>)
+              : <span style={{color:C.muted,fontSize:11,padding:"2px 4px"}}>— select —</span>}
+          </div>
+          <div style={{ position:"absolute", top:"100%", left:0, zIndex:200, background:C.white,
+            border:`1px solid ${C.border}`, borderRadius:6, boxShadow:"0 4px 16px rgba(0,0,0,0.15)",
+            minWidth:220, maxHeight:220, overflowY:"auto", marginTop:2 }}
+            onClick={e => e.stopPropagation()}>
+            {options.map(opt => (
+              <label key={opt} style={{ display:"flex", alignItems:"center", gap:8, padding:"6px 12px",
+                cursor:"pointer", background:selected.has(opt)?"#fef3c7":C.white,
+                borderBottom:`1px solid ${C.border}` }}
+                onMouseEnter={e => { if (!selected.has(opt)) e.currentTarget.style.background="#f8fafc"; }}
+                onMouseLeave={e => { e.currentTarget.style.background = selected.has(opt)?"#fef3c7":C.white; }}>
+                <input type="checkbox" checked={selected.has(opt)} onChange={() => toggle(opt)}
+                  style={{ cursor:"pointer", width:13, height:13, accentColor:C.navyLight }} />
+                <span style={{ fontSize:11, color:C.text }}>{opt}</span>
+              </label>
+            ))}
+          </div>
+          <div style={{ display:"flex", gap:4, marginTop:4 }}>
+            <button onClick={saveMulti} style={{ padding:"3px 10px", fontSize:10, fontWeight:700,
+              background:C.navyLight, color:"#fff", border:"none", borderRadius:4, cursor:"pointer" }}>Save</button>
+            <button onClick={() => setEditing(false)} style={{ padding:"3px 10px", fontSize:10,
+              background:C.white, color:C.muted, border:`1px solid ${C.border}`, borderRadius:4, cursor:"pointer" }}>Cancel</button>
+          </div>
+          {error && <div style={{ color: C.delayed, fontSize: 10, marginTop: 2 }}>{error}</div>}
+        </div>
+      );
+    }
+
     if (options && options.length > 0) {
       return (
         <div>
@@ -1539,6 +1586,7 @@ function ExecutiveSummaryTab({ wp, raid, req, cap, openModal }) {
 
   // ── Section 1: RAID ───────────────────────────────────────────────────────
   const K = raid?.keys;
+  const raidTagOptions = raid && K?.tag ? Array.from(new Set(raid.items.flatMap(r => String(r[K.tag]||"").split(/[,\n;]+/).map(s=>s.trim()).filter(Boolean)))).sort() : [];
   const due8  = raid ? raid.open.filter(r => { const d=daysUntil(r[K.date]); return d!=null && d>=0 && d<=8;  }) : [];
   const due14 = raid ? raid.open.filter(r => { const d=daysUntil(r[K.date]); return d!=null && d>=0 && d<=14; }) : [];
   // Priority map with open/total fields to match RAID Analysis tab rendering
@@ -1847,6 +1895,7 @@ function ExecutiveSummaryTab({ wp, raid, req, cap, openModal }) {
             rows={raidModal.rows}
             K={K} teamKey={resolvedTeamKey}
             allTeams={allModalTeams} allTypes={allModalTypes} allComps={allModalComps}
+            tagOptions={raidTagOptions}
             statusCol={statusCol}
             hideType={raidModal.hideType || false}
             hideStatus={raidModal.hideStatus || false}
@@ -1862,7 +1911,7 @@ function ExecutiveSummaryTab({ wp, raid, req, cap, openModal }) {
 
 
 // ─── RAID KPI DRILL-DOWN MODAL ───────────────────────────────────────────────
-function RaidKpiModal({ title, rows, K, teamKey, allTeams, allTypes, allComps, statusCol, hideType, hideStatus, colConfig, setColConfig, onClose }) {
+function RaidKpiModal({ title, rows, K, teamKey, allTeams, allTypes, allComps, tagOptions, statusCol, hideType, hideStatus, colConfig, setColConfig, onClose }) {
   const [teamFilter,   setTeamFilter]   = useState("All");
   const [statusFilter, setStatusFilter] = useState("All");
   const [typeFilter,   setTypeFilter]   = useState("All");
@@ -2049,7 +2098,7 @@ function RaidKpiModal({ title, rows, K, teamKey, allTeams, allTypes, allComps, s
                     {colConfig.component.visible       && <td style={{ padding:"8px 10px", color:C.text, wordBreak:"break-word", width:colConfig.component.width }}>{String(r[K.component]||"—")}</td>}
                     {colConfig.experience.visible      && <td style={{ padding:"8px 10px", color:C.muted, wordBreak:"break-word", width:colConfig.experience.width }}>{String(r[K.experience]||"—")}</td>}
                     {colConfig.topic.visible           && <td style={{ padding:"8px 10px", color:C.muted, wordBreak:"break-word", width:colConfig.topic.width }}>{String(r[K.topic]||"—")}</td>}
-                    {colConfig.tag?.visible            && <td style={{ padding:"8px 10px", width:colConfig.tag?.width||100, overflow:"hidden" }}>{r._rowId && K.tag ? <EditableCell sheet="raid" rowId={r._rowId} colName={K.tag} value={localVals[r._rowId]?.[K.tag] ?? String(r[K.tag]||"")} onSaved={v=>localUpdate(r._rowId,K.tag,v)} renderDisplay={v=>{const pts=v.split(/[\n,;]+/).map(s=>s.trim()).filter(Boolean);return pts.length?<span style={{display:"flex",flexWrap:"wrap",gap:2}}>{pts.map((p,i)=><span key={i} style={{background:"#fef3c7",color:"#92400e",border:"1px solid #fcd34d",borderRadius:3,padding:"2px 5px",fontSize:10,whiteSpace:"nowrap"}}>{p}</span>)}</span>:<span style={{color:C.muted}}>—</span>;}} /> : (() => { const parts=String(r[K.tag]||"").split(/[\n,;]+/).map(s=>s.trim()).filter(Boolean); if(!parts.length) return <span style={{color:C.muted}}>—</span>; return <span style={{display:"flex",flexWrap:"wrap",gap:2}}>{parts.map((p,i)=><span key={i} style={{background:"#fef3c7",color:"#92400e",border:"1px solid #fcd34d",borderRadius:3,padding:"2px 5px",fontSize:10,whiteSpace:"nowrap"}}>{p}</span>)}</span>; })()}</td>}
+                    {colConfig.tag?.visible            && <td style={{ padding:"8px 10px", width:colConfig.tag?.width||100, overflow:"hidden" }}>{r._rowId && K.tag ? <EditableCell sheet="raid" rowId={r._rowId} colName={K.tag} value={localVals[r._rowId]?.[K.tag] ?? String(r[K.tag]||"")} onSaved={v=>localUpdate(r._rowId,K.tag,v)} multi options={tagOptions.length?tagOptions:undefined} renderDisplay={v=>{const pts=v.split(/[\n,;]+/).map(s=>s.trim()).filter(Boolean);return pts.length?<span style={{display:"flex",flexWrap:"wrap",gap:2}}>{pts.map((p,i)=><span key={i} style={{background:"#fef3c7",color:"#92400e",border:"1px solid #fcd34d",borderRadius:3,padding:"2px 5px",fontSize:10,whiteSpace:"nowrap"}}>{p}</span>)}</span>:<span style={{color:C.muted}}>—</span>;}} /> : (() => { const parts=String(r[K.tag]||"").split(/[\n,;]+/).map(s=>s.trim()).filter(Boolean); if(!parts.length) return <span style={{color:C.muted}}>—</span>; return <span style={{display:"flex",flexWrap:"wrap",gap:2}}>{parts.map((p,i)=><span key={i} style={{background:"#fef3c7",color:"#92400e",border:"1px solid #fcd34d",borderRadius:3,padding:"2px 5px",fontSize:10,whiteSpace:"nowrap"}}>{p}</span>)}</span>; })()}</td>}
                     {colConfig.desc.visible            && <td style={{ padding:"8px 10px", wordBreak:"break-word", lineHeight:1.5, width:colConfig.desc.width }}>{r._rowId && K.desc ? <EditableCell sheet="raid" rowId={r._rowId} colName={K.desc} value={localVals[r._rowId]?.[K.desc] ?? String(r[K.desc]||"")} multiline onSaved={v=>localUpdate(r._rowId,K.desc,v)} /> : String(r[K.desc]||"—")}</td>}
                     {colConfig.comment.visible         && <td style={{ padding:"8px 10px", wordBreak:"break-word", lineHeight:1.5, width:colConfig.comment.width }}>{r._rowId && K.comment ? <EditableCell sheet="raid" rowId={r._rowId} colName={K.comment} value={localVals[r._rowId]?.[K.comment] ?? String(r[K.comment]||"")} multiline onSaved={v=>localUpdate(r._rowId,K.comment,v)} /> : String(r[K.comment]||"—")}</td>}
                     {colConfig.owner?.visible          && <td style={{ padding:"8px 10px", color:C.text, wordBreak:"break-word", width:colConfig.owner.width }}>{String(r[K.owner]||"—")}</td>}
@@ -2160,7 +2209,7 @@ function CRDrillModal({ title, rows, K, showCompletion, onClose }) {
     { key:"ocm",     td:(r)=>numCell(r,K.crOcm) },
     { key:"ux",      td:(r)=>numCell(r,K.crUx) },
     { key:"sprint",  td:(r)=><td style={{padding:"6px 8px",whiteSpace:"nowrap",width:colCfg.sprint.width,overflow:"hidden"}}>{r._rowId&&K.crTargetSprint?<EditableCell sheet="raid" rowId={r._rowId} colName={K.crTargetSprint} value={localVals[r._rowId]?.[K.crTargetSprint]??String(r[K.crTargetSprint]||"")} onSaved={v=>localUpdate(r._rowId,K.crTargetSprint,v)}/>:String(r[K.crTargetSprint]||"—")}</td> },
-    { key:"tag",     td:(r)=><td style={{padding:"6px 8px",width:colCfg.tag.width,overflow:"hidden"}}>{r._rowId&&K.tag?<EditableCell sheet="raid" rowId={r._rowId} colName={K.tag} value={localVals[r._rowId]?.[K.tag]??String(r[K.tag]||"")} onSaved={v=>localUpdate(r._rowId,K.tag,v)} renderDisplay={v=>{const pts=v.split(/[\n,;]+/).map(s=>s.trim()).filter(Boolean);return pts.length?<span style={{display:"flex",flexWrap:"wrap",gap:2}}>{pts.map((p,i)=><span key={i} style={{background:"#fef3c7",color:"#92400e",border:"1px solid #fcd34d",borderRadius:3,padding:"2px 5px",fontSize:10,whiteSpace:"nowrap"}}>{p}</span>)}</span>:<span style={{color:C.muted}}>—</span>;}} />:(() => { const parts=String(r[K.tag]||"").split(/[\n,;]+/).map(s=>s.trim()).filter(Boolean); if(!parts.length) return <span style={{color:C.muted}}>—</span>; return <span style={{display:"flex",flexWrap:"wrap",gap:2}}>{parts.map((p,i)=><span key={i} style={{background:"#fef3c7",color:"#92400e",border:"1px solid #fcd34d",borderRadius:3,padding:"2px 5px",fontSize:10,whiteSpace:"nowrap"}}>{p}</span>)}</span>; })()}</td> },
+    { key:"tag",     td:(r)=><td style={{padding:"6px 8px",width:colCfg.tag.width,overflow:"hidden"}}>{r._rowId&&K.tag?<EditableCell sheet="raid" rowId={r._rowId} colName={K.tag} value={localVals[r._rowId]?.[K.tag]??String(r[K.tag]||"")} onSaved={v=>localUpdate(r._rowId,K.tag,v)} multi options={tagOptions?.length?tagOptions:undefined} renderDisplay={v=>{const pts=v.split(/[\n,;]+/).map(s=>s.trim()).filter(Boolean);return pts.length?<span style={{display:"flex",flexWrap:"wrap",gap:2}}>{pts.map((p,i)=><span key={i} style={{background:"#fef3c7",color:"#92400e",border:"1px solid #fcd34d",borderRadius:3,padding:"2px 5px",fontSize:10,whiteSpace:"nowrap"}}>{p}</span>)}</span>:<span style={{color:C.muted}}>—</span>;}} />:(() => { const parts=String(r[K.tag]||"").split(/[\n,;]+/).map(s=>s.trim()).filter(Boolean); if(!parts.length) return <span style={{color:C.muted}}>—</span>; return <span style={{display:"flex",flexWrap:"wrap",gap:2}}>{parts.map((p,i)=><span key={i} style={{background:"#fef3c7",color:"#92400e",border:"1px solid #fcd34d",borderRadius:3,padding:"2px 5px",fontSize:10,whiteSpace:"nowrap"}}>{p}</span>)}</span>; })()}</td> },
     { key:"resDate", td:(r)=><td style={{padding:"6px 8px",width:colCfg.resDate.width,overflow:"hidden"}}>{r._rowId&&K.resolutionDate?<EditableCell sheet="raid" rowId={r._rowId} colName={K.resolutionDate} value={localVals[r._rowId]?.[K.resolutionDate]??String(r[K.resolutionDate]||"")} onSaved={v=>localUpdate(r._rowId,K.resolutionDate,v)}/>:<span style={{color:C.muted}}>{fmtDate(r[K.resolutionDate])||"—"}</span>}</td> },
     { key:"compl",   td:(r)=>showCompletion?<td style={{padding:"6px 8px",width:colCfg.compl.width,overflow:"hidden"}}><span style={{background:isCompleted(r)?"#dcfce7":"#f3f4f6",color:isCompleted(r)?"#166534":"#6b7280",borderRadius:4,padding:"2px 7px",fontSize:10,fontWeight:700}}>{String(r[K.crCompletion]||"—")}</span></td>:null },
   ];
@@ -3975,7 +4024,6 @@ function RaidAnalysisTab({ raid }) {
 
   const allTypes = Array.from(new Set(teamRows.map(r => String(r[K.type]||"").trim()).filter(Boolean))).sort();
   const allComponents = Array.from(new Set(teamRows.map(r => String(r[K.component]||"").trim()).filter(Boolean))).sort();
-
   // Independent cross-filter helpers for team table
   const tMatchS = r => statusFilter === "All" || (statusFilter === "Delayed" ? String(r[K.status]||"").toLowerCase().includes("delay") : !String(r[K.status]||"").toLowerCase().includes("delay") && !String(r[K.status]||"").toLowerCase().includes("complete"));
   const tMatchT = r => typeFilter   === "All" || String(r[K.type]||"").trim()      === typeFilter;
@@ -4258,7 +4306,7 @@ function RaidAnalysisTab({ raid }) {
                         {colConfig.component?.visible        && <td style={{ padding:"8px 10px", color:C.text, wordBreak:"break-word", width:colConfig.component.width }}>{String(r[K.component]||"—")}</td>}
                         {colConfig.experience?.visible       && <td style={{ padding:"8px 10px", color:C.muted, wordBreak:"break-word", width:colConfig.experience.width }}>{String(r[K.experience]||"—")}</td>}
                         {colConfig.topic?.visible            && <td style={{ padding:"8px 10px", color:C.muted, wordBreak:"break-word", width:colConfig.topic.width }}>{String(r[K.topic]||"—")}</td>}
-                        {colConfig.tag?.visible              && <td style={{ padding:"8px 10px", width:colConfig.tag.width, overflow:"hidden" }}>{r._rowId&&K.tag?<EditableCell sheet="raid" rowId={r._rowId} colName={K.tag} value={localVals[r._rowId]?.[K.tag]??String(r[K.tag]||"")} onSaved={v=>localUpdate(r._rowId,K.tag,v)} renderDisplay={v=>{const pts=v.split(/[\n,;]+/).map(s=>s.trim()).filter(Boolean);return pts.length?<span style={{display:"flex",flexWrap:"wrap",gap:2}}>{pts.map((p,i)=><span key={i} style={{background:"#fef3c7",color:"#92400e",border:"1px solid #fcd34d",borderRadius:3,padding:"2px 5px",fontSize:10,whiteSpace:"nowrap"}}>{p}</span>)}</span>:<span style={{color:C.muted}}>—</span>;}} />:(() => { const parts=String(r[K.tag]||"").split(/[\n,;]+/).map(s=>s.trim()).filter(Boolean); if(!parts.length) return <span style={{color:C.muted}}>—</span>; return <span style={{display:"flex",flexWrap:"wrap",gap:2}}>{parts.map((p,i)=><span key={i} style={{background:"#fef3c7",color:"#92400e",border:"1px solid #fcd34d",borderRadius:3,padding:"2px 5px",fontSize:10,whiteSpace:"nowrap"}}>{p}</span>)}</span>; })()}</td>}
+                        {colConfig.tag?.visible              && <td style={{ padding:"8px 10px", width:colConfig.tag.width, overflow:"hidden" }}>{r._rowId&&K.tag?<EditableCell sheet="raid" rowId={r._rowId} colName={K.tag} value={localVals[r._rowId]?.[K.tag]??String(r[K.tag]||"")} onSaved={v=>localUpdate(r._rowId,K.tag,v)} multi options={raidTagOptions.length?raidTagOptions:undefined} renderDisplay={v=>{const pts=v.split(/[\n,;]+/).map(s=>s.trim()).filter(Boolean);return pts.length?<span style={{display:"flex",flexWrap:"wrap",gap:2}}>{pts.map((p,i)=><span key={i} style={{background:"#fef3c7",color:"#92400e",border:"1px solid #fcd34d",borderRadius:3,padding:"2px 5px",fontSize:10,whiteSpace:"nowrap"}}>{p}</span>)}</span>:<span style={{color:C.muted}}>—</span>;}} />:(() => { const parts=String(r[K.tag]||"").split(/[\n,;]+/).map(s=>s.trim()).filter(Boolean); if(!parts.length) return <span style={{color:C.muted}}>—</span>; return <span style={{display:"flex",flexWrap:"wrap",gap:2}}>{parts.map((p,i)=><span key={i} style={{background:"#fef3c7",color:"#92400e",border:"1px solid #fcd34d",borderRadius:3,padding:"2px 5px",fontSize:10,whiteSpace:"nowrap"}}>{p}</span>)}</span>; })()}</td>}
                         {colConfig.desc.visible      && <td style={{ padding:"8px 10px", wordBreak:"break-word", lineHeight:1.5, width:colConfig.desc.width }}>{r._rowId&&K.desc?<EditableCell sheet="raid" rowId={r._rowId} colName={K.desc} value={localVals[r._rowId]?.[K.desc]??String(r[K.desc]||"")} multiline onSaved={v=>localUpdate(r._rowId,K.desc,v)}/>:String(r[K.desc]||"—")}</td>}
                         {colConfig.comment.visible   && <td style={{ padding:"8px 10px", wordBreak:"break-word", lineHeight:1.5, width:colConfig.comment.width }}>{r._rowId&&K.comment?<EditableCell sheet="raid" rowId={r._rowId} colName={K.comment} value={localVals[r._rowId]?.[K.comment]??String(r[K.comment]||"")} multiline onSaved={v=>localUpdate(r._rowId,K.comment,v)}/>:String(r[K.comment]||"—")}</td>}
                         {colConfig.owner?.visible            && <td style={{ padding:"8px 10px", color:C.text, wordBreak:"break-word", width:colConfig.owner.width }}>{String(r[K.owner]||"—")}</td>}
@@ -4293,6 +4341,7 @@ function RaidAnalysisTab({ raid }) {
             rows={raidModal.rows}
             K={K} teamKey={resolvedTeamKey}
             allTeams={allModalTeams} allTypes={allModalTypes} allComps={allModalComps}
+            tagOptions={raidTagOptions}
             statusCol={statusCol}
             hideType={raidModal.hideType || false}
             hideStatus={raidModal.hideStatus || false}
@@ -5629,8 +5678,9 @@ function TestScenariosTab({ data, wp, req, subTab, setSubTab }) {
   };
 
   const OpenFeedbackModal = ({ title, rows: mRows, onClose }) => {
-    const [spFilter, setSpFilter] = useState("ALL");
-    const [ofColW,   setOfColW]   = useState({});
+    const [spFilter,   setSpFilter]   = useState("ALL");
+    const [teamFilter, setTeamFilter] = useState("ALL");
+    const [ofColW,     setOfColW]     = useState({});
     const ofResizing = useRef(null);
 
     useEffect(() => {
@@ -5655,6 +5705,10 @@ function TestScenariosTab({ data, wp, req, subTab, setSubTab }) {
 
     const allSps       = Array.from(new Set(mRows.map(r => String(r[K.subprocess]||"Unknown").trim()))).sort();
     const filteredRows = spFilter === "ALL" ? mRows : mRows.filter(r => String(r[K.subprocess]||"Unknown").trim() === spFilter);
+    // For team filter — only show teams that have at least one row with feedback
+    const activeTeams  = TEAMS.filter(t => mRows.some(r => String(r[t.feedbackKey]||"").trim()));
+    const visTeams     = teamFilter === "ALL" ? activeTeams : activeTeams.filter(t => t.id === teamFilter);
+    const singleTeam   = teamFilter !== "ALL";
 
     const multiVal = v => {
       const parts = String(v||"").split(/\n|,|;/).map(s=>s.trim()).filter(Boolean);
@@ -5664,71 +5718,87 @@ function TestScenariosTab({ data, wp, req, subTab, setSubTab }) {
       </span>;
     };
 
+    const fpill = (label, isActive, count, onClick, color) => (
+      <button key={label} onClick={onClick}
+        style={{ display:"flex", alignItems:"center", gap:4, padding:"3px 9px", borderRadius:20,
+          border:`2px solid ${isActive?(color||"#991b1b"):C.border}`,
+          background:isActive?(color||"#991b1b"):C.white, color:isActive?"#fff":C.text,
+          cursor:"pointer", fontSize:10, fontWeight:700, transition:"all .12s" }}>
+        {label}
+        {count != null && <span style={{ background:isActive?"rgba(255,255,255,0.25)":"#f1f5f9", color:isActive?"#fff":C.text,
+          borderRadius:10, padding:"1px 6px", fontSize:10, fontWeight:800, minWidth:18, textAlign:"center" }}>{count}</span>}
+      </button>
+    );
+
     return (
       <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center" }} onClick={onClose}>
-        <div style={{ background:C.white, borderRadius:10, width:"99%", maxWidth:1800, maxHeight:"92vh", display:"flex", flexDirection:"column", boxShadow:"0 24px 60px rgba(0,0,0,0.35)" }} onClick={e=>e.stopPropagation()}>
+        <div style={{ background:C.white, borderRadius:10, width:"99%", maxWidth:singleTeam?1100:1800, maxHeight:"92vh", display:"flex", flexDirection:"column", boxShadow:"0 24px 60px rgba(0,0,0,0.35)", transition:"max-width .2s" }} onClick={e=>e.stopPropagation()}>
           <div style={{ background:"#991b1b", padding:"12px 20px", borderRadius:"10px 10px 0 0", display:"flex", justifyContent:"space-between", alignItems:"center", flexShrink:0 }}>
             <span style={{ color:"#fff", fontWeight:700, fontSize:13 }}>{title} <span style={{ opacity:.6, fontWeight:400 }}>({filteredRows.length}{filteredRows.length!==mRows.length?` of ${mRows.length}`:""} scenarios with open feedback)</span></span>
             <button onClick={onClose} style={{ background:"rgba(255,255,255,0.15)", border:"none", color:"#fff", borderRadius:5, padding:"5px 14px", cursor:"pointer", fontSize:13, fontWeight:600 }}>✕</button>
           </div>
-          {allSps.length > 1 && (
-            <div style={{ background:"#f8fafc", borderBottom:`1px solid ${C.border}`, padding:"8px 16px", flexShrink:0, display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
-              <span style={{ fontSize:10, color:"#374151", fontWeight:700, minWidth:70 }}>Sub Process</span>
-              {["ALL", ...allSps].map(sp => {
-                const isActive = spFilter === sp;
-                const count = sp === "ALL" ? mRows.length : mRows.filter(r => String(r[K.subprocess]||"Unknown").trim() === sp).length;
-                return (
-                  <button key={sp} onClick={() => setSpFilter(sp)}
-                    style={{ display:"flex", alignItems:"center", gap:4, padding:"3px 9px", borderRadius:20,
-                      border:`2px solid ${isActive?"#991b1b":C.border}`,
-                      background:isActive?"#991b1b":C.white, color:isActive?"#fff":C.text,
-                      cursor:"pointer", fontSize:10, fontWeight:700, transition:"all .12s" }}>
-                    {sp === "ALL" ? "All" : sp}
-                    <span style={{ background:isActive?"rgba(255,255,255,0.25)":"#f1f5f9", color:isActive?"#fff":C.text,
-                      borderRadius:10, padding:"1px 6px", fontSize:10, fontWeight:800, minWidth:18, textAlign:"center" }}>
-                      {count}
-                    </span>
-                  </button>
-                );
-              })}
+          {/* Filter bar */}
+          <div style={{ background:"#f8fafc", borderBottom:`1px solid ${C.border}`, padding:"10px 14px", flexShrink:0, display:"flex", flexDirection:"column", gap:8 }}>
+            <div style={{ fontSize:10, fontWeight:700, color:"#374151", textTransform:"uppercase", letterSpacing:"0.06em" }}>Filters</div>
+            {/* Team filter */}
+            <div style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
+              <span style={{ fontSize:10, color:"#374151", fontWeight:700, minWidth:90, flexShrink:0 }}>Review Team</span>
+              {fpill("All Teams", teamFilter==="ALL", null, ()=>setTeamFilter("ALL"), "#991b1b")}
+              {activeTeams.map(t => fpill(t.label, teamFilter===t.id, mRows.filter(r=>String(r[t.feedbackKey]||"").trim()).length, ()=>setTeamFilter(teamFilter===t.id?"ALL":t.id), t.color))}
             </div>
-          )}
+            {/* Sub Process filter */}
+            {allSps.length > 1 && (
+              <div style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
+                <span style={{ fontSize:10, color:"#374151", fontWeight:700, minWidth:90, flexShrink:0 }}>Sub Process</span>
+                {fpill("All", spFilter==="ALL", mRows.length, ()=>setSpFilter("ALL"), "#991b1b")}
+                {allSps.map(sp => fpill(sp, spFilter===sp, mRows.filter(r=>String(r[K.subprocess]||"Unknown").trim()===sp).length, ()=>setSpFilter(spFilter===sp?"ALL":sp), "#991b1b"))}
+              </div>
+            )}
+            {!singleTeam && <div style={{ fontSize:10, color:C.muted, fontStyle:"italic" }}>Select a team above to see Reviewer and Feedback columns</div>}
+          </div>
           <div style={{ overflowY:"auto", overflowX:"auto", flex:1 }}>
             <table style={{ borderCollapse:"collapse", fontSize:11, tableLayout:"fixed" }}>
               <colgroup>
                 <col style={{ width: ocw("of-id",  80) }} />
                 <col style={{ width: ocw("of-tag", 100) }} />
-                <col style={{ width: ocw("of-scen",360) }} />
+                <col style={{ width: ocw("of-scen",singleTeam?420:320) }} />
                 <col style={{ width: ocw("of-sp",  130) }} />
-                {TEAMS.flatMap(t => [
-                  <col key={t.id+"-rv"} style={{ width: ocw("of-"+t.id+"-rv", 110) }} />,
-                  <col key={t.id+"-fb"} style={{ width: ocw("of-"+t.id+"-fb", 220) }} />,
-                  <col key={t.id+"-st"} style={{ width: ocw("of-"+t.id+"-st", 120) }} />,
-                ])}
+                {singleTeam
+                  ? visTeams.flatMap(t => [
+                      <col key={t.id+"-rv"} style={{ width: ocw("of-"+t.id+"-rv", 120) }} />,
+                      <col key={t.id+"-fb"} style={{ width: ocw("of-"+t.id+"-fb", 280) }} />,
+                      <col key={t.id+"-st"} style={{ width: ocw("of-"+t.id+"-st", 130) }} />,
+                    ])
+                  : visTeams.map(t => <col key={t.id+"-st"} style={{ width: ocw("of-"+t.id+"-st", 110) }} />)
+                }
               </colgroup>
               <thead style={{ position:"sticky", top:0, zIndex:2 }}>
                 <tr>
                   <th colSpan={4} style={{ padding:"4px 10px", textAlign:"center", background:C.navy, color:"rgba(255,255,255,0.5)", fontWeight:700, fontSize:9, textTransform:"uppercase", letterSpacing:"0.07em", borderRight:"1px solid rgba(255,255,255,0.25)", borderBottom:"1px solid rgba(255,255,255,0.12)" }}>Scenario Details</th>
-                  {TEAMS.map(t => (
-                    <th key={t.id} colSpan={3} style={{ padding:"4px 10px", textAlign:"center", background:t.color, color:"#fff", fontWeight:700, fontSize:9, textTransform:"uppercase", letterSpacing:"0.07em", borderRight:"1px solid rgba(255,255,255,0.3)", borderBottom:"1px solid rgba(255,255,255,0.2)" }}>{t.label}</th>
-                  ))}
+                  {singleTeam
+                    ? visTeams.map(t => <th key={t.id} colSpan={3} style={{ padding:"4px 10px", textAlign:"center", background:t.color, color:"#fff", fontWeight:700, fontSize:9, textTransform:"uppercase", letterSpacing:"0.07em", borderRight:"1px solid rgba(255,255,255,0.3)", borderBottom:"1px solid rgba(255,255,255,0.2)" }}>{t.label}</th>)
+                    : visTeams.map(t => <th key={t.id} colSpan={1} style={{ padding:"4px 10px", textAlign:"center", background:t.color, color:"#fff", fontWeight:700, fontSize:9, textTransform:"uppercase", letterSpacing:"0.07em", borderRight:"1px solid rgba(255,255,255,0.3)", borderBottom:"1px solid rgba(255,255,255,0.2)" }}>{t.label}</th>)
+                  }
                 </tr>
                 <tr style={{ background:C.navy }}>
                   {[["of-id","ID"],["of-tag","Tag"],["of-scen","Scenario"],["of-sp","SubProcess"]].map(([ck,h],i) => (
                     <th key={ck} style={{ padding:"8px 10px", textAlign:"left", color:"#fff", fontWeight:700, fontSize:10, position:"relative", overflow:"hidden", borderRight:i===3?"1px solid rgba(255,255,255,0.25)":"1px solid rgba(255,255,255,0.08)" }}>
-                      {h}{orh(ck, [80,100,360,130][i])}
+                      {h}{orh(ck, [80,100,singleTeam?420:320,130][i])}
                     </th>
                   ))}
-                  {TEAMS.flatMap(t => [
-                    <th key={t.id+"-rv"} style={{ padding:"8px 10px", textAlign:"left", color:"rgba(255,255,255,0.8)", fontWeight:600, fontSize:10, position:"relative", overflow:"hidden", borderRight:"1px solid rgba(255,255,255,0.08)" }}>Reviewer{orh("of-"+t.id+"-rv",110)}</th>,
-                    <th key={t.id+"-fb"} style={{ padding:"8px 10px", textAlign:"left", color:"rgba(255,255,255,0.8)", fontWeight:600, fontSize:10, position:"relative", overflow:"hidden", borderRight:"1px solid rgba(255,255,255,0.08)" }}>Feedback{orh("of-"+t.id+"-fb",220)}</th>,
-                    <th key={t.id+"-st"} style={{ padding:"8px 10px", textAlign:"left", color:"rgba(255,255,255,0.8)", fontWeight:600, fontSize:10, position:"relative", overflow:"hidden", borderRight:"1px solid rgba(255,255,255,0.25)" }}>Status{orh("of-"+t.id+"-st",120)}</th>,
-                  ])}
+                  {singleTeam
+                    ? visTeams.flatMap(t => [
+                        <th key={t.id+"-rv"} style={{ padding:"8px 10px", textAlign:"left", color:"rgba(255,255,255,0.8)", fontWeight:600, fontSize:10, position:"relative", overflow:"hidden", borderRight:"1px solid rgba(255,255,255,0.08)" }}>Reviewer{orh("of-"+t.id+"-rv",120)}</th>,
+                        <th key={t.id+"-fb"} style={{ padding:"8px 10px", textAlign:"left", color:"rgba(255,255,255,0.8)", fontWeight:600, fontSize:10, position:"relative", overflow:"hidden", borderRight:"1px solid rgba(255,255,255,0.08)" }}>Feedback{orh("of-"+t.id+"-fb",280)}</th>,
+                        <th key={t.id+"-st"} style={{ padding:"8px 10px", textAlign:"left", color:"rgba(255,255,255,0.8)", fontWeight:600, fontSize:10, position:"relative", overflow:"hidden", borderRight:"1px solid rgba(255,255,255,0.25)" }}>Status{orh("of-"+t.id+"-st",130)}</th>,
+                      ])
+                    : visTeams.map(t => <th key={t.id+"-st"} style={{ padding:"8px 10px", textAlign:"center", color:"rgba(255,255,255,0.8)", fontWeight:600, fontSize:10, position:"relative", overflow:"hidden", borderRight:"1px solid rgba(255,255,255,0.25)" }}>Status{orh("of-"+t.id+"-st",110)}</th>)
+                  }
                 </tr>
               </thead>
               <tbody>
                 {filteredRows.length === 0 && (
-                  <tr><td colSpan={4+TEAMS.length*3} style={{ padding:24, textAlign:"center", color:C.muted }}>No scenarios</td></tr>
+                  <tr><td colSpan={4+(singleTeam?visTeams.length*3:visTeams.length)} style={{ padding:24, textAlign:"center", color:C.muted }}>No scenarios</td></tr>
                 )}
                 {filteredRows.map((r, i) => (
                   <tr key={i} style={{ background:i%2===0?C.white:"#f7f9fc", borderBottom:`1px solid ${C.border}`, verticalAlign:"top" }}>
@@ -5736,11 +5806,14 @@ function TestScenariosTab({ data, wp, req, subTab, setSubTab }) {
                     <td style={{ padding:"8px 10px", overflow:"hidden", borderRight:`1px solid ${C.border}` }}>{multiVal(r[K.tag])}</td>
                     <td style={{ padding:"8px 10px", color:C.text, wordBreak:"break-word", overflow:"hidden", borderRight:`1px solid ${C.border}` }}>{String(r[K.name]||"—")}</td>
                     <td style={{ padding:"8px 10px", color:C.muted, overflow:"hidden", borderRight:"1px solid #94a3b8" }}>{String(r[K.subprocess]||"—")}</td>
-                    {TEAMS.flatMap(t => [
-                      <td key={t.id+"-rv"} style={{ padding:"8px 10px", fontWeight:600, overflow:"hidden", borderRight:`1px solid ${C.border}` }}>{String(r[t.reviewerKey]||"—")}</td>,
-                      <td key={t.id+"-fb"} style={{ padding:"8px 10px", color:C.muted, wordBreak:"break-word", overflow:"hidden", borderRight:`1px solid ${C.border}` }}>{String(r[t.feedbackKey]||"—")}</td>,
-                      <td key={t.id+"-st"} style={{ padding:"8px 10px", overflow:"hidden", borderRight:"1px solid #94a3b8" }}>{stPill(r, t)}</td>,
-                    ])}
+                    {singleTeam
+                      ? visTeams.flatMap(t => [
+                          <td key={t.id+"-rv"} style={{ padding:"8px 10px", fontWeight:600, overflow:"hidden", borderRight:`1px solid ${C.border}` }}>{String(r[t.reviewerKey]||"—")}</td>,
+                          <td key={t.id+"-fb"} style={{ padding:"8px 10px", color:C.muted, wordBreak:"break-word", overflow:"hidden", borderRight:`1px solid ${C.border}` }}>{String(r[t.feedbackKey]||"—")}</td>,
+                          <td key={t.id+"-st"} style={{ padding:"8px 10px", overflow:"hidden", borderRight:"1px solid #94a3b8" }}>{stPill(r, t)}</td>,
+                        ])
+                      : visTeams.map(t => <td key={t.id+"-st"} style={{ padding:"8px 10px", textAlign:"center", overflow:"hidden", borderRight:"1px solid #94a3b8" }}>{stPill(r, t)}</td>)
+                    }
                   </tr>
                 ))}
               </tbody>
@@ -8941,6 +9014,7 @@ function ScorecardTab({ wp, raid, req, openModal }) {
             rows={raidModal.rows}
             K={K} teamKey={teamKey}
             allTeams={allModalTeams} allTypes={allModalTypes} allComps={allModalComps}
+            tagOptions={raidTagOptions}
             statusCol={statusCol}
             hideType={raidModal.hideType || false}
             hideStatus={raidModal.hideStatus || false}
