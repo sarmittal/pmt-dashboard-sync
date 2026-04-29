@@ -6113,26 +6113,26 @@ function TestScenariosTab({ data, wp, req, subTab, setSubTab }) {
                   const pendRows    = tableRows.flatMap(r => r.teamStats[t.id]?.pendRows      || []);
                   const npRows      = tableRows.flatMap(r => r.teamStats[t.id]?.notPushedRows || []);
                   return [
-                    <td key={t.id+"-s"} style={{ padding:"7px 8px", borderRight:`1px solid ${C.border}` }}>
-                      <div style={{ display:"flex", flexDirection:"column", gap:2 }}>
+                    <td key={t.id+"-s"} style={{ padding:"7px 8px", borderRight:`1px solid ${C.border}`, overflow:"hidden" }}>
+                      <div style={{ display:"flex", flexDirection:"column", gap:2, overflow:"hidden" }}>
                         <span onClick={() => revRows.length && setDrillModal({ title:`${t.label} — All Reviewed · ${sitLabel}`, rows:revRows, teamId:t.id })}
                           style={{ background:"#dcfce7", color:"#166534", border:"1px solid #bbf7d0", borderRadius:4,
-                            padding:"1px 6px", fontSize:10, fontWeight:700, whiteSpace:"nowrap", cursor:revRows.length?"pointer":"default" }}>
+                            padding:"1px 6px", fontSize:10, fontWeight:700, cursor:revRows.length?"pointer":"default" }}>
                           ✓ {rev} ({pctStr(rev,totDrafted)})
                         </span>
                         <span onClick={() => pendRows.length && setDrillModal({ title:`${t.label} — All Pending · ${sitLabel}`, rows:pendRows, teamId:t.id })}
                           style={{ background:"#fef3c7", color:"#92400e", border:"1px solid #fcd34d", borderRadius:4,
-                            padding:"1px 6px", fontSize:10, fontWeight:700, whiteSpace:"nowrap", cursor:pendRows.length?"pointer":"default", opacity:pend===0?0.4:1 }}>
+                            padding:"1px 6px", fontSize:10, fontWeight:700, cursor:pendRows.length?"pointer":"default", opacity:pend===0?0.4:1 }}>
                           ⏳ {pend} ({pctStr(pend,totDrafted)})
                         </span>
                         <span onClick={() => npRows.length && setDrillModal({ title:`${t.label} — All Not Pushed · ${sitLabel}`, rows:npRows, teamId:t.id })}
                           style={{ background:"#f1f5f9", color:"#475569", border:"1px solid #cbd5e1", borderRadius:4,
-                            padding:"1px 6px", fontSize:10, fontWeight:700, whiteSpace:"nowrap", cursor:npRows.length?"pointer":"default", opacity:np===0?0.35:1 }}>
+                            padding:"1px 6px", fontSize:10, fontWeight:700, cursor:npRows.length?"pointer":"default", opacity:np===0?0.35:1 }}>
                           ○ {np}
                         </span>
                       </div>
                     </td>,
-                    <td key={t.id+"-r"} style={{ padding:"7px 8px", borderRight:`1px solid rgba(255,255,255,0.15)` }} />,
+                    <td key={t.id+"-r"} style={{ padding:"7px 8px", borderRight:`1px solid rgba(255,255,255,0.15)`, overflow:"hidden" }} />,
                   ];
                 })}
               </tr>
@@ -6186,29 +6186,29 @@ function TestScenariosTab({ data, wp, req, subTab, setSubTab }) {
                     const pendRows     = ts.pendRows      || [];
                     const notPushRows  = ts.notPushedRows || [];
                     return [
-                      <td key={t.id+"-s"} style={{ padding:"9px 8px", verticalAlign:"top" }}>
-                        <div style={{ display:"flex", flexDirection:"column", gap:3 }}>
+                      <td key={t.id+"-s"} style={{ padding:"9px 8px", verticalAlign:"top", overflow:"hidden" }}>
+                        <div style={{ display:"flex", flexDirection:"column", gap:3, overflow:"hidden" }}>
                           <span onClick={e => { e.stopPropagation(); revRows.length && setDrillModal({ title:`${row.sp} · ${t.label} — Reviewed`, rows:revRows, teamId:t.id }); }}
                             style={{ background:"#dcfce7", color:"#166534", border:"1px solid #bbf7d0", borderRadius:5,
-                              padding:"2px 8px", fontSize:10, fontWeight:700, whiteSpace:"nowrap",
+                              padding:"2px 8px", fontSize:10, fontWeight:700,
                               cursor:revRows.length?"pointer":"default" }}>
                             ✓ {rev} ({pctStr(rev,row.drafted)})
                           </span>
                           <span onClick={e => { e.stopPropagation(); pendRows.length && setDrillModal({ title:`${row.sp} · ${t.label} — Pending Review`, rows:pendRows, teamId:t.id }); }}
                             style={{ background:"#fef3c7", color:"#92400e", border:"1px solid #fcd34d", borderRadius:5,
-                              padding:"2px 8px", fontSize:10, fontWeight:700, whiteSpace:"nowrap",
+                              padding:"2px 8px", fontSize:10, fontWeight:700,
                               cursor:pendRows.length?"pointer":"default", opacity:pend===0?0.4:1 }}>
                             ⏳ {pend} ({pctStr(pend,row.drafted)})
                           </span>
                           <span onClick={e => { e.stopPropagation(); notPushRows.length && setDrillModal({ title:`${row.sp} · ${t.label} — Not Yet Pushed`, rows:notPushRows, teamId:t.id }); }}
                             style={{ background:"#f1f5f9", color:"#475569", border:"1px solid #cbd5e1", borderRadius:5,
-                              padding:"2px 8px", fontSize:10, fontWeight:700, whiteSpace:"nowrap",
+                              padding:"2px 8px", fontSize:10, fontWeight:700,
                               cursor:notPushRows.length?"pointer":"default", opacity:np===0?0.35:1 }}>
                             ○ {np}
                           </span>
                         </div>
                       </td>,
-                      <td key={t.id+"-r"} style={{ padding:"9px 8px", color:C.muted, fontSize:10 }}>{ts.reviewerName||"—"}</td>,
+                      <td key={t.id+"-r"} style={{ padding:"9px 8px", color:C.muted, fontSize:10, overflow:"hidden" }}>{ts.reviewerName||"—"}</td>,
                     ];
                   })}
                 </tr>
