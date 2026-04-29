@@ -166,6 +166,7 @@ function parseRaid(sheets) {
     crCompletion:   ks.find(k => k === "Completion Status") || ks.find(k => /completion.?status/i.test(k)),
     crUrl:          ks.find(k => k === "_attachmentUrl") || ks.find(k => k === "_permalink") || ks.find(k => /^url$|^link$/i.test(k)) || ks.find(k => /attachment.?url|attached.?url|row.?url/i.test(k)),
     tag:            ks.find(k => k === "Tag") || ks.find(k => k === "Tags") || ks.find(k => /^tags?$/i.test(k)),
+    resolutionDate: ks.find(k => k === "Resolution Date (if applicable)") || ks.find(k => /resolution.?date/i.test(k)),
     workstream:     ks.find(k => k === "Workstream") || ks.find(k => /^workstream$/i.test(k)),
   };
   const byPriority = {}, byComponent = {}, byTeam = {};
@@ -983,10 +984,12 @@ const WP_COLS_KEEP = [
 const RAID_COLS_KEEP = [
   "Type","Category","Status","Description","Title","Summary",
   "Primary Owner","Owner","Assignee","Priority","Severity",
-  "Component","Workstream","Area","Team","Primary Team",
-  "Comment","Comments","Resolution","Due Date","Target Date",
+  "Component","Workstream","Area","Team","Primary Team","Primary Team (Owner)",
+  "Comment","Comments","Resolution","Comments/Resolution History","Comments/ Resolution History",
+  "Due Date","Target Date","RAID Due Date",
   "ID","RAID ID","Item ID","Experience","Topic","Critical Path",
   "Change Request Analysis","Status of Decision Acceptance (PMO)","Hours Estimate",
+  "Tag","Tags","Targeted Build Sprint","Resolution Date (if applicable)",
 ];
 
 const TEST_COLS_KEEP = [
@@ -1436,19 +1439,22 @@ function ExecutiveSummaryTab({ wp, raid, req, cap, openModal }) {
   const [raidModal,    setRaidModal]    = useState(null); // { title, rows }   — RaidKpiModal
   const [storyModal,   setStoryModal]   = useState(null); // { title, rows }   — StoryDrillModal
   const [modalColConfig, setModalColConfig] = useState({
-    raidId:    { label:"RAID ID",               visible:true,  width:90  },
-    status:    { label:"Status",                visible:true,  width:90  },
-    type:      { label:"Type",                  visible:true,  width:90  },
-    component: { label:"Component",             visible:true,  width:130 },
-    experience:{ label:"Experience",            visible:true,  width:90  },
-    topic:     { label:"Topic",                 visible:true,  width:90  },
-    desc:      { label:"Description",           visible:true,  width:260 },
-    comment:   { label:"Comments / Resolution", visible:true,  width:220 },
-    owner:     { label:"Owner",                 visible:true,  width:110 },
-    team:      { label:"Primary Team (Owner)",  visible:true,  width:140 },
-    critPath:   { label:"Critical Path",         visible:true,  width:100 },
-    dueDate:    { label:"Due Date",              visible:true,  width:85  },
-    raidDueDate:{ label:"Override Due Date",     visible:true,  width:120 },
+    raidId:        { label:"RAID ID",               visible:true,  width:90  },
+    priority:      { label:"Priority",              visible:true,  width:80  },
+    status:        { label:"Status",                visible:true,  width:90  },
+    type:          { label:"Type",                  visible:true,  width:90  },
+    component:     { label:"Component",             visible:true,  width:130 },
+    experience:    { label:"Experience",            visible:true,  width:90  },
+    topic:         { label:"Topic",                 visible:true,  width:90  },
+    tag:           { label:"Tag",                   visible:true,  width:100 },
+    desc:          { label:"Description",           visible:true,  width:260 },
+    comment:       { label:"Comments / Resolution", visible:true,  width:220 },
+    owner:         { label:"Owner",                 visible:true,  width:110 },
+    team:          { label:"Primary Team (Owner)",  visible:true,  width:140 },
+    critPath:      { label:"Critical Path",         visible:true,  width:100 },
+    dueDate:       { label:"Due Date",              visible:true,  width:85  },
+    raidDueDate:   { label:"Override Due Date",     visible:true,  width:120 },
+    resolutionDate:{ label:"Resolution Date",       visible:true,  width:120 },
   });
 
   const anyData = wp || raid || req || cap;
@@ -1581,7 +1587,7 @@ function ExecutiveSummaryTab({ wp, raid, req, cap, openModal }) {
             <KpiCard label="RAIDs Impacting Build" value={impactOpen.length}                     color={C.navyLight}         sub={`${impactDelayed.length} Delayed`} subColor={C.delayed} onClick={impactOpen.length ? () => setRaidModal({ title:"RAIDs Impacting Build", rows:impactOpen, hideType:false, hideStatus:false }) : null} />
             <div style={{ position:"relative" }}>
               <div style={{ position:"absolute", left:-5, top:"8%", bottom:"8%", width:2, background:C.border, borderRadius:1 }} />
-              <KpiCard label="Blocked User Stories" value={blockedStories.length || (req ? 0 : "—")} color={C.blocked||"#8e44ad"} onClick={blockedStories.length ? () => openModal("Blocked User Stories", blockedStories) : null} />
+              <KpiCard label="Blocked User Stories" value={blockedStories.length || (req ? 0 : "—")} color={C.blocked||"#8e44ad"} onClick={blockedStories.length ? () => setStoryModal({ title:"Blocked User Stories", rows:blockedStories }) : null} />
             </div>
           </div>
           {/* Priority chart — exact same chart as RAID Analysis tab */}
@@ -1714,6 +1720,28 @@ function ExecutiveSummaryTab({ wp, raid, req, cap, openModal }) {
                     </tr>
                   );
                 })}
+                {sprintRows.length > 0 && (() => {
+                  const tot = sprintRows.reduce((a,sp) => ({
+                    total:sp.total+(a.total||0), complete:(sp.complete||0)+(a.complete||0),
+                    inProgress:(sp.inProgress||0)+(a.inProgress||0), blocked:(sp.blocked||0)+(a.blocked||0),
+                    notStarted:(sp.notStarted||0)+(a.notStarted||0), partial:(sp.partial||0)+(a.partial||0),
+                    rows:[...(a.rows||[]),...(sp.rows||[])],
+                  }), {total:0,complete:0,inProgress:0,blocked:0,notStarted:0,partial:0,rows:[]});
+                  const mkTotCell = (count, bkt, color) => count > 0
+                    ? <span onClick={e=>{e.stopPropagation();setStoryModal({title:`All Sprints${bkt?` — ${bkt}`:""}`, rows:bkt?tot.rows.filter(r=>_rowBucket(r)===bkt):tot.rows});}} style={{ fontWeight:800, color, cursor:"pointer", textDecoration:"underline dotted" }}>{count}</span>
+                    : <span style={{ color:C.muted }}>—</span>;
+                  return (
+                    <tr style={{ background:"#e8eef7", borderTop:`2px solid #162f50` }}>
+                      <td style={{ padding:"8px 12px", fontWeight:800, color:"#162f50", fontSize:11 }}>TOTAL</td>
+                      <td style={{ padding:"8px 12px", textAlign:"center" }}>{mkTotCell(tot.total,     null,       "#162f50")}</td>
+                      <td style={{ padding:"8px 12px", textAlign:"center" }}>{mkTotCell(tot.complete,  "complete",  "#1d4ed8")}</td>
+                      <td style={{ padding:"8px 12px", textAlign:"center" }}>{mkTotCell(tot.inProgress,"inProgress","#15803d")}</td>
+                      <td style={{ padding:"8px 12px", textAlign:"center" }}>{mkTotCell(tot.blocked,   "blocked",   "#b91c1c")}</td>
+                      <td style={{ padding:"8px 12px", textAlign:"center" }}>{mkTotCell(tot.notStarted,"notStarted","#475569")}</td>
+                      <td style={{ padding:"8px 12px", textAlign:"center" }}>{mkTotCell(tot.partial,   "partial",   "#0369a1")}</td>
+                    </tr>
+                  );
+                })()}
               </tbody>
             </table>
           </Card>
@@ -1905,10 +1933,11 @@ function RaidKpiModal({ title, rows, K, teamKey, allTeams, allTypes, allComps, s
             width: Object.values(colConfig).filter(c=>c.visible).reduce((s,c)=>s+c.width,0)+"px", minWidth:"100%" }}>
             <thead style={{ position:"sticky", top:0, zIndex:2 }}>
               <tr style={{ background:"#162f50" }}>
-                {[["raidId","RAID ID"],["status","Status"],["type","Type"],["component","Component"],
+                {[["raidId","RAID ID"],["priority","Priority"],["status","Status"],["type","Type"],["component","Component"],
                   ["experience","Experience"],["topic","Topic"],["tag","Tag"],["desc","Description"],
                   ["comment","Comments / Resolution"],["owner","Owner"],["team","Primary Team (Owner)"],
-                  ["critPath","Critical Path"],["dueDate","Due Date"],["raidDueDate","Override Due Date"]
+                  ["critPath","Critical Path"],["dueDate","Due Date"],["raidDueDate","Override Due Date"],
+                  ["resolutionDate","Resolution Date"]
                 ].filter(([key]) => colConfig[key]?.visible).map(([key,label],idx,arr) => (
                   <th key={key} style={{ padding:"8px 10px", textAlign:"left", color:"#fff", fontWeight:700, fontSize:10,
                     width:colConfig[key].width, position:"relative",
@@ -1939,20 +1968,22 @@ function RaidKpiModal({ title, rows, K, teamKey, allTeams, allTypes, allComps, s
                 const dueCol = due!=null&&due<=7?C.delayed:due!=null&&due<=14?C.gold:C.muted;
                 return (
                   <tr key={i} style={{ background:i%2===0?C.white:"#f7f9fc", borderBottom:`1px solid ${C.border}`, verticalAlign:"top" }}>
-                    {colConfig.raidId.visible    && <td style={{ padding:"8px 10px", fontWeight:700, color:C.navyLight, wordBreak:"break-word", width:colConfig.raidId.width }}>{String(r[K.id]||"—")}</td>}
-                    {colConfig.status.visible    && <td style={{ padding:"8px 10px", width:colConfig.status.width }}><span style={{ background:sCol+"20", color:sCol, border:`1px solid ${sCol}40`, borderRadius:4, padding:"2px 6px", fontSize:10, fontWeight:700, whiteSpace:"nowrap" }}>{status||"—"}</span></td>}
-                    {colConfig.type.visible      && <td style={{ padding:"8px 10px", color:C.text, wordBreak:"break-word", width:colConfig.type.width }}>{String(r[K.type]||"—")}</td>}
-                    {colConfig.component.visible && <td style={{ padding:"8px 10px", color:C.text, wordBreak:"break-word", width:colConfig.component.width }}>{String(r[K.component]||"—")}</td>}
-                    {colConfig.experience.visible&& <td style={{ padding:"8px 10px", color:C.muted, wordBreak:"break-word", width:colConfig.experience.width }}>{String(r[K.experience]||"—")}</td>}
-                    {colConfig.topic.visible     && <td style={{ padding:"8px 10px", color:C.muted, wordBreak:"break-word", width:colConfig.topic.width }}>{String(r[K.topic]||"—")}</td>}
-                    {colConfig.tag?.visible      && <td style={{ padding:"8px 10px", width:colConfig.tag?.width||140 }}>{r._rowId && K.tag ? <EditableCell sheet="raid" rowId={r._rowId} colName={K.tag} value={localVals[r._rowId]?.[K.tag] ?? String(r[K.tag]||"")} onSaved={v=>localUpdate(r._rowId,K.tag,v)} /> : (() => { const v=String(r[K.tag]||"").trim(); if(!v||v==="—") return <span style={{color:C.muted}}>—</span>; return <span style={{background:"#fef3c7",color:"#92400e",border:"1px solid #fcd34d",borderRadius:3,padding:"2px 6px",fontSize:10,whiteSpace:"nowrap"}}>{v}</span>; })()}</td>}
-                    {colConfig.desc.visible      && <td style={{ padding:"8px 10px", wordBreak:"break-word", lineHeight:1.5, width:colConfig.desc.width }}>{r._rowId && K.desc ? <EditableCell sheet="raid" rowId={r._rowId} colName={K.desc} value={localVals[r._rowId]?.[K.desc] ?? String(r[K.desc]||"")} multiline onSaved={v=>localUpdate(r._rowId,K.desc,v)} /> : String(r[K.desc]||"—")}</td>}
-                    {colConfig.comment.visible   && <td style={{ padding:"8px 10px", wordBreak:"break-word", lineHeight:1.5, width:colConfig.comment.width }}>{r._rowId && K.comment ? <EditableCell sheet="raid" rowId={r._rowId} colName={K.comment} value={localVals[r._rowId]?.[K.comment] ?? String(r[K.comment]||"")} multiline onSaved={v=>localUpdate(r._rowId,K.comment,v)} /> : String(r[K.comment]||"—")}</td>}
-                    {colConfig.owner?.visible     && <td style={{ padding:"8px 10px", color:C.text, wordBreak:"break-word", width:colConfig.owner.width }}>{String(r[K.owner]||"—")}</td>}
-                    {colConfig.team?.visible      && <td style={{ padding:"8px 10px", color:C.text, wordBreak:"break-word", width:colConfig.team?.width||140 }}>{String(r[teamKey]||"—")}</td>}
-                    {colConfig.critPath?.visible  && <td style={{ padding:"8px 10px", width:colConfig.critPath.width }}>{r._rowId && K.critPath ? <EditableCell sheet="raid" rowId={r._rowId} colName={K.critPath} value={localVals[r._rowId]?.[K.critPath] ?? String(r[K.critPath]||"")} onSaved={v=>localUpdate(r._rowId,K.critPath,v)} /> : (() => { const v=String(r[K.critPath]||"").trim(); if(!v||v==="—") return <span style={{color:C.muted}}>—</span>; const hi=v.toLowerCase()!=="no"&&v.toLowerCase()!=="n/a"; return <span style={{background:hi?"#fee2e2":"#f1f5f9",color:hi?C.delayed:C.muted,borderRadius:3,padding:"2px 6px",fontSize:10,fontWeight:600}}>{v}</span>; })()}</td>}
-                    {colConfig.dueDate?.visible   && <td style={{ padding:"8px 10px", color:dueCol, fontWeight:600, whiteSpace:"nowrap", width:colConfig.dueDate.width }}>{dueStr}</td>}
-                    {colConfig.raidDueDate?.visible && <td style={{ padding:"8px 10px", width:colConfig.raidDueDate?.width||120 }}>{r._rowId&&K.raidDueDate?<EditableCell sheet="raid" rowId={r._rowId} colName={K.raidDueDate} value={localVals[r._rowId]?.[K.raidDueDate]??String(r[K.raidDueDate]||"")} onSaved={v=>localUpdate(r._rowId,K.raidDueDate,v)}/>:<span style={{color:C.muted}}>—</span>}</td>}
+                    {colConfig.raidId.visible          && <td style={{ padding:"8px 10px", fontWeight:700, color:C.navyLight, wordBreak:"break-word", width:colConfig.raidId.width }}>{String(r[K.id]||"—")}</td>}
+                    {colConfig.priority?.visible       && (() => { const pv=String(r[K.priority]||"—"); const pc=getPriorityColor(pv); return <td style={{ padding:"8px 10px", width:colConfig.priority.width }}><span style={{ background:pc?"#fee2e2":"#f1f5f9", color:pc||C.text, border:`1px solid ${pc?pc+"50":"#e2e8f0"}`, borderRadius:3, padding:"2px 6px", fontSize:10, fontWeight:700, whiteSpace:"nowrap" }}>{pv}</span></td>; })()}
+                    {colConfig.status.visible          && <td style={{ padding:"8px 10px", width:colConfig.status.width }}><span style={{ background:sCol+"20", color:sCol, border:`1px solid ${sCol}40`, borderRadius:4, padding:"2px 6px", fontSize:10, fontWeight:700, whiteSpace:"nowrap" }}>{status||"—"}</span></td>}
+                    {colConfig.type.visible            && <td style={{ padding:"8px 10px", color:C.text, wordBreak:"break-word", width:colConfig.type.width }}>{String(r[K.type]||"—")}</td>}
+                    {colConfig.component.visible       && <td style={{ padding:"8px 10px", color:C.text, wordBreak:"break-word", width:colConfig.component.width }}>{String(r[K.component]||"—")}</td>}
+                    {colConfig.experience.visible      && <td style={{ padding:"8px 10px", color:C.muted, wordBreak:"break-word", width:colConfig.experience.width }}>{String(r[K.experience]||"—")}</td>}
+                    {colConfig.topic.visible           && <td style={{ padding:"8px 10px", color:C.muted, wordBreak:"break-word", width:colConfig.topic.width }}>{String(r[K.topic]||"—")}</td>}
+                    {colConfig.tag?.visible            && <td style={{ padding:"8px 10px", width:colConfig.tag?.width||100 }}>{r._rowId && K.tag ? <EditableCell sheet="raid" rowId={r._rowId} colName={K.tag} value={localVals[r._rowId]?.[K.tag] ?? String(r[K.tag]||"")} onSaved={v=>localUpdate(r._rowId,K.tag,v)} /> : (() => { const v=String(r[K.tag]||"").trim(); if(!v||v==="—") return <span style={{color:C.muted}}>—</span>; return <span style={{background:"#fef3c7",color:"#92400e",border:"1px solid #fcd34d",borderRadius:3,padding:"2px 6px",fontSize:10,whiteSpace:"nowrap"}}>{v}</span>; })()}</td>}
+                    {colConfig.desc.visible            && <td style={{ padding:"8px 10px", wordBreak:"break-word", lineHeight:1.5, width:colConfig.desc.width }}>{r._rowId && K.desc ? <EditableCell sheet="raid" rowId={r._rowId} colName={K.desc} value={localVals[r._rowId]?.[K.desc] ?? String(r[K.desc]||"")} multiline onSaved={v=>localUpdate(r._rowId,K.desc,v)} /> : String(r[K.desc]||"—")}</td>}
+                    {colConfig.comment.visible         && <td style={{ padding:"8px 10px", wordBreak:"break-word", lineHeight:1.5, width:colConfig.comment.width }}>{r._rowId && K.comment ? <EditableCell sheet="raid" rowId={r._rowId} colName={K.comment} value={localVals[r._rowId]?.[K.comment] ?? String(r[K.comment]||"")} multiline onSaved={v=>localUpdate(r._rowId,K.comment,v)} /> : String(r[K.comment]||"—")}</td>}
+                    {colConfig.owner?.visible          && <td style={{ padding:"8px 10px", color:C.text, wordBreak:"break-word", width:colConfig.owner.width }}>{String(r[K.owner]||"—")}</td>}
+                    {colConfig.team?.visible           && <td style={{ padding:"8px 10px", color:C.text, wordBreak:"break-word", width:colConfig.team?.width||140 }}>{String(r[teamKey]||"—")}</td>}
+                    {colConfig.critPath?.visible       && <td style={{ padding:"8px 10px", width:colConfig.critPath.width }}>{r._rowId && K.critPath ? <EditableCell sheet="raid" rowId={r._rowId} colName={K.critPath} value={localVals[r._rowId]?.[K.critPath] ?? String(r[K.critPath]||"")} onSaved={v=>localUpdate(r._rowId,K.critPath,v)} /> : (() => { const v=String(r[K.critPath]||"").trim(); if(!v||v==="—") return <span style={{color:C.muted}}>—</span>; const hi=v.toLowerCase()!=="no"&&v.toLowerCase()!=="n/a"; return <span style={{background:hi?"#fee2e2":"#f1f5f9",color:hi?C.delayed:C.muted,borderRadius:3,padding:"2px 6px",fontSize:10,fontWeight:600}}>{v}</span>; })()}</td>}
+                    {colConfig.dueDate?.visible        && <td style={{ padding:"8px 10px", color:dueCol, fontWeight:600, whiteSpace:"nowrap", width:colConfig.dueDate.width }}>{dueStr}</td>}
+                    {colConfig.raidDueDate?.visible    && <td style={{ padding:"8px 10px", width:colConfig.raidDueDate?.width||120 }}>{r._rowId&&K.raidDueDate?<EditableCell sheet="raid" rowId={r._rowId} colName={K.raidDueDate} value={localVals[r._rowId]?.[K.raidDueDate]??String(r[K.raidDueDate]||"")} onSaved={v=>localUpdate(r._rowId,K.raidDueDate,v)}/>:<span style={{color:C.muted}}>—</span>}</td>}
+                    {colConfig.resolutionDate?.visible && <td style={{ padding:"8px 10px", color:C.muted, whiteSpace:"nowrap", width:colConfig.resolutionDate?.width||120 }}>{fmtDate(r[K.resolutionDate])||"—"}</td>}
                   </tr>
                 );
               })}
@@ -1996,8 +2027,10 @@ function CRDrillModal({ title, rows, K, showCompletion, onClose }) {
     sdOps:   { label:"SD/Ops Hrs",    visible:true,  width:80  },
     ocm:     { label:"OCM Hrs",       visible:true,  width:70  },
     ux:      { label:"UX Hrs",        visible:true,  width:70  },
-    sprint:  { label:"Target Sprint", visible:true,  width:90  },
-    compl:   { label:"Completion",    visible:showCompletion, width:90 },
+    sprint:  { label:"Target Sprint",   visible:true,  width:90  },
+    tag:     { label:"Tag",             visible:true,  width:90  },
+    resDate: { label:"Resolution Date", visible:true,  width:110 },
+    compl:   { label:"Completion",      visible:showCompletion, width:90 },
   });
 
   const uniq = arr => ["All", ...Array.from(new Set(arr.filter(Boolean))).sort()];
@@ -2053,6 +2086,8 @@ function CRDrillModal({ title, rows, K, showCompletion, onClose }) {
     { key:"ocm",     td:(r)=>numCell(r,K.crOcm) },
     { key:"ux",      td:(r)=>numCell(r,K.crUx) },
     { key:"sprint",  td:(r)=><td style={{padding:"6px 8px",whiteSpace:"nowrap",width:colCfg.sprint.width,overflow:"hidden"}}>{r._rowId&&K.crTargetSprint?<EditableCell sheet="raid" rowId={r._rowId} colName={K.crTargetSprint} value={localVals[r._rowId]?.[K.crTargetSprint]??String(r[K.crTargetSprint]||"")} onSaved={v=>localUpdate(r._rowId,K.crTargetSprint,v)}/>:String(r[K.crTargetSprint]||"—")}</td> },
+    { key:"tag",     td:(r)=><td style={{padding:"6px 8px",width:colCfg.tag.width,overflow:"hidden"}}>{r._rowId&&K.tag?<EditableCell sheet="raid" rowId={r._rowId} colName={K.tag} value={localVals[r._rowId]?.[K.tag]??String(r[K.tag]||"")} onSaved={v=>localUpdate(r._rowId,K.tag,v)}/>:(() => { const v=String(r[K.tag]||"").trim(); if(!v||v==="—") return <span style={{color:C.muted}}>—</span>; return <span style={{background:"#fef3c7",color:"#92400e",border:"1px solid #fcd34d",borderRadius:3,padding:"2px 6px",fontSize:10,whiteSpace:"nowrap"}}>{v}</span>; })()}</td> },
+    { key:"resDate", td:(r)=><td style={{padding:"6px 8px",color:C.muted,whiteSpace:"nowrap",width:colCfg.resDate.width,overflow:"hidden"}}>{fmtDate(r[K.resolutionDate])||"—"}</td> },
     { key:"compl",   td:(r)=>showCompletion?<td style={{padding:"6px 8px",width:colCfg.compl.width,overflow:"hidden"}}><span style={{background:isCompleted(r)?"#dcfce7":"#f3f4f6",color:isCompleted(r)?"#166534":"#6b7280",borderRadius:4,padding:"2px 7px",fontSize:10,fontWeight:700}}>{String(r[K.crCompletion]||"—")}</span></td>:null },
   ];
 
@@ -2128,7 +2163,7 @@ function CRDrillModal({ title, rows, K, showCompletion, onClose }) {
                   <th key={d.key} style={{ padding:"7px 8px", textAlign:"left", color:"#fff", fontWeight:700, fontSize:10,
                     whiteSpace:"nowrap", width:colCfg[d.key].width, position:"relative",
                     borderRight:i<arr.length-1?"1px solid rgba(255,255,255,0.1)":"none", overflow:"hidden" }}>
-                    {colCfg[d.key].label}{["desc","comment","sprint"].includes(d.key) && <EditHeaderBadge />}
+                    {colCfg[d.key].label}{["desc","comment","sprint","tag"].includes(d.key) && <EditHeaderBadge />}
                     <div onMouseDown={e => resizeStart(d.key, e)}
                       style={{ position:"absolute", right:0, top:0, bottom:0, width:6, cursor:"col-resize", zIndex:10 }}
                       onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,0.3)"}
@@ -2817,9 +2852,10 @@ function ReqTraceabilityTab({ req, test }) {
   const [colConfig, setColConfig] = useState({
     covStatus:      {w:88},  reqId:       {w:68},  experience: {w:72},
     component:      {w:82},  bizReq:      {w:140}, story:      {w:140},
-    acceptance:     {w:115}, tags:        {w:78},  buildStatus:{w:75},
-    reviewStatus:   {w:100}, scriptType:  {w:82},  scenCount:  {w:45},
-    estCases:       {w:52},  rationalized:{w:65},  scriptLink: {w:65},
+    acceptance:     {w:115}, tags:        {w:78},  buildCycle: {w:85},
+    buildStatus:    {w:75},  reviewStatus:{w:100}, scriptType: {w:82},
+    scenCount:      {w:45},  estCases:    {w:52},  rationalized:{w:65},
+    scriptLink:     {w:65},
   });
 
   // ── All hooks above this line ─────────────────────────────────────────────
@@ -2981,7 +3017,7 @@ function ReqTraceabilityTab({ req, test }) {
             width:"100%",minWidth:28+Object.values(colConfig).reduce((s,c)=>s+c.w,0)}}>
             <colgroup>
               <col style={{width:28}}/>
-              {["covStatus","reqId","experience","component","bizReq","story","acceptance","reviewStatus","tags","buildStatus","scriptType","scenCount","estCases","rationalized","scriptLink"].map(k=>(
+              {["covStatus","reqId","experience","component","bizReq","story","acceptance","reviewStatus","tags","buildCycle","buildStatus","scriptType","scenCount","estCases","rationalized","scriptLink"].map(k=>(
                 <col key={k} style={{width:colConfig[k]?.w}}/>
               ))}
             </colgroup>
@@ -2990,7 +3026,7 @@ function ReqTraceabilityTab({ req, test }) {
               <tr>
                 <th style={{width:28,background:C.navy,borderRight:"1px solid rgba(255,255,255,0.1)"}}/>
                 <th colSpan={8} style={{padding:"4px 8px",background:"#dbeafe",color:"#1e40af",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.08em",textAlign:"center",borderRight:"2px solid #93c5fd"}}>Design</th>
-                <th colSpan={2} style={{padding:"4px 8px",background:"#dcfce7",color:"#166534",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.08em",textAlign:"center",borderRight:"2px solid #86efac"}}>Build</th>
+                <th colSpan={3} style={{padding:"4px 8px",background:"#dcfce7",color:"#166534",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.08em",textAlign:"center",borderRight:"2px solid #86efac"}}>Build</th>
                 <th colSpan={5} style={{padding:"4px 8px",background:"#fef9c3",color:"#854d0e",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.08em",textAlign:"center",borderRight:"none"}}>Test</th>
               </tr>
               {/* Column header row */}
@@ -3005,6 +3041,7 @@ function ReqTraceabilityTab({ req, test }) {
                 <TH colKey="acceptance">Acceptance Criteria</TH>
                 <TH colKey="reviewStatus" style={{borderRight:"2px solid rgba(255,255,255,0.25)"}}>Review Status</TH>
                 <TH colKey="tags">Tags</TH>
+                <TH colKey="buildCycle">Build Cycle (Playback)</TH>
                 <TH colKey="buildStatus" style={{textAlign:"center",borderRight:"2px solid rgba(255,255,255,0.25)"}}>Build Status</TH>
                 <TH colKey="scriptType">Test Script / Scenario</TH>
                 <TH colKey="scenCount" style={{textAlign:"center"}}>Scen #</TH>
@@ -3035,6 +3072,7 @@ function ReqTraceabilityTab({ req, test }) {
                   <td style={{padding:"6px 8px",borderRight:`1px solid ${C.border}`}}/>
                   <td style={{padding:"6px 8px",borderRight:`1px solid ${C.border}`}}/>
                   <td style={{padding:"6px 8px",borderRight:`1px solid ${C.border}`}}/>
+                  <td style={{padding:"6px 8px",borderRight:`1px solid ${C.border}`}}/>
                   <td style={{padding:"6px 8px",textAlign:"center",fontWeight:800,fontSize:11,color:C.navyLight,borderRight:`1px solid ${C.border}`}}>{stScens}</td>
                   <td style={{padding:"6px 8px",textAlign:"center",fontWeight:800,fontSize:11,color:C.navyLight,borderRight:`1px solid ${C.border}`}}>{totEst||"—"}</td>
                   <td style={{padding:"6px 8px",borderRight:`1px solid ${C.border}`}}/>
@@ -3042,7 +3080,7 @@ function ReqTraceabilityTab({ req, test }) {
                 </tr>
               )}
               {filtered.length===0&&(
-                <tr><td colSpan={16} style={{padding:24,textAlign:"center",color:C.muted}}>No requirements match selected filters.</td></tr>
+                <tr><td colSpan={17} style={{padding:24,textAlign:"center",color:C.muted}}>No requirements match selected filters.</td></tr>
               )}
               {filtered.map((r,i)=>{
                 const id       = String(r[reqK?.reqId]||"").trim()||String(i);
@@ -3089,6 +3127,7 @@ function ReqTraceabilityTab({ req, test }) {
                       {td(<span style={{lineHeight:1.5,fontSize:11,color:C.muted,wordBreak:"break-word"}}>{_fieldVal(r[reqK?.acceptance])}</span>)}
                       {td(_reviewBadge(r),{verticalAlign:"middle",borderRight:"2px solid #cbd5e1"})}
                       {td(tagPills)}
+                      {td(<span style={{fontSize:10,color:C.text,wordBreak:"break-word"}}>{_fieldVal(r[reqK?.sprint])}</span>)}
                       {td(_buildBadge(r),{textAlign:"center",verticalAlign:"middle",borderRight:"2px solid #cbd5e1"})}
                       {td(<span style={{fontSize:10,color:C.text}}>{_fieldVal(r[reqK?.testScriptType])}</span>)}
                       {td(<span style={{fontWeight:700,color:C.navyLight}}>{scens.length||"0"}</span>,{textAlign:"center",verticalAlign:"middle"})}
@@ -3100,7 +3139,7 @@ function ReqTraceabilityTab({ req, test }) {
                     {/* ── Inline expansion ── */}
                     {isOpen&&(
                       <tr style={{background:"#f0f6ff",borderBottom:`2px solid #93c5fd`}}>
-                        <td colSpan={16} style={{padding:0}}>
+                        <td colSpan={17} style={{padding:0}}>
                           <div style={{padding:"14px 18px 16px 44px",display:"flex",flexDirection:"column",gap:14}}>
 
                             {/* Section 0: User Story Details */}
@@ -3137,6 +3176,30 @@ function ReqTraceabilityTab({ req, test }) {
                             <div>
                               <div style={{fontSize:10,fontWeight:700,color:C.navy,textTransform:"uppercase",letterSpacing:"0.07em",borderBottom:`1px solid #bfdbfe`,paddingBottom:4,marginBottom:8}}>
                                 1 — Build Approach
+                              </div>
+                              {/* Summary row: Tags, Build Cycle, Func Build Status, Tech Build Status */}
+                              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:"8px 20px",marginBottom:12,padding:"8px 10px",background:"#f0f9ff",border:"1px solid #bae6fd",borderRadius:6}}>
+                                <div style={{display:"flex",flexDirection:"column",gap:3}}>
+                                  <span style={{fontSize:9,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:"0.05em"}}>Tags</span>
+                                  {tagPills}
+                                </div>
+                                <div style={{display:"flex",flexDirection:"column",gap:3}}>
+                                  <span style={{fontSize:9,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:"0.05em"}}>Build Cycle (Playback)</span>
+                                  <span style={{fontSize:11,color:C.text,lineHeight:1.45}}>{_fieldVal(r[reqK?.sprint])}</span>
+                                </div>
+                                {[{label:"Functional Build Status",key:"funcBuildStatus"},{label:"Tech Build Status",key:"techBuildStatus"}].map(({label,key})=>{
+                                  const raw=String(r[reqK?.[key]]||"").trim();
+                                  const bucket=_toBucket(raw);
+                                  const s=bucket?BUILD_STATUS_META[bucket]:null;
+                                  return (
+                                    <div key={key} style={{display:"flex",flexDirection:"column",gap:3}}>
+                                      <span style={{fontSize:9,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:"0.05em"}}>{label}</span>
+                                      {s
+                                        ? <span style={{background:s.bg,color:s.c,border:`1px solid ${s.br}`,borderRadius:4,padding:"2px 7px",fontSize:10,fontWeight:600,whiteSpace:"nowrap",display:"inline-block"}}>{raw||s.l}</span>
+                                        : <span style={{fontSize:11,color:C.muted,fontStyle:"italic"}}>—</span>}
+                                    </div>
+                                  );
+                                })}
                               </div>
                               <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:"8px 20px"}}>
                                 {BUILD_FIELDS.map(({label,key})=>{
@@ -3755,34 +3818,40 @@ function RaidAnalysisTab({ raid }) {
     setLocalVals(prev => ({ ...prev, [rowId]: { ...(prev[rowId] || {}), [col]: val } }));
   // Persistent column config — survives modal close/reopen
   const [modalColConfig, setModalColConfig] = useState({
-    raidId:    { label:"RAID ID",                  visible:true,  width:90  },
-    status:    { label:"Status",                   visible:true,  width:90  },
-    type:      { label:"Type",                     visible:true,  width:90  },
-    component: { label:"Component",                visible:true,  width:130 },
-    experience:{ label:"Experience",               visible:true,  width:90  },
-    topic:     { label:"Topic",                    visible:true,  width:90  },
-    desc:      { label:"Description",              visible:true,  width:260 },
-    comment:   { label:"Comments / Resolution",    visible:true,  width:220 },
-    owner:     { label:"Owner",                    visible:true,  width:110 },
-    team:      { label:"Primary Team (Owner)",     visible:true,  width:140 },
-    critPath:    { label:"Critical Path",            visible:true,  width:100 },
-    dueDate:     { label:"Due Date",                 visible:true,  width:85  },
-    raidDueDate: { label:"Override Due Date",        visible:true,  width:120 },
+    raidId:        { label:"RAID ID",                  visible:true,  width:90  },
+    priority:      { label:"Priority",                 visible:true,  width:80  },
+    status:        { label:"Status",                   visible:true,  width:90  },
+    type:          { label:"Type",                     visible:true,  width:90  },
+    component:     { label:"Component",                visible:true,  width:130 },
+    experience:    { label:"Experience",               visible:true,  width:90  },
+    topic:         { label:"Topic",                    visible:true,  width:90  },
+    tag:           { label:"Tag",                      visible:true,  width:100 },
+    desc:          { label:"Description",              visible:true,  width:260 },
+    comment:       { label:"Comments / Resolution",    visible:true,  width:220 },
+    owner:         { label:"Owner",                    visible:true,  width:110 },
+    team:          { label:"Primary Team (Owner)",     visible:true,  width:140 },
+    critPath:      { label:"Critical Path",            visible:true,  width:100 },
+    dueDate:       { label:"Due Date",                 visible:true,  width:85  },
+    raidDueDate:   { label:"Override Due Date",        visible:true,  width:120 },
+    resolutionDate:{ label:"Resolution Date",          visible:true,  width:120 },
   });
   const [showColPanel, setShowColPanel] = useState(false);
   const [colConfig, setColConfig] = useState({
-    raidId:    { label:"RAID ID",              visible:true,  width:90  },
-    status:    { label:"Status",               visible:true,  width:90  },
-    type:      { label:"Type",                 visible:true,  width:90  },
-    component: { label:"Component",            visible:true,  width:130 },
-    experience:{ label:"Experience",           visible:true,  width:90  },
-    topic:     { label:"Topic",                visible:true,  width:90  },
-    desc:      { label:"Description",          visible:true,  width:260 },
-    comment:   { label:"Comments / Resolution",visible:true,  width:220 },
-    owner:     { label:"Owner",                visible:true,  width:110 },
-    critPath:    { label:"Critical Path",        visible:true,  width:100 },
-    dueDate:     { label:"Due Date",             visible:true,  width:85  },
-    raidDueDate: { label:"Override Due Date",    visible:true,  width:120 },
+    raidId:        { label:"RAID ID",              visible:true,  width:90  },
+    priority:      { label:"Priority",             visible:true,  width:80  },
+    status:        { label:"Status",               visible:true,  width:90  },
+    type:          { label:"Type",                 visible:true,  width:90  },
+    component:     { label:"Component",            visible:true,  width:130 },
+    experience:    { label:"Experience",           visible:true,  width:90  },
+    topic:         { label:"Topic",                visible:true,  width:90  },
+    tag:           { label:"Tag",                  visible:true,  width:100 },
+    desc:          { label:"Description",          visible:true,  width:260 },
+    comment:       { label:"Comments / Resolution",visible:true,  width:220 },
+    owner:         { label:"Owner",                visible:true,  width:110 },
+    critPath:      { label:"Critical Path",        visible:true,  width:100 },
+    dueDate:       { label:"Due Date",             visible:true,  width:85  },
+    raidDueDate:   { label:"Override Due Date",    visible:true,  width:120 },
+    resolutionDate:{ label:"Resolution Date",      visible:true,  width:120 },
   });
 
   if (!raid) return <Empty label="Upload RAID Log file above to view this tab." />;
@@ -3900,12 +3969,12 @@ function RaidAnalysisTab({ raid }) {
                 <div key={pri} style={{ display:"flex", alignItems:"center", gap:8 }}>
                   <div style={{ minWidth:100, fontSize:11, fontWeight:700, color:C.text, whiteSpace:"nowrap" }}>{pri}</div>
                   <div style={{ flex:1, display:"flex", height:20, borderRadius:4, overflow:"hidden", background:"#f0f2f5" }}>
-                    {d.open > 0 && <div style={{ width:`${(d.open/maxTotal)*100}%`, background:C.onTrack, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", minWidth:4 }} onClick={()=>setRaidModal({ title:`${pri}`, rows:d.rows, hideStatus:false })}>{d.open >= 2 && <span style={{ color:"#fff", fontSize:10, fontWeight:700 }}>{d.open}</span>}</div>}
-                    {d.delayed > 0 && <div style={{ width:`${(d.delayed/maxTotal)*100}%`, background:C.delayed, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", minWidth:4 }} onClick={()=>setRaidModal({ title:`${pri} — Delayed`, rows:d.rows, hideStatus:false })}>{d.delayed >= 2 && <span style={{ color:"#fff", fontSize:10, fontWeight:700 }}>{d.delayed}</span>}</div>}
+                    {d.open > 0 && <div style={{ width:`${(d.open/maxTotal)*100}%`, background:C.onTrack, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", minWidth:4 }} onClick={()=>setRaidModal({ title:`${pri}`, rows:openRows, hideStatus:false })}>{d.open >= 2 && <span style={{ color:"#fff", fontSize:10, fontWeight:700 }}>{d.open}</span>}</div>}
+                    {d.delayed > 0 && <div style={{ width:`${(d.delayed/maxTotal)*100}%`, background:C.delayed, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", minWidth:4 }} onClick={()=>setRaidModal({ title:`${pri} — Delayed`, rows:delayedRows, hideStatus:false })}>{d.delayed >= 2 && <span style={{ color:"#fff", fontSize:10, fontWeight:700 }}>{d.delayed}</span>}</div>}
                   </div>
                   <div style={{ display:"flex", gap:5, minWidth:110 }}>
-                    <span style={{ background:C.onTrack+"20", color:"#856a00", border:`1px solid ${C.onTrack}50`, borderRadius:3, padding:"2px 7px", fontSize:10, fontWeight:700, cursor:"pointer" }} onClick={()=>openRows.length&&setRaidModal({ title:`${pri}`, rows:d.rows, hideStatus:false })}>Open: {d.open}</span>
-                    <span style={{ background:C.delayed+"20", color:C.delayed, border:`1px solid ${C.delayed}40`, borderRadius:3, padding:"2px 7px", fontSize:10, fontWeight:700, cursor:"pointer" }} onClick={()=>delayedRows.length&&setRaidModal({ title:`${pri} — Delayed`, rows:d.rows, hideStatus:false })}>Del: {d.delayed}</span>
+                    <span style={{ background:C.onTrack+"20", color:"#856a00", border:`1px solid ${C.onTrack}50`, borderRadius:3, padding:"2px 7px", fontSize:10, fontWeight:700, cursor:"pointer" }} onClick={()=>openRows.length&&setRaidModal({ title:`${pri}`, rows:openRows, hideStatus:false })}>Open: {d.open}</span>
+                    <span style={{ background:C.delayed+"20", color:C.delayed, border:`1px solid ${C.delayed}40`, borderRadius:3, padding:"2px 7px", fontSize:10, fontWeight:700, cursor:"pointer" }} onClick={()=>delayedRows.length&&setRaidModal({ title:`${pri} — Delayed`, rows:delayedRows, hideStatus:false })}>Del: {d.delayed}</span>
                   </div>
                 </div>
               );
@@ -3929,11 +3998,14 @@ function RaidAnalysisTab({ raid }) {
             {allTeams.map(team => {
               const count = raid.items.filter(r =>
                 String(r[teamKey]||"").trim() === team &&
-                String(r[K.status]||"").toLowerCase() !== "complete"
+                String(r[K.status]||"").toLowerCase() !== "complete" &&
+                String(r[K.status]||"").toLowerCase() !== "deferred" &&
+                !isCR(r)
               ).length;
               const delayed = raid.items.filter(r =>
                 String(r[teamKey]||"").trim() === team &&
-                String(r[K.status]||"").toLowerCase().includes("delay")
+                String(r[K.status]||"").toLowerCase().includes("delay") &&
+                !isCR(r)
               ).length;
               const active = selectedTeam === team;
               return (
@@ -4064,10 +4136,10 @@ function RaidAnalysisTab({ raid }) {
                 <thead>
                   <tr style={{ background:"#162f50" }}>
                     {[
-                      ["raidId","RAID ID"], ["status","Status"], ["type","Type"], ["component","Component"],
-                      ["experience","Experience"], ["topic","Topic"], ["desc","Description"],
-                      ["comment","Comments / Resolution"], ["owner","Owner"], ["critPath","Critical Path"], ["dueDate","Due Date"], ["raidDueDate","Override Due Date"]
-                    ].filter(([key]) => colConfig[key].visible).map(([key, label], idx, arr) => (
+                      ["raidId","RAID ID"], ["priority","Priority"], ["status","Status"], ["type","Type"], ["component","Component"],
+                      ["experience","Experience"], ["topic","Topic"], ["tag","Tag"], ["desc","Description"],
+                      ["comment","Comments / Resolution"], ["owner","Owner"], ["critPath","Critical Path"], ["dueDate","Due Date"], ["raidDueDate","Override Due Date"], ["resolutionDate","Resolution Date"]
+                    ].filter(([key]) => colConfig[key]?.visible).map(([key, label], idx, arr) => (
                       <th key={key} style={{ padding:"8px 10px", textAlign:"left", color:"#fff", fontWeight:700, fontSize:10,
                         width:colConfig[key].width, position:"relative",
                         borderRight: idx < arr.length-1 ? "1px solid rgba(255,255,255,0.1)" : "none" }}>
@@ -4105,20 +4177,23 @@ function RaidAnalysisTab({ raid }) {
                     const dueCol = due != null && due <= 7 ? C.delayed : due != null && due <= 14 ? C.gold : C.muted;
                     return (
                       <tr key={i} style={{ background:i%2===0?C.white:"#f7f9fc", borderBottom:`1px solid ${C.border}`, verticalAlign:"top" }}>
-                        {colConfig.raidId.visible    && <td style={{ padding:"8px 10px", fontWeight:700, color:C.navyLight, wordBreak:"break-word", width:colConfig.raidId.width }}>{String(r[K.id]||"—")}</td>}
-                        {colConfig.status.visible    && <td style={{ padding:"8px 10px", width:colConfig.status.width }}>
+                        {colConfig.raidId?.visible         && <td style={{ padding:"8px 10px", fontWeight:700, color:C.navyLight, wordBreak:"break-word", width:colConfig.raidId.width }}>{String(r[K.id]||"—")}</td>}
+                        {colConfig.priority?.visible       && (() => { const pv=String(r[K.priority]||"—"); const pc=getPriorityColor(pv); return <td style={{ padding:"8px 10px", width:colConfig.priority.width }}><span style={{ background:pc?"#fee2e2":"#f1f5f9", color:pc||C.text, border:`1px solid ${pc?pc+"50":"#e2e8f0"}`, borderRadius:3, padding:"2px 6px", fontSize:10, fontWeight:700, whiteSpace:"nowrap" }}>{pv}</span></td>; })()}
+                        {colConfig.status?.visible          && <td style={{ padding:"8px 10px", width:colConfig.status.width }}>
                           <span style={{ background:sCol+"20", color:sCol, border:`1px solid ${sCol}40`, borderRadius:4, padding:"2px 6px", fontSize:10, fontWeight:700, whiteSpace:"nowrap" }}>{status||"—"}</span>
                         </td>}
-                        {colConfig.type.visible      && <td style={{ padding:"8px 10px", color:C.text, wordBreak:"break-word", width:colConfig.type.width }}>{String(r[K.type]||"—")}</td>}
-                        {colConfig.component.visible && <td style={{ padding:"8px 10px", color:C.text, wordBreak:"break-word", width:colConfig.component.width }}>{String(r[K.component]||"—")}</td>}
-                        {colConfig.experience.visible&& <td style={{ padding:"8px 10px", color:C.muted, wordBreak:"break-word", width:colConfig.experience.width }}>{String(r[K.experience]||"—")}</td>}
-                        {colConfig.topic.visible     && <td style={{ padding:"8px 10px", color:C.muted, wordBreak:"break-word", width:colConfig.topic.width }}>{String(r[K.topic]||"—")}</td>}
+                        {colConfig.type?.visible             && <td style={{ padding:"8px 10px", color:C.text, wordBreak:"break-word", width:colConfig.type.width }}>{String(r[K.type]||"—")}</td>}
+                        {colConfig.component?.visible        && <td style={{ padding:"8px 10px", color:C.text, wordBreak:"break-word", width:colConfig.component.width }}>{String(r[K.component]||"—")}</td>}
+                        {colConfig.experience?.visible       && <td style={{ padding:"8px 10px", color:C.muted, wordBreak:"break-word", width:colConfig.experience.width }}>{String(r[K.experience]||"—")}</td>}
+                        {colConfig.topic?.visible            && <td style={{ padding:"8px 10px", color:C.muted, wordBreak:"break-word", width:colConfig.topic.width }}>{String(r[K.topic]||"—")}</td>}
+                        {colConfig.tag?.visible              && <td style={{ padding:"8px 10px", width:colConfig.tag.width }}>{r._rowId&&K.tag?<EditableCell sheet="raid" rowId={r._rowId} colName={K.tag} value={localVals[r._rowId]?.[K.tag]??String(r[K.tag]||"")} onSaved={v=>localUpdate(r._rowId,K.tag,v)}/>:(() => { const v=String(r[K.tag]||"").trim(); if(!v||v==="—") return <span style={{color:C.muted}}>—</span>; return <span style={{background:"#fef3c7",color:"#92400e",border:"1px solid #fcd34d",borderRadius:3,padding:"2px 6px",fontSize:10,whiteSpace:"nowrap"}}>{v}</span>; })()}</td>}
                         {colConfig.desc.visible      && <td style={{ padding:"8px 10px", wordBreak:"break-word", lineHeight:1.5, width:colConfig.desc.width }}>{r._rowId&&K.desc?<EditableCell sheet="raid" rowId={r._rowId} colName={K.desc} value={localVals[r._rowId]?.[K.desc]??String(r[K.desc]||"")} multiline onSaved={v=>localUpdate(r._rowId,K.desc,v)}/>:String(r[K.desc]||"—")}</td>}
                         {colConfig.comment.visible   && <td style={{ padding:"8px 10px", wordBreak:"break-word", lineHeight:1.5, width:colConfig.comment.width }}>{r._rowId&&K.comment?<EditableCell sheet="raid" rowId={r._rowId} colName={K.comment} value={localVals[r._rowId]?.[K.comment]??String(r[K.comment]||"")} multiline onSaved={v=>localUpdate(r._rowId,K.comment,v)}/>:String(r[K.comment]||"—")}</td>}
-                        {colConfig.owner.visible     && <td style={{ padding:"8px 10px", color:C.text, wordBreak:"break-word", width:colConfig.owner.width }}>{String(r[K.owner]||"—")}</td>}
-                        {colConfig.critPath.visible  && <td style={{ padding:"8px 10px", width:colConfig.critPath.width }}>{r._rowId&&K.critPath?<EditableCell sheet="raid" rowId={r._rowId} colName={K.critPath} value={localVals[r._rowId]?.[K.critPath]??String(r[K.critPath]||"")} onSaved={v=>localUpdate(r._rowId,K.critPath,v)}/>:(() => { const v=String(r[K.critPath]||"").trim(); if(!v||v==="—") return <span style={{color:C.muted}}>—</span>; const hi=v.toLowerCase()!=="no"&&v.toLowerCase()!=="n/a"; return <span style={{background:hi?"#fee2e2":"#f1f5f9",color:hi?C.delayed:C.muted,borderRadius:3,padding:"2px 6px",fontSize:10,fontWeight:600}}>{v}</span>; })()}</td>}
-                        {colConfig.dueDate.visible   && <td style={{ padding:"8px 10px", color:dueCol, fontWeight:600, whiteSpace:"nowrap", width:colConfig.dueDate.width }}>{dueStr}</td>}
-                        {colConfig.raidDueDate?.visible && <td style={{ padding:"8px 10px", width:colConfig.raidDueDate?.width||120 }}>{r._rowId&&K.raidDueDate?<EditableCell sheet="raid" rowId={r._rowId} colName={K.raidDueDate} value={localVals[r._rowId]?.[K.raidDueDate]??String(r[K.raidDueDate]||"")} onSaved={v=>localUpdate(r._rowId,K.raidDueDate,v)}/>:<span style={{color:C.muted}}>—</span>}</td>}
+                        {colConfig.owner?.visible            && <td style={{ padding:"8px 10px", color:C.text, wordBreak:"break-word", width:colConfig.owner.width }}>{String(r[K.owner]||"—")}</td>}
+                        {colConfig.critPath?.visible         && <td style={{ padding:"8px 10px", width:colConfig.critPath.width }}>{r._rowId&&K.critPath?<EditableCell sheet="raid" rowId={r._rowId} colName={K.critPath} value={localVals[r._rowId]?.[K.critPath]??String(r[K.critPath]||"")} onSaved={v=>localUpdate(r._rowId,K.critPath,v)}/>:(() => { const v=String(r[K.critPath]||"").trim(); if(!v||v==="—") return <span style={{color:C.muted}}>—</span>; const hi=v.toLowerCase()!=="no"&&v.toLowerCase()!=="n/a"; return <span style={{background:hi?"#fee2e2":"#f1f5f9",color:hi?C.delayed:C.muted,borderRadius:3,padding:"2px 6px",fontSize:10,fontWeight:600}}>{v}</span>; })()}</td>}
+                        {colConfig.dueDate?.visible          && <td style={{ padding:"8px 10px", color:dueCol, fontWeight:600, whiteSpace:"nowrap", width:colConfig.dueDate.width }}>{dueStr}</td>}
+                        {colConfig.raidDueDate?.visible      && <td style={{ padding:"8px 10px", width:colConfig.raidDueDate?.width||120 }}>{r._rowId&&K.raidDueDate?<EditableCell sheet="raid" rowId={r._rowId} colName={K.raidDueDate} value={localVals[r._rowId]?.[K.raidDueDate]??String(r[K.raidDueDate]||"")} onSaved={v=>localUpdate(r._rowId,K.raidDueDate,v)}/>:<span style={{color:C.muted}}>—</span>}</td>}
+                        {colConfig.resolutionDate?.visible   && <td style={{ padding:"8px 10px", color:C.muted, whiteSpace:"nowrap", width:colConfig.resolutionDate?.width||120 }}>{fmtDate(r[K.resolutionDate])||"—"}</td>}
                       </tr>
                     );
                   })}
@@ -4184,7 +4259,9 @@ function RaidDrillModal({ title, rows, raidKeys, onClose, initialStatusFilter, i
   const topicCol   = K.topic     || "Topic";
   const critCol        = K.critPath    || "Critical Path";
   const dateCol        = K.date        || "Due Date";
-  const raidDueDateCol = K.raidDueDate || null;
+  const raidDueDateCol    = K.raidDueDate    || null;
+  const tagCol            = K.tag            || null;
+  const resolutionDateCol = K.resolutionDate || null;
 
   // Derive available types from data
   const allTypes = Array.from(new Set(rows.map(r => String(r[typeCol] || "").trim()).filter(Boolean))).sort();
@@ -4247,10 +4324,14 @@ function RaidDrillModal({ title, rows, raidKeys, onClose, initialStatusFilter, i
   const expandAll   = () => { const e = {}; sortedGroups.forEach(([c]) => e[c] = true);  setExpanded(e); };
   const collapseAll = () => { const e = {}; sortedGroups.forEach(([c]) => e[c] = false); setExpanded(e); };
 
-  const cols = [idCol, priorityCol, statusCol, expCol, compCol, topicCol, descCol, commentCol, ownerCol, critCol, dateCol, ...(raidDueDateCol ? [raidDueDateCol] : [])];
+  const cols = [idCol, priorityCol, statusCol, expCol, compCol, topicCol,
+    ...(tagCol ? [tagCol] : []),
+    descCol, commentCol, ownerCol, critCol, dateCol,
+    ...(raidDueDateCol ? [raidDueDateCol] : []),
+    ...(resolutionDateCol ? [resolutionDateCol] : [])];
   const wideCols = new Set([descCol, commentCol]);
   // dateCol (Due Date) is calculated — not editable; raidDueDateCol (RAID Due Date) is the user override
-  const editableCols = new Set([descCol, commentCol, critCol, raidDueDateCol, K.tag, K.crTargetSprint].filter(Boolean));
+  const editableCols = new Set([descCol, commentCol, critCol, raidDueDateCol, tagCol, K.crTargetSprint].filter(Boolean));
   const multilineCols = new Set([descCol, commentCol]);
   // Display labels for columns whose header differs from the raw column name
   const colLabels = { [raidDueDateCol]: "Override Due Date" };
@@ -4377,6 +4458,7 @@ function RaidDrillModal({ title, rows, raidKeys, onClose, initialStatusFilter, i
                           const isStat  = c === statusCol;
                           const isWide  = wideCols.has(c);
                           const isDate  = c === dateCol;
+                          const isTag   = c === tagCol;
                           const isEdit  = editableCols.has(c) && r._rowId;
                           const priColor = isPri ? getPriorityColor(v) : null;
                           return (
@@ -4402,7 +4484,9 @@ function RaidDrillModal({ title, rows, raidKeys, onClose, initialStatusFilter, i
                                     ? <span style={{ background:statusColor+"20", color:statusColor, border:`1px solid ${statusColor}40`, borderRadius:3, padding:"2px 7px", fontSize:10, fontWeight:700 }}>{v}</span>
                                     : isDate && daysLeft != null
                                       ? <>{fmtDate(r[c])}<div style={{ fontSize:9, color:dueColor, marginTop:1 }}>{daysLeft < 0 ? `${Math.abs(daysLeft)}d overdue` : daysLeft === 0 ? "today" : `${daysLeft}d left`}</div></>
-                                      : isWide ? v : v.slice(0, 60)}
+                                      : isTag && v !== "—"
+                                        ? <span style={{ background:"#fef3c7", color:"#92400e", border:"1px solid #fcd34d", borderRadius:3, padding:"2px 6px", fontSize:10, whiteSpace:"nowrap" }}>{v}</span>
+                                        : isWide ? v : v.slice(0, 60)}
                             </td>
                           );
                         })}
@@ -6130,7 +6214,11 @@ function TestScenariosTab({ data, wp, req }) {
   );
 
   const _toggleScen  = id => setScenExpanded(prev => { const n=new Set(prev); n.has(id)?n.delete(id):n.add(id); return n; });
-  const _toggleReq   = (scenId, reqId) => setScenActiveReq(prev => ({ ...prev, [scenId]: prev[scenId]===reqId ? null : reqId }));
+  const _toggleReq   = (scenId, reqId) => setScenActiveReq(prev => {
+    const cur = prev[scenId] instanceof Set ? new Set(prev[scenId]) : new Set();
+    cur.has(reqId) ? cur.delete(reqId) : cur.add(reqId);
+    return { ...prev, [scenId]: cur };
+  });
   const _setFlag = (f, val) => setScenFlagF(prev => ({ ...prev, [f]: val }));
 
   const _statusBadge = v => {
@@ -6346,8 +6434,7 @@ function TestScenariosTab({ data, wp, req }) {
                 const scenId      = String(r[K.id]||i);
                 const isOpen      = scenExpanded.has(scenId);
                 const tagIds      = _splitUSIds(r[K.similarUSIds]);
-                const activeReqId = scenActiveReq[scenId] || null;
-                const reqRow      = activeReqId ? reqById[activeReqId] : null;
+                const activeReqIds = scenActiveReq[scenId] instanceof Set ? scenActiveReq[scenId] : new Set();
                 const isDel    = isTruthy(r[K.toBeDeleted]);
                 const isDup    = isTruthy(r[K.dupDataMiningNA]);
                 const isOpenFb = isTruthy(r[K.openFeedbackFlag]);
@@ -6370,7 +6457,7 @@ function TestScenariosTab({ data, wp, req }) {
                       </td>
                       <td style={{ padding:"8px 10px", fontWeight:700, color:C.navyLight, whiteSpace:"nowrap", borderRight:`1px solid ${C.border}`, width:scenColW["id"]||90 }}>{String(r[K.id]||"—")}</td>
                       <td style={{ padding:"8px 10px", color:C.text, wordBreak:"break-word", borderRight:`1px solid ${C.border}`, width:scenColW["scen"]||220 }}>{String(r[K.name]||"—")}</td>
-                      <td style={{ padding:"8px 10px", color:C.muted, whiteSpace:"nowrap", borderRight:`1px solid ${C.border}`, width:scenColW["sp"]||130 }}>{String(r[K.subprocess]||"—")}</td>
+                      <td style={{ padding:"8px 10px", color:C.muted, wordBreak:"break-word", borderRight:`1px solid ${C.border}`, width:scenColW["sp"]||130 }}>{String(r[K.subprocess]||"—")}</td>
                       <td style={{ padding:"8px 10px", color:C.text, wordBreak:"break-word", borderRight:`1px solid ${C.border}`, width:scenColW["det"]||180 }}>{String(r[K.additionalDetails]||"—")}</td>
                       <td style={{ padding:"8px 10px", color:C.muted, wordBreak:"break-word", maxWidth:scenColW["pers"]||120, borderRight:`1px solid ${C.border}`, width:scenColW["pers"]||120 }}>{String(r[K.persona]||"—")}</td>
                       <td style={{ padding:"8px 10px", textAlign:"center", fontWeight:700, color:C.text, borderRight:`1px solid ${C.border}`, width:scenColW["est"]||65 }}>{r[K.estCases]||"—"}</td>
@@ -6419,7 +6506,7 @@ function TestScenariosTab({ data, wp, req }) {
                               <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:6 }}>Tagged User Stories ({tagIds.length})</div>
                               <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
                                 {tagIds.map(usId => {
-                                  const isActive = activeReqId === usId;
+                                  const isActive = activeReqIds.has(usId);
                                   return (
                                     <span key={usId} onClick={()=>_toggleReq(scenId, usId)}
                                       style={{ background:isActive?"#1d4ed8":"#eff6ff", color:isActive?"#fff":"#1d4ed8",
@@ -6431,28 +6518,31 @@ function TestScenariosTab({ data, wp, req }) {
                                   );
                                 })}
                               </div>
-                              {activeReqId && (
-                                <div style={{ marginTop:10, background:C.white, border:`1px solid #93c5fd`, borderRadius:6, padding:"10px 14px" }}>
-                                  {reqRow ? (
-                                    <div style={{ display:"grid", gridTemplateColumns:"120px 1fr 1fr", gap:12, alignItems:"start" }}>
-                                      <div>
-                                        <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:4 }}>Req ID</div>
-                                        <div style={{ fontSize:12, fontWeight:700, color:C.navyLight }}>{String(reqRow[reqK?.reqId]||activeReqId)}</div>
+                              {Array.from(activeReqIds).map(activeReqId => {
+                                const reqRow = reqById[activeReqId];
+                                return (
+                                  <div key={activeReqId} style={{ marginTop:10, background:C.white, border:`1px solid #93c5fd`, borderRadius:6, padding:"10px 14px" }}>
+                                    {reqRow ? (
+                                      <div style={{ display:"grid", gridTemplateColumns:"120px 1fr 1fr", gap:12, alignItems:"start" }}>
+                                        <div>
+                                          <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:4 }}>Req ID</div>
+                                          <div style={{ fontSize:12, fontWeight:700, color:C.navyLight }}>{String(reqRow[reqK?.reqId]||activeReqId)}</div>
+                                        </div>
+                                        <div>
+                                          <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:4 }}>User Story</div>
+                                          <div style={{ fontSize:11, color:C.text, lineHeight:1.5 }}>{String(reqRow[reqK?.story]||"—")}</div>
+                                        </div>
+                                        <div>
+                                          <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:4 }}>Acceptance Criteria</div>
+                                          <div style={{ fontSize:11, color:C.muted, lineHeight:1.5 }}>{String(reqRow[reqK?.acceptance]||"—")}</div>
+                                        </div>
                                       </div>
-                                      <div>
-                                        <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:4 }}>User Story</div>
-                                        <div style={{ fontSize:11, color:C.text, lineHeight:1.5 }}>{String(reqRow[reqK?.story]||"—")}</div>
-                                      </div>
-                                      <div>
-                                        <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:4 }}>Acceptance Criteria</div>
-                                        <div style={{ fontSize:11, color:C.muted, lineHeight:1.5 }}>{String(reqRow[reqK?.acceptance]||"—")}</div>
-                                      </div>
-                                    </div>
-                                  ) : (
-                                    <div style={{ fontSize:11, color:C.muted, fontStyle:"italic" }}>No requirement data found for ID: {activeReqId}</div>
-                                  )}
-                                </div>
-                              )}
+                                    ) : (
+                                      <div style={{ fontSize:11, color:C.muted, fontStyle:"italic" }}>No requirement data found for ID: {activeReqId}</div>
+                                    )}
+                                  </div>
+                                );
+                              })}
                             </div>
                           )}
                         </td>
@@ -7659,19 +7749,22 @@ function ScorecardTab({ wp, raid, req, openModal }) {
   const [storyModal, setStoryModal] = useState(null);
   const [wpDrillModal, setWpDrillModal] = useState(null);
   const [modalColConfig, setModalColConfig] = useState({
-    raidId:    { label:"RAID ID",              visible:true,  width:90  },
-    status:    { label:"Status",               visible:true,  width:90  },
-    type:      { label:"Type",                 visible:true,  width:90  },
-    component: { label:"Component",            visible:true,  width:130 },
-    experience:{ label:"Experience",           visible:true,  width:90  },
-    topic:     { label:"Topic",                visible:true,  width:90  },
-    desc:      { label:"Description",          visible:true,  width:260 },
-    comment:   { label:"Comments / Resolution",visible:true,  width:220 },
-    owner:     { label:"Owner",                visible:true,  width:110 },
-    team:      { label:"Primary Team (Owner)", visible:true,  width:140 },
-    critPath:    { label:"Critical Path",        visible:true,  width:100 },
-    dueDate:     { label:"Due Date",             visible:true,  width:85  },
-    raidDueDate: { label:"Override Due Date",    visible:true,  width:120 },
+    raidId:        { label:"RAID ID",              visible:true,  width:90  },
+    priority:      { label:"Priority",             visible:true,  width:80  },
+    status:        { label:"Status",               visible:true,  width:90  },
+    type:          { label:"Type",                 visible:true,  width:90  },
+    component:     { label:"Component",            visible:true,  width:130 },
+    experience:    { label:"Experience",           visible:true,  width:90  },
+    topic:         { label:"Topic",                visible:true,  width:90  },
+    tag:           { label:"Tag",                  visible:true,  width:100 },
+    desc:          { label:"Description",          visible:true,  width:260 },
+    comment:       { label:"Comments / Resolution",visible:true,  width:220 },
+    owner:         { label:"Owner",                visible:true,  width:110 },
+    team:          { label:"Primary Team (Owner)", visible:true,  width:140 },
+    critPath:      { label:"Critical Path",        visible:true,  width:100 },
+    dueDate:       { label:"Due Date",             visible:true,  width:85  },
+    raidDueDate:   { label:"Override Due Date",    visible:true,  width:120 },
+    resolutionDate:{ label:"Resolution Date",      visible:true,  width:120 },
   });
   if (!raid && !req && !wp) return <Empty label="Upload files to view Component Scorecard." />;
 
