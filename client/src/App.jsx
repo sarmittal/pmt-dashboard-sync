@@ -5068,7 +5068,7 @@ function ComponentCardsTab({ wp, raid, req, openModal }) {
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(120px,1fr))", gap:10 }}>
         {[
           ["Components", allComps.length, C.navyLight],
-          ["Total Stories", req ? Object.values(req.byComponent||{}).reduce((s,d)=>s+d.total,0) : "—", C.navyLight],
+          ["Total Stories", req ? req.items.filter(r => !REQ_EXCL_EXP.some(e => String(r[req.keys?.pmExperience]||"").toLowerCase().includes(e))).length : "—", C.navyLight],
           ["Blocked", req ? Object.values(req.byComponent||{}).reduce((s,d)=>s+(d.blocked||0),0) : "—", C.delayed],
           ["In Progress", req ? Object.values(req.byComponent||{}).reduce((s,d)=>s+(d.inProgress||0),0) : "—", C.onTrack],
           ["Complete", req ? Object.values(req.byComponent||{}).reduce((s,d)=>s+(d.complete||0),0) : "—", C.complete],
