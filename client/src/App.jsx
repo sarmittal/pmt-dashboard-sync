@@ -1704,6 +1704,29 @@ function ExecutiveSummaryTab({ wp, raid, req, cap, openModal }) {
                 </tr>
               </thead>
               <tbody>
+                {sprintRows.length > 0 && (() => {
+                  const tot = sprintRows.reduce((a,sp) => ({
+                    total:sp.total+(a.total||0), complete:(sp.complete||0)+(a.complete||0),
+                    inProgress:(sp.inProgress||0)+(a.inProgress||0), blocked:(sp.blocked||0)+(a.blocked||0),
+                    notStarted:(sp.notStarted||0)+(a.notStarted||0), partial:(sp.partial||0)+(a.partial||0),
+                    rows:[...(a.rows||[]),...(sp.rows||[])],
+                  }), {total:0,complete:0,inProgress:0,blocked:0,notStarted:0,partial:0,rows:[]});
+                  const mkTotCell = (count, bkt, color) => count > 0
+                    ? <span onClick={e=>{e.stopPropagation();setStoryModal({title:`All Sprints${bkt?` — ${bkt}`:""}`, rows:bkt?tot.rows.filter(r=>_rowBucket(r)===bkt):tot.rows});}} style={{ fontWeight:800, color, cursor:"pointer", textDecoration:"underline dotted" }}>{count}</span>
+                    : <span style={{ color:C.muted }}>—</span>;
+                  return (
+                    <tr style={{ background:"#e8eef7", borderBottom:`2px solid #162f50` }}>
+                      <td style={{ padding:"8px 12px", fontWeight:800, color:"#162f50", fontSize:11 }}>TOTAL</td>
+                      <td style={{ padding:"8px 12px", textAlign:"center" }}>{mkTotCell(tot.total,     null,       "#162f50")}</td>
+                      <td style={{ padding:"8px 12px", textAlign:"center" }}>{tot.total>0?(() => { const pct=Math.round((tot.complete||0)/tot.total*100); const [bg,c]=pct>=80?["#dcfce7","#166534"]:pct>=50?["#fef3c7","#92400e"]:["#fee2e2","#b91c1c"]; return <span style={{background:bg,color:c,borderRadius:4,padding:"2px 7px",fontSize:10,fontWeight:800}}>{pct}%</span>; })():<span style={{color:C.muted}}>—</span>}</td>
+                      <td style={{ padding:"8px 12px", textAlign:"center" }}>{mkTotCell(tot.complete,  "complete",  "#1d4ed8")}</td>
+                      <td style={{ padding:"8px 12px", textAlign:"center" }}>{mkTotCell(tot.inProgress,"inProgress","#15803d")}</td>
+                      <td style={{ padding:"8px 12px", textAlign:"center" }}>{mkTotCell(tot.blocked,   "blocked",   "#b91c1c")}</td>
+                      <td style={{ padding:"8px 12px", textAlign:"center" }}>{mkTotCell(tot.notStarted,"notStarted","#475569")}</td>
+                      <td style={{ padding:"8px 12px", textAlign:"center" }}>{mkTotCell(tot.partial,   "partial",   "#0369a1")}</td>
+                    </tr>
+                  );
+                })()}
                 {sprintRows.map((sp, i) => {
                   const mkCell = (count, bkt, color) => count > 0
                     ? <span onClick={e=>{e.stopPropagation();setStoryModal({title:`Sprint: ${sp.name}${bkt?` — ${bkt}`:""}`, rows:bkt?_spBucket(sp,bkt):sp.rows});}} style={{ fontWeight:700, color, cursor:"pointer", textDecoration:"underline dotted" }}>{count}</span>
@@ -1721,29 +1744,6 @@ function ExecutiveSummaryTab({ wp, raid, req, cap, openModal }) {
                     </tr>
                   );
                 })}
-                {sprintRows.length > 0 && (() => {
-                  const tot = sprintRows.reduce((a,sp) => ({
-                    total:sp.total+(a.total||0), complete:(sp.complete||0)+(a.complete||0),
-                    inProgress:(sp.inProgress||0)+(a.inProgress||0), blocked:(sp.blocked||0)+(a.blocked||0),
-                    notStarted:(sp.notStarted||0)+(a.notStarted||0), partial:(sp.partial||0)+(a.partial||0),
-                    rows:[...(a.rows||[]),...(sp.rows||[])],
-                  }), {total:0,complete:0,inProgress:0,blocked:0,notStarted:0,partial:0,rows:[]});
-                  const mkTotCell = (count, bkt, color) => count > 0
-                    ? <span onClick={e=>{e.stopPropagation();setStoryModal({title:`All Sprints${bkt?` — ${bkt}`:""}`, rows:bkt?tot.rows.filter(r=>_rowBucket(r)===bkt):tot.rows});}} style={{ fontWeight:800, color, cursor:"pointer", textDecoration:"underline dotted" }}>{count}</span>
-                    : <span style={{ color:C.muted }}>—</span>;
-                  return (
-                    <tr style={{ background:"#e8eef7", borderTop:`2px solid #162f50` }}>
-                      <td style={{ padding:"8px 12px", fontWeight:800, color:"#162f50", fontSize:11 }}>TOTAL</td>
-                      <td style={{ padding:"8px 12px", textAlign:"center" }}>{mkTotCell(tot.total,     null,       "#162f50")}</td>
-                      <td style={{ padding:"8px 12px", textAlign:"center" }}>{tot.total>0?(() => { const pct=Math.round((tot.complete||0)/tot.total*100); const [bg,c]=pct>=80?["#dcfce7","#166534"]:pct>=50?["#fef3c7","#92400e"]:["#fee2e2","#b91c1c"]; return <span style={{background:bg,color:c,borderRadius:4,padding:"2px 7px",fontSize:10,fontWeight:800}}>{pct}%</span>; })():<span style={{color:C.muted}}>—</span>}</td>
-                      <td style={{ padding:"8px 12px", textAlign:"center" }}>{mkTotCell(tot.complete,  "complete",  "#1d4ed8")}</td>
-                      <td style={{ padding:"8px 12px", textAlign:"center" }}>{mkTotCell(tot.inProgress,"inProgress","#15803d")}</td>
-                      <td style={{ padding:"8px 12px", textAlign:"center" }}>{mkTotCell(tot.blocked,   "blocked",   "#b91c1c")}</td>
-                      <td style={{ padding:"8px 12px", textAlign:"center" }}>{mkTotCell(tot.notStarted,"notStarted","#475569")}</td>
-                      <td style={{ padding:"8px 12px", textAlign:"center" }}>{mkTotCell(tot.partial,   "partial",   "#0369a1")}</td>
-                    </tr>
-                  );
-                })()}
               </tbody>
             </table>
           </Card>
@@ -2748,7 +2748,7 @@ function ReqTraceabilityTab({ req, test }) {
   const [tagFilter,    setTagFilter]    = useState("ALL");
   const [reviewFilter, setReviewFilter] = useState("ALL");
   const [search,       setSearch]       = useState("");
-  const [expanded,     setExpanded]     = useState(new Set());
+  const [detailRow,    setDetailRow]    = useState(null); // { r, rowKey, scens, isScript, gap, estSum }
   const [expandedSc,   setExpandedSc]   = useState(new Set());
 
   // ── Stable derived data — recomputes only when source data changes ─────────
@@ -2866,7 +2866,6 @@ function ReqTraceabilityTab({ req, test }) {
   const {scenarioMapped,scriptMapped,pendingMapping,stCovered,stGap,stScript,stScens,totEst,scenPct,scriptPct} = stats;
   const _statusBucket = r => _statusBucketOf(r, reqK);
   const _covKey       = r => _covKeyOf(r, reqK, scensByReqId);
-  const _toggle   = id => setExpanded  (p => { const n=new Set(p); n.has(id)?n.delete(id):n.add(id); return n; });
   const _toggleSc = id => setExpandedSc(p => { const n=new Set(p); n.has(id)?n.delete(id):n.add(id); return n; });
   const _buildBadge = r => {
     const b=_statusBucket(r), s=BUILD_STATUS_META[b]||BUILD_STATUS_META.notStarted;
@@ -3084,19 +3083,18 @@ function ReqTraceabilityTab({ req, test }) {
               {filtered.length===0&&(
                 <tr><td colSpan={17} style={{padding:24,textAlign:"center",color:C.muted}}>No requirements match selected filters.</td></tr>
               )}
+
               {filtered.map((r,i)=>{
                 const id       = String(r[reqK?.reqId]||"").trim()||String(i);
                 const rowKey   = `${i}_${id}`;
                 const scens    = scensByReqId[id]||[];
                 const estSum   = scens.reduce((s,t)=>s+(parseFloat(t[tK?.estCases])||0),0);
-                const isOpen   = expanded.has(rowKey);
                 const isScript = isTestScript(r);
                 const gap      = !isScript && scens.length===0;
                 const rowBg    = i%2===0 ? C.white : "#f9fafb";
                 const td = (children, style={}) => (
                   <td style={{padding:"7px 8px",verticalAlign:"top",borderRight:`1px solid ${C.border}`,overflow:"hidden",...style}}>{children}</td>
                 );
-                // Tags → pills (multi-select split by newline/comma)
                 const tagPills = (() => {
                   const raw = String(r[reqK?.tags]||"").trim();
                   if (!raw||raw==="nan"||raw==="None") return <span style={{color:C.muted,fontSize:10}}>—</span>;
@@ -3109,208 +3107,200 @@ function ReqTraceabilityTab({ req, test }) {
                     </div>
                   );
                 })();
-                // Coverage status badge
                 const statusBadge = gap
                   ? <span style={{background:"#fee2e2",color:"#b91c1c",border:"1px solid #fca5a5",borderRadius:4,padding:"2px 6px",fontSize:9,fontWeight:700,whiteSpace:"nowrap"}}>No Scenario</span>
                   : isScript
                   ? <span style={{background:"#f5f3ff",color:"#6d28d9",border:"1px solid #c4b5fd",borderRadius:4,padding:"2px 6px",fontSize:9,fontWeight:700,whiteSpace:"nowrap"}}>Script Reqd</span>
                   : <span style={{background:"#dcfce7",color:"#166534",border:"1px solid #86efac",borderRadius:4,padding:"2px 6px",fontSize:9,fontWeight:700,whiteSpace:"nowrap"}}>Covered</span>;
                 return (
-                  <React.Fragment key={rowKey}>
-                    <tr style={{background:rowBg,borderBottom:isOpen?`2px solid #93c5fd`:`1px solid ${C.border}`,cursor:"pointer"}}
-                      onClick={()=>_toggle(rowKey)}>
-                      <td style={{padding:"7px 8px",textAlign:"center",color:isOpen?C.navyLight:C.muted,fontWeight:700,borderRight:`1px solid ${C.border}`}}>{isOpen?"▾":"▸"}</td>
-                      {td(statusBadge,{verticalAlign:"middle"})}
-                      {td(<span style={{fontWeight:700,color:C.navyLight,whiteSpace:"nowrap",fontSize:11}}>{id||"—"}</span>)}
-                      {td(<span style={{fontSize:10,color:C.muted,wordBreak:"break-word"}}>{_fieldVal(r[reqK?.pmExperience])}</span>)}
-                      {td(<span style={{fontSize:10,color:C.text,wordBreak:"break-word"}}>{_fieldVal(r[reqK?.component])}</span>)}
-                      {td(<span style={{lineHeight:1.5,fontSize:11,wordBreak:"break-word"}}>{_fieldVal(r[reqK?.bizReq])}</span>)}
-                      {td(<span style={{lineHeight:1.5,fontSize:11,wordBreak:"break-word"}}>{_fieldVal(r[reqK?.story])}</span>)}
-                      {td(<span style={{lineHeight:1.5,fontSize:11,color:C.muted,wordBreak:"break-word"}}>{_fieldVal(r[reqK?.acceptance])}</span>)}
-                      {td(_reviewBadge(r),{verticalAlign:"middle",borderRight:"2px solid #cbd5e1"})}
-                      {td(tagPills)}
-                      {td(<span style={{fontSize:10,color:C.text,wordBreak:"break-word"}}>{_fieldVal(r[reqK?.sprint])}</span>)}
-                      {td(_buildBadge(r),{textAlign:"center",verticalAlign:"middle",borderRight:"2px solid #cbd5e1"})}
-                      {td(<span style={{fontSize:10,color:C.text}}>{_fieldVal(r[reqK?.testScriptType])}</span>)}
-                      {td(<span style={{fontWeight:700,color:C.navyLight}}>{scens.length||"0"}</span>,{textAlign:"center",verticalAlign:"middle"})}
-                      {td(<span style={{fontWeight:estSum>0?700:400,color:estSum>0?C.navyLight:C.muted}}>{estSum||"—"}</span>,{textAlign:"center",verticalAlign:"middle"})}
-                      {td(<span style={{color:C.muted,fontSize:10,fontStyle:"italic"}}>—</span>,{textAlign:"center",verticalAlign:"middle"})}
-                      {td(<span style={{color:C.muted,fontSize:10,fontStyle:"italic"}}>—</span>,{textAlign:"center",verticalAlign:"middle",borderRight:"none"})}
-                    </tr>
-
-                    {/* ── Inline expansion ── */}
-                    {isOpen&&(
-                      <tr style={{background:"#f0f6ff",borderBottom:`2px solid #93c5fd`}}>
-                        <td colSpan={17} style={{padding:0}}>
-                          <div style={{padding:"14px 18px 16px 44px",display:"flex",flexDirection:"column",gap:14}}>
-
-                            {/* Section 0: User Story Details */}
-                            <div>
-                              <div style={{fontSize:10,fontWeight:700,color:C.navy,textTransform:"uppercase",letterSpacing:"0.07em",borderBottom:`1px solid #bfdbfe`,paddingBottom:4,marginBottom:8}}>
-                                User Story Details
-                              </div>
-                              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px 24px"}}>
-                                {[
-                                  {label:"Experience",            val:_fieldVal(r[reqK?.pmExperience])},
-                                  {label:"Sub Process",           val:_fieldVal(r[reqK?.component])},
-                                ].map(({label,val})=>(
-                                  <div key={label} style={{display:"flex",flexDirection:"column",gap:2}}>
-                                    <span style={{fontSize:9,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:"0.05em"}}>{label}</span>
-                                    <span style={{fontSize:11,color:C.text,lineHeight:1.5}}>{val}</span>
-                                  </div>
-                                ))}
-                              </div>
-                              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:"10px 24px",marginTop:10}}>
-                                {[
-                                  {label:"Business Requirement",  val:_fieldVal(r[reqK?.bizReq])},
-                                  {label:"User Story",            val:_fieldVal(r[reqK?.story])},
-                                  {label:"Acceptance Criteria",   val:_fieldVal(r[reqK?.acceptance])},
-                                ].map(({label,val})=>(
-                                  <div key={label} style={{display:"flex",flexDirection:"column",gap:2}}>
-                                    <span style={{fontSize:9,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:"0.05em"}}>{label}</span>
-                                    <span style={{fontSize:11,color:C.text,lineHeight:1.5,whiteSpace:"pre-wrap",wordBreak:"break-word"}}>{val}</span>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-
-                            {/* Section 1: Build Approach */}
-                            <div>
-                              <div style={{fontSize:10,fontWeight:700,color:C.navy,textTransform:"uppercase",letterSpacing:"0.07em",borderBottom:`1px solid #bfdbfe`,paddingBottom:4,marginBottom:8}}>
-                                1 — Build Approach
-                              </div>
-                              {/* Summary row: Tags, Build Cycle, Func Build Status, Tech Build Status */}
-                              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:"8px 20px",marginBottom:12,padding:"8px 10px",background:"#f0f9ff",border:"1px solid #bae6fd",borderRadius:6}}>
-                                <div style={{display:"flex",flexDirection:"column",gap:3}}>
-                                  <span style={{fontSize:9,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:"0.05em"}}>Tags</span>
-                                  {tagPills}
-                                </div>
-                                <div style={{display:"flex",flexDirection:"column",gap:3}}>
-                                  <span style={{fontSize:9,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:"0.05em"}}>Build Cycle (Playback)</span>
-                                  <span style={{fontSize:11,color:C.text,lineHeight:1.45}}>{_fieldVal(r[reqK?.sprint])}</span>
-                                </div>
-                                {[{label:"Functional Build Status",key:"funcBuildStatus"},{label:"Tech Build Status",key:"techBuildStatus"}].map(({label,key})=>{
-                                  const raw=String(r[reqK?.[key]]||"").trim();
-                                  const bucket=_toBucket(raw);
-                                  const s=bucket?BUILD_STATUS_META[bucket]:null;
-                                  return (
-                                    <div key={key} style={{display:"flex",flexDirection:"column",gap:3}}>
-                                      <span style={{fontSize:9,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:"0.05em"}}>{label}</span>
-                                      {s
-                                        ? <span style={{background:s.bg,color:s.c,border:`1px solid ${s.br}`,borderRadius:4,padding:"2px 7px",fontSize:10,fontWeight:600,whiteSpace:"nowrap",display:"inline-block"}}>{raw||s.l}</span>
-                                        : <span style={{fontSize:11,color:C.muted,fontStyle:"italic"}}>—</span>}
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:"8px 20px"}}>
-                                {BUILD_FIELDS.map(({label,key})=>{
-                                  const raw = String(r[reqK?.[key]]||"").trim();
-                                  const empty = !raw||raw==="nan"||raw==="None";
-                                  const isUrl = !empty && (raw.startsWith("http://") || raw.startsWith("https://"));
-                                  const content = empty
-                                    ? <span style={{fontSize:11,color:C.muted,fontStyle:"italic"}}>—</span>
-                                    : isUrl
-                                    ? <a href={raw} target="_blank" rel="noopener noreferrer"
-                                        style={{fontSize:11,color:C.navyLight,textDecoration:"underline",display:"flex",alignItems:"center",gap:3}}>
-                                        Open document <span style={{fontSize:10}}>↗</span>
-                                      </a>
-                                    : <span style={{fontSize:11,color:C.text,lineHeight:1.45,wordBreak:"break-word"}}>{raw}</span>;
-                                  return (
-                                    <div key={key} style={{display:"flex",flexDirection:"column",gap:2}}>
-                                      <span style={{fontSize:9,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:"0.05em"}}>{label}</span>
-                                      {content}
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            </div>
-
-                            {/* Section 2: Test Scenario Details */}
-                            <div>
-                              <div style={{fontSize:10,fontWeight:700,color:C.navy,textTransform:"uppercase",letterSpacing:"0.07em",borderBottom:`1px solid #bfdbfe`,paddingBottom:4,marginBottom:8}}>
-                                2 — Test Scenario Details {scens.length>0&&!isScript&&<span style={{fontWeight:400,color:C.muted,textTransform:"none",letterSpacing:0}}>({scens.length} scenarios)</span>}
-                              </div>
-                              {isScript?(
-                                <div style={{background:"#f5f3ff",border:"1px solid #c4b5fd",borderRadius:6,padding:"8px 12px",display:"flex",alignItems:"center",gap:8}}>
-                                  <span style={{fontSize:13}}>📋</span>
-                                  <span style={{fontSize:11,color:"#6d28d9",fontWeight:600}}>Covered by Test Script — not linked to test scenarios. Test script link required (see Test Script Link column).</span>
-                                </div>
-                              ):scens.length===0?(
-                                <div style={{background:"#fff7ed",border:"1px solid #fed7aa",borderRadius:6,padding:"8px 12px",display:"flex",alignItems:"center",gap:8}}>
-                                  <span style={{fontSize:13}}>⚠</span>
-                                  <span style={{fontSize:11,color:"#c2410c",fontWeight:600}}>No test scenarios linked — coverage gap</span>
-                                </div>
-                              ):(
-                                <div style={{display:"flex",flexDirection:"column",gap:6}}>
-                                  {/* Bubble row */}
-                                  <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-                                    {scens.map(sc=>{
-                                      const scId  = String(sc[tK?.id]||"").trim();
-                                      const scKey = `${rowKey}__${scId}`;
-                                      const scOpen= expandedSc.has(scKey);
-                                      return (
-                                        <button key={scKey} onClick={e=>{e.stopPropagation();_toggleSc(scKey);}} style={{
-                                          background:scOpen?"#1e40af":"#eff6ff",color:scOpen?"#fff":"#1d4ed8",
-                                          border:`1.5px solid ${scOpen?"#1e40af":"#93c5fd"}`,borderRadius:20,
-                                          padding:"4px 12px",fontSize:10,fontWeight:700,cursor:"pointer",
-                                          whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:5
-                                        }}>
-                                          <span>{scOpen?"▾":"▸"}</span>
-                                          <span>{scId||"Scenario"}</span>
-                                          <span style={{opacity:0.75,fontWeight:400,maxWidth:160,overflow:"hidden",textOverflow:"ellipsis"}}>
-                                            {String(sc[tK?.name]||"").slice(0,50)||""}
-                                          </span>
-                                        </button>
-                                      );
-                                    })}
-                                  </div>
-                                  {/* Expanded detail panels — render below all bubbles, full width */}
-                                  {scens.filter(sc=>expandedSc.has(`${rowKey}__${String(sc[tK?.id]||"").trim()}`)).map(sc=>{
-                                    const scId = String(sc[tK?.id]||"").trim();
-                                    return (
-                                      <div key={`det_${scId}`} style={{width:"100%",background:"#fff",border:`1px solid #bfdbfe`,borderRadius:6,padding:"12px 16px",display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:"10px 24px",boxShadow:"0 2px 6px rgba(30,64,175,0.08)"}}>
-                                        {[
-                                          {label:"Test Scenario ID",      val:scId||"—"},
-                                          {label:"Test Scenario",         val:String(sc[tK?.name]||"—")},
-                                          {label:"Applicable Experience", val:_fieldVal(sc[tK?.applicableExperience])},
-                                          {label:"Applicable Business",   val:_fieldVal(sc[tK?.applicableBusiness])},
-                                          {label:"Applicable Region",     val:_fieldVal(sc[tK?.applicableRegion])},
-                                          {label:"Est. Test Cases",       val:_fieldVal(sc[tK?.estCases])},
-                                        ].map(({label,val})=>(
-                                          <div key={label} style={{display:"flex",flexDirection:"column",gap:2}}>
-                                            <span style={{fontSize:9,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:"0.05em"}}>{label}</span>
-                                            <span style={{fontSize:11,color:val==="—"?C.muted:C.text,lineHeight:1.45}}>{val}</span>
-                                          </div>
-                                        ))}
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              )}
-                            </div>
-
-                            {/* Section 3: Test Case Detail (placeholder) */}
-                            <div>
-                              <div style={{fontSize:10,fontWeight:700,color:C.navy,textTransform:"uppercase",letterSpacing:"0.07em",borderBottom:`1px solid #bfdbfe`,paddingBottom:4,marginBottom:8}}>
-                                3 — Test Case Detail
-                              </div>
-                              <div style={{background:"#f8fafc",border:`1px dashed ${C.border}`,borderRadius:6,padding:"8px 12px"}}>
-                                <span style={{fontSize:11,color:C.muted,fontStyle:"italic"}}>Test case detail — upload test case sheet to link here</span>
-                              </div>
-                            </div>
-
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                  </React.Fragment>
+                  <tr key={rowKey} style={{background:rowBg,borderBottom:`1px solid ${C.border}`,cursor:"pointer"}}
+                    onClick={()=>{ setExpandedSc(new Set()); setDetailRow({r,rowKey,scens,isScript,gap,estSum,tagPills}); }}>
+                    <td style={{padding:"7px 8px",textAlign:"center",color:C.navyLight,fontWeight:700,borderRight:`1px solid ${C.border}`}}>↗</td>
+                    {td(statusBadge,{verticalAlign:"middle"})}
+                    {td(<span style={{fontWeight:700,color:C.navyLight,whiteSpace:"nowrap",fontSize:11}}>{id||"—"}</span>)}
+                    {td(<span style={{fontSize:10,color:C.muted,wordBreak:"break-word"}}>{_fieldVal(r[reqK?.pmExperience])}</span>)}
+                    {td(<span style={{fontSize:10,color:C.text,wordBreak:"break-word"}}>{_fieldVal(r[reqK?.component])}</span>)}
+                    {td(<span style={{lineHeight:1.5,fontSize:11,wordBreak:"break-word"}}>{_fieldVal(r[reqK?.bizReq])}</span>)}
+                    {td(<span style={{lineHeight:1.5,fontSize:11,wordBreak:"break-word"}}>{_fieldVal(r[reqK?.story])}</span>)}
+                    {td(<span style={{lineHeight:1.5,fontSize:11,color:C.muted,wordBreak:"break-word"}}>{_fieldVal(r[reqK?.acceptance])}</span>)}
+                    {td(_reviewBadge(r),{verticalAlign:"middle",borderRight:"2px solid #cbd5e1"})}
+                    {td(tagPills)}
+                    {td(<span style={{fontSize:10,color:C.text,wordBreak:"break-word"}}>{_fieldVal(r[reqK?.sprint])}</span>)}
+                    {td(_buildBadge(r),{textAlign:"center",verticalAlign:"middle",borderRight:"2px solid #cbd5e1"})}
+                    {td(<span style={{fontSize:10,color:C.text}}>{_fieldVal(r[reqK?.testScriptType])}</span>)}
+                    {td(<span style={{fontWeight:700,color:C.navyLight}}>{scens.length||"0"}</span>,{textAlign:"center",verticalAlign:"middle"})}
+                    {td(<span style={{fontWeight:estSum>0?700:400,color:estSum>0?C.navyLight:C.muted}}>{estSum||"—"}</span>,{textAlign:"center",verticalAlign:"middle"})}
+                    {td(<span style={{color:C.muted,fontSize:10,fontStyle:"italic"}}>—</span>,{textAlign:"center",verticalAlign:"middle"})}
+                    {td(<span style={{color:C.muted,fontSize:10,fontStyle:"italic"}}>—</span>,{textAlign:"center",verticalAlign:"middle",borderRight:"none"})}
+                  </tr>
                 );
               })}
             </tbody>
           </table>
         </div>
       </div>
+
+      {/* ── Requirement Detail Modal ─────────────────────────────────────── */}
+      {detailRow && (() => {
+        const { r, scens, isScript, gap, estSum, tagPills } = detailRow;
+        const reqId = String(r[reqK?.reqId]||"").trim();
+        return (
+          <div onClick={()=>setDetailRow(null)}
+            style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.45)",zIndex:1000,display:"flex",alignItems:"flex-start",justifyContent:"center",overflowY:"auto",padding:"40px 24px"}}>
+            <div onClick={e=>e.stopPropagation()}
+              style={{background:C.white,borderRadius:10,boxShadow:"0 8px 40px rgba(0,0,0,0.22)",width:"100%",maxWidth:880,display:"flex",flexDirection:"column",overflow:"hidden"}}>
+
+              {/* Header */}
+              <div style={{background:C.navy,padding:"14px 20px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                <div style={{color:"#fff",fontWeight:700,fontSize:13}}>
+                  Requirement Detail
+                  {reqId&&<span style={{marginLeft:10,background:"rgba(255,255,255,0.18)",borderRadius:4,padding:"2px 8px",fontSize:11}}>{reqId}</span>}
+                  <span style={{marginLeft:10,fontWeight:400,fontSize:11,opacity:0.8}}>{isScript?"Script Required":gap?"No Scenario":"Covered"}</span>
+                </div>
+                <button onClick={()=>setDetailRow(null)}
+                  style={{background:"rgba(255,255,255,0.15)",border:"none",color:"#fff",borderRadius:6,padding:"4px 12px",cursor:"pointer",fontSize:13,fontWeight:700}}>
+                  ✕
+                </button>
+              </div>
+
+              {/* Body */}
+              <div style={{padding:"18px 20px",display:"flex",flexDirection:"column",gap:18,overflowY:"auto",maxHeight:"80vh"}}>
+
+                {/* Section 1 — User Story Details */}
+                <div style={{background:"#f8fafc",border:`1px solid ${C.border}`,borderRadius:8,padding:"14px 16px"}}>
+                  <div style={{fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:10}}>User Story Details</div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px 20px"}}>
+                    {[
+                      {label:"Experience",       val:_fieldVal(r[reqK?.pmExperience])},
+                      {label:"Sub Process",      val:_fieldVal(r[reqK?.component])},
+                      {label:"Review Status",    val:_reviewBadge(r), isNode:true},
+                      {label:"Build Status",     val:_buildBadge(r), isNode:true},
+                      {label:"Build Cycle",      val:_fieldVal(r[reqK?.sprint])},
+                      {label:"Test Script Type", val:_fieldVal(r[reqK?.testScriptType])},
+                    ].map(({label,val,isNode})=>(
+                      <div key={label}>
+                        <div style={{fontSize:10,fontWeight:700,color:C.muted,marginBottom:2}}>{label}</div>
+                        {isNode?val:<div style={{fontSize:12,color:C.text}}>{val}</div>}
+                      </div>
+                    ))}
+                    <div style={{gridColumn:"1/-1"}}>
+                      <div style={{fontSize:10,fontWeight:700,color:C.muted,marginBottom:2}}>Tags</div>
+                      <div>{tagPills}</div>
+                    </div>
+                  </div>
+                  <div style={{marginTop:12,display:"grid",gridTemplateColumns:"1fr",gap:8}}>
+                    {[
+                      {label:"Business Requirement", val:_fieldVal(r[reqK?.bizReq])},
+                      {label:"User Story",           val:_fieldVal(r[reqK?.story])},
+                      {label:"Acceptance Criteria",  val:_fieldVal(r[reqK?.acceptance])},
+                    ].map(({label,val})=>(
+                      <div key={label} style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:6,padding:"8px 12px"}}>
+                        <div style={{fontSize:10,fontWeight:700,color:C.muted,marginBottom:4}}>{label}</div>
+                        <div style={{fontSize:12,color:C.text,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{val}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Section 2 — Build Approach */}
+                <div style={{background:"#f0f9ff",border:`1px solid #bae6fd`,borderRadius:8,padding:"14px 16px"}}>
+                  <div style={{fontSize:10,fontWeight:700,color:"#0369a1",textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:10}}>Build Approach</div>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:"8px 16px"}}>
+                    {BUILD_FIELDS.map(({label,key})=>{
+                      const val=_fieldVal(r[reqK?.[key]]);
+                      if(val==="—") return null;
+                      return (
+                        <div key={key}>
+                          <div style={{fontSize:10,fontWeight:700,color:C.muted,marginBottom:2}}>{label}</div>
+                          <div style={{fontSize:11,color:C.text,lineHeight:1.5,wordBreak:"break-word"}}>{val}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Section 3 — Test Scenario Coverage */}
+                <div style={{background:"#fafafa",border:`1px solid ${C.border}`,borderRadius:8,padding:"14px 16px"}}>
+                  <div style={{fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:8}}>
+                    Test Scenario Coverage
+                    <span style={{marginLeft:8,fontWeight:400,textTransform:"none",fontSize:11,color:C.text}}>
+                      {scens.length} scenario{scens.length!==1?"s":""}{estSum>0?` · ${estSum} est. cases`:""}
+                    </span>
+                  </div>
+                  {scens.length===0?(
+                    <div style={{fontSize:12,color:gap?C.delayed:"#6d28d9",fontStyle:"italic"}}>
+                      {gap?"No test scenarios linked to this requirement."
+                          :"Test script required — no scenario mapping needed."}
+                    </div>
+                  ):(
+                    <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                      {scens.map(sc=>{
+                        const scenId  = String(sc[tK?.id]||sc[tK?.name]||"").trim();
+                        const isOpen  = expandedSc.has(scenId);
+                        const scName  = String(sc[tK?.name]||scenId||"—").trim();
+                        const scEst   = parseFloat(sc[tK?.estCases])||0;
+                        return (
+                          <div key={scenId} style={{width:"100%"}}>
+                            <button onClick={()=>_toggleSc(scenId)}
+                              style={{display:"flex",alignItems:"center",gap:6,padding:"5px 10px",borderRadius:6,
+                                border:`1.5px solid ${isOpen?"#6d28d9":"#c4b5fd"}`,
+                                background:isOpen?"#f5f3ff":C.white,
+                                cursor:"pointer",color:isOpen?"#4c1d95":"#6d28d9",fontSize:11,fontWeight:600,
+                                width:"100%",textAlign:"left",justifyContent:"space-between"}}>
+                              <span style={{display:"flex",alignItems:"center",gap:6}}>
+                                <span style={{fontSize:10}}>{isOpen?"▾":"▸"}</span>
+                                <span style={{wordBreak:"break-word"}}>{scName}</span>
+                              </span>
+                              {scEst>0&&<span style={{fontSize:10,fontWeight:700,background:"#ede9fe",color:"#6d28d9",borderRadius:10,padding:"1px 7px",flexShrink:0}}>{scEst} est</span>}
+                            </button>
+                            {isOpen&&(
+                              <div style={{marginTop:4,padding:"10px 14px",background:"#f5f3ff",border:`1px solid #c4b5fd`,borderRadius:6}}>
+                                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"6px 16px",fontSize:11}}>
+                                  {[
+                                    {label:"ID",               val:String(sc[tK?.id]||"—")},
+                                    {label:"Sub Process",      val:_fieldVal(sc[tK?.subprocess])},
+                                    {label:"Process Step ID",  val:_fieldVal(sc[tK?.processStep])},
+                                    {label:"Persona",          val:_fieldVal(sc[tK?.persona])},
+                                    {label:"Est. Cases",       val:scEst||"—"},
+                                    {label:"SIT Plan",         val:_fieldVal(sc[tK?.sitPlan])},
+                                    {label:"Sprint Plan",      val:_fieldVal(sc[tK?.sprintPlan])},
+                                    {label:"Applicable Biz",  val:_fieldVal(sc[tK?.applicableBusiness])},
+                                    {label:"Applicable Exp",  val:_fieldVal(sc[tK?.applicableExperience])},
+                                    {label:"Applicable Rgn",  val:_fieldVal(sc[tK?.applicableRegion])},
+                                  ].map(({label,val})=>(
+                                    <div key={label}>
+                                      <div style={{fontSize:10,fontWeight:700,color:C.muted,marginBottom:1}}>{label}</div>
+                                      <div style={{color:C.text}}>{val}</div>
+                                    </div>
+                                  ))}
+                                </div>
+                                {_fieldVal(sc[tK?.additionalDetails])!=="—"&&(
+                                  <div style={{marginTop:8,padding:"6px 10px",background:C.white,border:`1px solid #ddd6fe`,borderRadius:5}}>
+                                    <div style={{fontSize:10,fontWeight:700,color:C.muted,marginBottom:2}}>Additional Details</div>
+                                    <div style={{fontSize:11,color:C.text,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{_fieldVal(sc[tK?.additionalDetails])}</div>
+                                  </div>
+                                )}
+                                {_fieldVal(sc[tK?.stepDesc])!=="—"&&(
+                                  <div style={{marginTop:8,padding:"6px 10px",background:C.white,border:`1px solid #ddd6fe`,borderRadius:5}}>
+                                    <div style={{fontSize:10,fontWeight:700,color:C.muted,marginBottom:2}}>Step Description</div>
+                                    <div style={{fontSize:11,color:C.text,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{_fieldVal(sc[tK?.stepDesc])}</div>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
     </div>
   );
 }
