@@ -3248,10 +3248,16 @@ function ReqTraceabilityTab({ req, test }) {
                     {BUILD_FIELDS.map(({label,key})=>{
                       const val=_fieldVal(r[reqK?.[key]]);
                       if(val==="—") return null;
+                      const isLink = (key==="sfWorkbook"||key==="techSpec") && /^https?:\/\//i.test(val.trim());
                       return (
                         <div key={key}>
                           <div style={{fontSize:10,fontWeight:700,color:C.muted,marginBottom:2}}>{label}</div>
-                          <div style={{fontSize:11,color:C.text,lineHeight:1.5,wordBreak:"break-word"}}>{val}</div>
+                          {isLink
+                            ? <a href={val.trim()} target="_blank" rel="noreferrer"
+                                style={{fontSize:11,color:"#0369a1",lineHeight:1.5,wordBreak:"break-all",textDecoration:"underline"}}>
+                                {val.length>50?val.slice(0,47)+"…":val}
+                              </a>
+                            : <div style={{fontSize:11,color:C.text,lineHeight:1.5,wordBreak:"break-word"}}>{val}</div>}
                         </div>
                       );
                     })}
