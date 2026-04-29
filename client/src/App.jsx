@@ -3269,8 +3269,8 @@ function ReqTraceabilityTab({ req, test }) {
                           <div style={{fontSize:10,fontWeight:700,color:C.muted,marginBottom:2}}>{label}</div>
                           {isLink
                             ? <a href={val.trim()} target="_blank" rel="noreferrer"
-                                style={{fontSize:11,color:"#0369a1",lineHeight:1.5,wordBreak:"break-all",textDecoration:"underline"}}>
-                                {val.length>50?val.slice(0,47)+"…":val}
+                                style={{display:"inline-flex",alignItems:"center",gap:4,fontSize:11,color:"#0369a1",fontWeight:600,textDecoration:"none",background:"#e0f2fe",border:"1px solid #7dd3fc",borderRadius:4,padding:"2px 8px"}}>
+                                ↗ Open Document
                               </a>
                             : <div style={{fontSize:11,color:C.text,lineHeight:1.5,wordBreak:"break-word"}}>{val}</div>}
                         </div>
