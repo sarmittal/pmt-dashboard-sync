@@ -797,7 +797,7 @@ const EditHeaderBadge = () => (
 
 // ── Editable cell — click to edit, saves to Smartsheet on blur/Enter ─────────
 // To add more editable columns: update EDITABLE in server/smartsheet.js only.
-function EditableCell({ sheet, rowId, colName, value, multiline = false, options: optionsProp = null, onSaved }) {
+function EditableCell({ sheet, rowId, colName, value, multiline = false, options: optionsProp = null, onSaved, renderDisplay }) {
   const [editing, setEditing]   = useState(false);
   const [draft,   setDraft]     = useState(value ?? "");
   const [saving,  setSaving]    = useState(false);
@@ -875,7 +875,7 @@ function EditableCell({ sheet, rowId, colName, value, multiline = false, options
         whiteSpace: multiline ? "pre-wrap" : "normal" }}
       onMouseEnter={e => { e.currentTarget.style.border = `1px dashed ${C.navyLight}`; e.currentTarget.style.background = "#f0f5ff"; }}
       onMouseLeave={e => { e.currentTarget.style.border = "1px dashed transparent"; e.currentTarget.style.background = ""; }}>
-      {value || <span style={{ color: C.muted, fontStyle: "italic" }}>—</span>}
+      {renderDisplay ? renderDisplay(value || "") : (value || <span style={{ color: C.muted, fontStyle: "italic" }}>—</span>)}
     </span>
   );
 }
@@ -2049,7 +2049,7 @@ function RaidKpiModal({ title, rows, K, teamKey, allTeams, allTypes, allComps, s
                     {colConfig.component.visible       && <td style={{ padding:"8px 10px", color:C.text, wordBreak:"break-word", width:colConfig.component.width }}>{String(r[K.component]||"—")}</td>}
                     {colConfig.experience.visible      && <td style={{ padding:"8px 10px", color:C.muted, wordBreak:"break-word", width:colConfig.experience.width }}>{String(r[K.experience]||"—")}</td>}
                     {colConfig.topic.visible           && <td style={{ padding:"8px 10px", color:C.muted, wordBreak:"break-word", width:colConfig.topic.width }}>{String(r[K.topic]||"—")}</td>}
-                    {colConfig.tag?.visible            && <td style={{ padding:"8px 10px", width:colConfig.tag?.width||100 }}>{r._rowId && K.tag ? <EditableCell sheet="raid" rowId={r._rowId} colName={K.tag} value={localVals[r._rowId]?.[K.tag] ?? String(r[K.tag]||"")} onSaved={v=>localUpdate(r._rowId,K.tag,v)} /> : (() => { const parts=String(r[K.tag]||"").split(/[\n,;]+/).map(s=>s.trim()).filter(Boolean); if(!parts.length) return <span style={{color:C.muted}}>—</span>; return <span style={{display:"flex",flexWrap:"wrap",gap:2}}>{parts.map((p,i)=><span key={i} style={{background:"#fef3c7",color:"#92400e",border:"1px solid #fcd34d",borderRadius:3,padding:"2px 5px",fontSize:10,whiteSpace:"nowrap"}}>{p}</span>)}</span>; })()}</td>}
+                    {colConfig.tag?.visible            && <td style={{ padding:"8px 10px", width:colConfig.tag?.width||100 }}>{r._rowId && K.tag ? <EditableCell sheet="raid" rowId={r._rowId} colName={K.tag} value={localVals[r._rowId]?.[K.tag] ?? String(r[K.tag]||"")} onSaved={v=>localUpdate(r._rowId,K.tag,v)} renderDisplay={v=>{const pts=v.split(/[\n,;]+/).map(s=>s.trim()).filter(Boolean);return pts.length?<span style={{display:"flex",flexWrap:"wrap",gap:2}}>{pts.map((p,i)=><span key={i} style={{background:"#fef3c7",color:"#92400e",border:"1px solid #fcd34d",borderRadius:3,padding:"2px 5px",fontSize:10,whiteSpace:"nowrap"}}>{p}</span>)}</span>:<span style={{color:C.muted}}>—</span>;}} /> : (() => { const parts=String(r[K.tag]||"").split(/[\n,;]+/).map(s=>s.trim()).filter(Boolean); if(!parts.length) return <span style={{color:C.muted}}>—</span>; return <span style={{display:"flex",flexWrap:"wrap",gap:2}}>{parts.map((p,i)=><span key={i} style={{background:"#fef3c7",color:"#92400e",border:"1px solid #fcd34d",borderRadius:3,padding:"2px 5px",fontSize:10,whiteSpace:"nowrap"}}>{p}</span>)}</span>; })()}</td>}
                     {colConfig.desc.visible            && <td style={{ padding:"8px 10px", wordBreak:"break-word", lineHeight:1.5, width:colConfig.desc.width }}>{r._rowId && K.desc ? <EditableCell sheet="raid" rowId={r._rowId} colName={K.desc} value={localVals[r._rowId]?.[K.desc] ?? String(r[K.desc]||"")} multiline onSaved={v=>localUpdate(r._rowId,K.desc,v)} /> : String(r[K.desc]||"—")}</td>}
                     {colConfig.comment.visible         && <td style={{ padding:"8px 10px", wordBreak:"break-word", lineHeight:1.5, width:colConfig.comment.width }}>{r._rowId && K.comment ? <EditableCell sheet="raid" rowId={r._rowId} colName={K.comment} value={localVals[r._rowId]?.[K.comment] ?? String(r[K.comment]||"")} multiline onSaved={v=>localUpdate(r._rowId,K.comment,v)} /> : String(r[K.comment]||"—")}</td>}
                     {colConfig.owner?.visible          && <td style={{ padding:"8px 10px", color:C.text, wordBreak:"break-word", width:colConfig.owner.width }}>{String(r[K.owner]||"—")}</td>}
@@ -2160,7 +2160,7 @@ function CRDrillModal({ title, rows, K, showCompletion, onClose }) {
     { key:"ocm",     td:(r)=>numCell(r,K.crOcm) },
     { key:"ux",      td:(r)=>numCell(r,K.crUx) },
     { key:"sprint",  td:(r)=><td style={{padding:"6px 8px",whiteSpace:"nowrap",width:colCfg.sprint.width,overflow:"hidden"}}>{r._rowId&&K.crTargetSprint?<EditableCell sheet="raid" rowId={r._rowId} colName={K.crTargetSprint} value={localVals[r._rowId]?.[K.crTargetSprint]??String(r[K.crTargetSprint]||"")} onSaved={v=>localUpdate(r._rowId,K.crTargetSprint,v)}/>:String(r[K.crTargetSprint]||"—")}</td> },
-    { key:"tag",     td:(r)=><td style={{padding:"6px 8px",width:colCfg.tag.width,overflow:"hidden"}}>{r._rowId&&K.tag?<EditableCell sheet="raid" rowId={r._rowId} colName={K.tag} value={localVals[r._rowId]?.[K.tag]??String(r[K.tag]||"")} onSaved={v=>localUpdate(r._rowId,K.tag,v)}/>:(() => { const parts=String(r[K.tag]||"").split(/[\n,;]+/).map(s=>s.trim()).filter(Boolean); if(!parts.length) return <span style={{color:C.muted}}>—</span>; return <span style={{display:"flex",flexWrap:"wrap",gap:2}}>{parts.map((p,i)=><span key={i} style={{background:"#fef3c7",color:"#92400e",border:"1px solid #fcd34d",borderRadius:3,padding:"2px 5px",fontSize:10,whiteSpace:"nowrap"}}>{p}</span>)}</span>; })()}</td> },
+    { key:"tag",     td:(r)=><td style={{padding:"6px 8px",width:colCfg.tag.width,overflow:"hidden"}}>{r._rowId&&K.tag?<EditableCell sheet="raid" rowId={r._rowId} colName={K.tag} value={localVals[r._rowId]?.[K.tag]??String(r[K.tag]||"")} onSaved={v=>localUpdate(r._rowId,K.tag,v)} renderDisplay={v=>{const pts=v.split(/[\n,;]+/).map(s=>s.trim()).filter(Boolean);return pts.length?<span style={{display:"flex",flexWrap:"wrap",gap:2}}>{pts.map((p,i)=><span key={i} style={{background:"#fef3c7",color:"#92400e",border:"1px solid #fcd34d",borderRadius:3,padding:"2px 5px",fontSize:10,whiteSpace:"nowrap"}}>{p}</span>)}</span>:<span style={{color:C.muted}}>—</span>;}} />:(() => { const parts=String(r[K.tag]||"").split(/[\n,;]+/).map(s=>s.trim()).filter(Boolean); if(!parts.length) return <span style={{color:C.muted}}>—</span>; return <span style={{display:"flex",flexWrap:"wrap",gap:2}}>{parts.map((p,i)=><span key={i} style={{background:"#fef3c7",color:"#92400e",border:"1px solid #fcd34d",borderRadius:3,padding:"2px 5px",fontSize:10,whiteSpace:"nowrap"}}>{p}</span>)}</span>; })()}</td> },
     { key:"resDate", td:(r)=><td style={{padding:"6px 8px",width:colCfg.resDate.width,overflow:"hidden"}}>{r._rowId&&K.resolutionDate?<EditableCell sheet="raid" rowId={r._rowId} colName={K.resolutionDate} value={localVals[r._rowId]?.[K.resolutionDate]??String(r[K.resolutionDate]||"")} onSaved={v=>localUpdate(r._rowId,K.resolutionDate,v)}/>:<span style={{color:C.muted}}>{fmtDate(r[K.resolutionDate])||"—"}</span>}</td> },
     { key:"compl",   td:(r)=>showCompletion?<td style={{padding:"6px 8px",width:colCfg.compl.width,overflow:"hidden"}}><span style={{background:isCompleted(r)?"#dcfce7":"#f3f4f6",color:isCompleted(r)?"#166534":"#6b7280",borderRadius:4,padding:"2px 7px",fontSize:10,fontWeight:700}}>{String(r[K.crCompletion]||"—")}</span></td>:null },
   ];
@@ -3741,7 +3741,7 @@ function BacklogTab({ raid }) {
         </div>
 
         {/* Table */}
-        <div style={{overflowX:"auto"}}>
+        <div style={{ maxHeight:"calc(100vh - 230px)", overflowY:"auto", overflowX:"auto" }}>
           <table style={{borderCollapse:"collapse",fontSize:11,tableLayout:"fixed",width:"100%"}}>
             <thead style={{ position:"sticky", top:0, zIndex:2 }}>
               <tr style={{background:"#162f50"}}>
@@ -4200,7 +4200,7 @@ function RaidAnalysisTab({ raid }) {
             </div>
 
             {/* Table */}
-            <div style={{overflowX:"auto"}}>
+            <div style={{ maxHeight:"calc(100vh - 230px)", overflowY:"auto", overflowX:"auto" }}>
               <table style={{ borderCollapse:"collapse", fontSize:11, tableLayout:"fixed", width:"100%" }}>
                 <thead style={{ position:"sticky", top:0, zIndex:2 }}>
                   <tr style={{ background:"#162f50" }}>
@@ -4255,7 +4255,7 @@ function RaidAnalysisTab({ raid }) {
                         {colConfig.component?.visible        && <td style={{ padding:"8px 10px", color:C.text, wordBreak:"break-word", width:colConfig.component.width }}>{String(r[K.component]||"—")}</td>}
                         {colConfig.experience?.visible       && <td style={{ padding:"8px 10px", color:C.muted, wordBreak:"break-word", width:colConfig.experience.width }}>{String(r[K.experience]||"—")}</td>}
                         {colConfig.topic?.visible            && <td style={{ padding:"8px 10px", color:C.muted, wordBreak:"break-word", width:colConfig.topic.width }}>{String(r[K.topic]||"—")}</td>}
-                        {colConfig.tag?.visible              && <td style={{ padding:"8px 10px", width:colConfig.tag.width }}>{r._rowId&&K.tag?<EditableCell sheet="raid" rowId={r._rowId} colName={K.tag} value={localVals[r._rowId]?.[K.tag]??String(r[K.tag]||"")} onSaved={v=>localUpdate(r._rowId,K.tag,v)}/>:(() => { const parts=String(r[K.tag]||"").split(/[\n,;]+/).map(s=>s.trim()).filter(Boolean); if(!parts.length) return <span style={{color:C.muted}}>—</span>; return <span style={{display:"flex",flexWrap:"wrap",gap:2}}>{parts.map((p,i)=><span key={i} style={{background:"#fef3c7",color:"#92400e",border:"1px solid #fcd34d",borderRadius:3,padding:"2px 5px",fontSize:10,whiteSpace:"nowrap"}}>{p}</span>)}</span>; })()}</td>}
+                        {colConfig.tag?.visible              && <td style={{ padding:"8px 10px", width:colConfig.tag.width }}>{r._rowId&&K.tag?<EditableCell sheet="raid" rowId={r._rowId} colName={K.tag} value={localVals[r._rowId]?.[K.tag]??String(r[K.tag]||"")} onSaved={v=>localUpdate(r._rowId,K.tag,v)} renderDisplay={v=>{const pts=v.split(/[\n,;]+/).map(s=>s.trim()).filter(Boolean);return pts.length?<span style={{display:"flex",flexWrap:"wrap",gap:2}}>{pts.map((p,i)=><span key={i} style={{background:"#fef3c7",color:"#92400e",border:"1px solid #fcd34d",borderRadius:3,padding:"2px 5px",fontSize:10,whiteSpace:"nowrap"}}>{p}</span>)}</span>:<span style={{color:C.muted}}>—</span>;}} />:(() => { const parts=String(r[K.tag]||"").split(/[\n,;]+/).map(s=>s.trim()).filter(Boolean); if(!parts.length) return <span style={{color:C.muted}}>—</span>; return <span style={{display:"flex",flexWrap:"wrap",gap:2}}>{parts.map((p,i)=><span key={i} style={{background:"#fef3c7",color:"#92400e",border:"1px solid #fcd34d",borderRadius:3,padding:"2px 5px",fontSize:10,whiteSpace:"nowrap"}}>{p}</span>)}</span>; })()}</td>}
                         {colConfig.desc.visible      && <td style={{ padding:"8px 10px", wordBreak:"break-word", lineHeight:1.5, width:colConfig.desc.width }}>{r._rowId&&K.desc?<EditableCell sheet="raid" rowId={r._rowId} colName={K.desc} value={localVals[r._rowId]?.[K.desc]??String(r[K.desc]||"")} multiline onSaved={v=>localUpdate(r._rowId,K.desc,v)}/>:String(r[K.desc]||"—")}</td>}
                         {colConfig.comment.visible   && <td style={{ padding:"8px 10px", wordBreak:"break-word", lineHeight:1.5, width:colConfig.comment.width }}>{r._rowId&&K.comment?<EditableCell sheet="raid" rowId={r._rowId} colName={K.comment} value={localVals[r._rowId]?.[K.comment]??String(r[K.comment]||"")} multiline onSaved={v=>localUpdate(r._rowId,K.comment,v)}/>:String(r[K.comment]||"—")}</td>}
                         {colConfig.owner?.visible            && <td style={{ padding:"8px 10px", color:C.text, wordBreak:"break-word", width:colConfig.owner.width }}>{String(r[K.owner]||"—")}</td>}
@@ -5627,6 +5627,28 @@ function TestScenariosTab({ data, wp, req, subTab, setSubTab }) {
 
   const OpenFeedbackModal = ({ title, rows: mRows, onClose }) => {
     const [spFilter, setSpFilter] = useState("ALL");
+    const [ofColW,   setOfColW]   = useState({});
+    const ofResizing = useRef(null);
+
+    useEffect(() => {
+      const onMove = e => {
+        if (!ofResizing.current) return;
+        const { key, startX, startW } = ofResizing.current;
+        setOfColW(p => ({ ...p, [key]: Math.max(40, startW + e.clientX - startX) }));
+      };
+      const onUp = () => { ofResizing.current = null; };
+      document.addEventListener("mousemove", onMove);
+      document.addEventListener("mouseup",  onUp);
+      return () => { document.removeEventListener("mousemove", onMove); document.removeEventListener("mouseup", onUp); };
+    }, []);
+
+    const ocw = (k, def) => ofColW[k] ?? def;
+    const orh = (ck, def) => (
+      <div onMouseDown={e => { e.preventDefault(); ofResizing.current = { key:ck, startX:e.clientX, startW:ocw(ck,def) }; }}
+        style={{ position:"absolute", right:0, top:0, bottom:0, width:5, cursor:"col-resize", zIndex:4, userSelect:"none" }}
+        onMouseEnter={e => e.currentTarget.style.background="rgba(255,255,255,0.25)"}
+        onMouseLeave={e => e.currentTarget.style.background="transparent"} />
+    );
 
     const allSps       = Array.from(new Set(mRows.map(r => String(r[K.subprocess]||"Unknown").trim()))).sort();
     const filteredRows = spFilter === "ALL" ? mRows : mRows.filter(r => String(r[K.subprocess]||"Unknown").trim() === spFilter);
@@ -5635,7 +5657,7 @@ function TestScenariosTab({ data, wp, req, subTab, setSubTab }) {
       const parts = String(v||"").split(/\n|,|;/).map(s=>s.trim()).filter(Boolean);
       if (!parts.length) return <span style={{color:C.muted}}>—</span>;
       return <span style={{display:"flex",flexWrap:"wrap",gap:2}}>
-        {parts.map((p,i)=><span key={i} style={{background:"#f0f4f8",color:C.muted,borderRadius:3,padding:"1px 5px",fontSize:10,whiteSpace:"nowrap"}}>{p}</span>)}
+        {parts.map((p,i)=><span key={i} style={{background:"#fef3c7",color:"#92400e",border:"1px solid #fcd34d",borderRadius:3,padding:"1px 5px",fontSize:10,whiteSpace:"nowrap"}}>{p}</span>)}
       </span>;
     };
 
@@ -5669,7 +5691,18 @@ function TestScenariosTab({ data, wp, req, subTab, setSubTab }) {
             </div>
           )}
           <div style={{ overflowY:"auto", overflowX:"auto", flex:1 }}>
-            <table style={{ borderCollapse:"collapse", fontSize:11, tableLayout:"auto" }}>
+            <table style={{ borderCollapse:"collapse", fontSize:11, tableLayout:"fixed" }}>
+              <colgroup>
+                <col style={{ width: ocw("of-id",  80) }} />
+                <col style={{ width: ocw("of-tag", 100) }} />
+                <col style={{ width: ocw("of-scen",360) }} />
+                <col style={{ width: ocw("of-sp",  130) }} />
+                {TEAMS.flatMap(t => [
+                  <col key={t.id+"-rv"} style={{ width: ocw("of-"+t.id+"-rv", 110) }} />,
+                  <col key={t.id+"-fb"} style={{ width: ocw("of-"+t.id+"-fb", 220) }} />,
+                  <col key={t.id+"-st"} style={{ width: ocw("of-"+t.id+"-st", 120) }} />,
+                ])}
+              </colgroup>
               <thead style={{ position:"sticky", top:0, zIndex:2 }}>
                 <tr>
                   <th colSpan={4} style={{ padding:"4px 10px", textAlign:"center", background:C.navy, color:"rgba(255,255,255,0.5)", fontWeight:700, fontSize:9, textTransform:"uppercase", letterSpacing:"0.07em", borderRight:"1px solid rgba(255,255,255,0.25)", borderBottom:"1px solid rgba(255,255,255,0.12)" }}>Scenario Details</th>
@@ -5678,13 +5711,15 @@ function TestScenariosTab({ data, wp, req, subTab, setSubTab }) {
                   ))}
                 </tr>
                 <tr style={{ background:C.navy }}>
-                  {["ID","Tag","Scenario","SubProcess"].map((h,i) => (
-                    <th key={h} style={{ padding:"8px 10px", textAlign:"left", color:"#fff", fontWeight:700, fontSize:10, whiteSpace:"nowrap", borderRight:i===3?"1px solid rgba(255,255,255,0.25)":"1px solid rgba(255,255,255,0.08)" }}>{h}</th>
+                  {[["of-id","ID"],["of-tag","Tag"],["of-scen","Scenario"],["of-sp","SubProcess"]].map(([ck,h],i) => (
+                    <th key={ck} style={{ padding:"8px 10px", textAlign:"left", color:"#fff", fontWeight:700, fontSize:10, position:"relative", overflow:"hidden", borderRight:i===3?"1px solid rgba(255,255,255,0.25)":"1px solid rgba(255,255,255,0.08)" }}>
+                      {h}{orh(ck, [80,100,360,130][i])}
+                    </th>
                   ))}
                   {TEAMS.flatMap(t => [
-                    <th key={t.id+"-rv"} style={{ padding:"8px 10px", textAlign:"left", color:"rgba(255,255,255,0.8)", fontWeight:600, fontSize:10, minWidth:100, whiteSpace:"nowrap", borderRight:"1px solid rgba(255,255,255,0.08)" }}>Reviewer</th>,
-                    <th key={t.id+"-fb"} style={{ padding:"8px 10px", textAlign:"left", color:"rgba(255,255,255,0.8)", fontWeight:600, fontSize:10, minWidth:180, borderRight:"1px solid rgba(255,255,255,0.08)" }}>Feedback</th>,
-                    <th key={t.id+"-st"} style={{ padding:"8px 10px", textAlign:"left", color:"rgba(255,255,255,0.8)", fontWeight:600, fontSize:10, minWidth:110, whiteSpace:"nowrap", borderRight:"1px solid rgba(255,255,255,0.25)" }}>Status</th>,
+                    <th key={t.id+"-rv"} style={{ padding:"8px 10px", textAlign:"left", color:"rgba(255,255,255,0.8)", fontWeight:600, fontSize:10, position:"relative", overflow:"hidden", borderRight:"1px solid rgba(255,255,255,0.08)" }}>Reviewer{orh("of-"+t.id+"-rv",110)}</th>,
+                    <th key={t.id+"-fb"} style={{ padding:"8px 10px", textAlign:"left", color:"rgba(255,255,255,0.8)", fontWeight:600, fontSize:10, position:"relative", overflow:"hidden", borderRight:"1px solid rgba(255,255,255,0.08)" }}>Feedback{orh("of-"+t.id+"-fb",220)}</th>,
+                    <th key={t.id+"-st"} style={{ padding:"8px 10px", textAlign:"left", color:"rgba(255,255,255,0.8)", fontWeight:600, fontSize:10, position:"relative", overflow:"hidden", borderRight:"1px solid rgba(255,255,255,0.25)" }}>Status{orh("of-"+t.id+"-st",120)}</th>,
                   ])}
                 </tr>
               </thead>
@@ -5694,14 +5729,14 @@ function TestScenariosTab({ data, wp, req, subTab, setSubTab }) {
                 )}
                 {filteredRows.map((r, i) => (
                   <tr key={i} style={{ background:i%2===0?C.white:"#f7f9fc", borderBottom:`1px solid ${C.border}`, verticalAlign:"top" }}>
-                    <td style={{ padding:"8px 10px", color:C.muted, fontWeight:600, whiteSpace:"nowrap", borderRight:`1px solid ${C.border}` }}>{String(r[K.id]||"—")}</td>
-                    <td style={{ padding:"8px 10px", borderRight:`1px solid ${C.border}` }}>{multiVal(r[K.tag])}</td>
-                    <td style={{ padding:"8px 10px", color:C.text, wordBreak:"break-word", maxWidth:240, borderRight:`1px solid ${C.border}` }}>{String(r[K.name]||"—")}</td>
-                    <td style={{ padding:"8px 10px", color:C.muted, whiteSpace:"nowrap", borderRight:"1px solid #94a3b8" }}>{String(r[K.subprocess]||"—")}</td>
+                    <td style={{ padding:"8px 10px", color:C.muted, fontWeight:600, overflow:"hidden", borderRight:`1px solid ${C.border}` }}>{String(r[K.id]||"—")}</td>
+                    <td style={{ padding:"8px 10px", overflow:"hidden", borderRight:`1px solid ${C.border}` }}>{multiVal(r[K.tag])}</td>
+                    <td style={{ padding:"8px 10px", color:C.text, wordBreak:"break-word", overflow:"hidden", borderRight:`1px solid ${C.border}` }}>{String(r[K.name]||"—")}</td>
+                    <td style={{ padding:"8px 10px", color:C.muted, overflow:"hidden", borderRight:"1px solid #94a3b8" }}>{String(r[K.subprocess]||"—")}</td>
                     {TEAMS.flatMap(t => [
-                      <td key={t.id+"-rv"} style={{ padding:"8px 10px", fontWeight:600, whiteSpace:"nowrap", borderRight:`1px solid ${C.border}` }}>{String(r[t.reviewerKey]||"—")}</td>,
-                      <td key={t.id+"-fb"} style={{ padding:"8px 10px", color:C.muted, wordBreak:"break-word", maxWidth:200, borderRight:`1px solid ${C.border}` }}>{String(r[t.feedbackKey]||"—")}</td>,
-                      <td key={t.id+"-st"} style={{ padding:"8px 10px", borderRight:"1px solid #94a3b8" }}>{stPill(r, t)}</td>,
+                      <td key={t.id+"-rv"} style={{ padding:"8px 10px", fontWeight:600, overflow:"hidden", borderRight:`1px solid ${C.border}` }}>{String(r[t.reviewerKey]||"—")}</td>,
+                      <td key={t.id+"-fb"} style={{ padding:"8px 10px", color:C.muted, wordBreak:"break-word", overflow:"hidden", borderRight:`1px solid ${C.border}` }}>{String(r[t.feedbackKey]||"—")}</td>,
+                      <td key={t.id+"-st"} style={{ padding:"8px 10px", overflow:"hidden", borderRight:"1px solid #94a3b8" }}>{stPill(r, t)}</td>,
                     ])}
                   </tr>
                 ))}
@@ -5884,6 +5919,7 @@ function TestScenariosTab({ data, wp, req, subTab, setSubTab }) {
   const ScenarioModal = ({ title, rows:mRows, onClose }) => {
     const [smColW,    setSmColW]    = useState({});
     const [smSpFil,   setSmSpFil]   = useState("ALL");
+    const [smSitFil,  setSmSitFil]  = useState("ALL");
     const smResizing  = useRef(null);
 
     useEffect(() => {
@@ -5906,15 +5942,19 @@ function TestScenariosTab({ data, wp, req, subTab, setSubTab }) {
         onMouseLeave={e => e.currentTarget.style.background="transparent"} />
     );
 
-    const allSps = Array.from(new Set(mRows.map(r => String(r[K.subprocess]||"Unknown").trim()))).sort();
-    const filteredRows = smSpFil === "ALL" ? mRows : mRows.filter(r => String(r[K.subprocess]||"Unknown").trim() === smSpFil);
+    const allSps  = Array.from(new Set(mRows.map(r => String(r[K.subprocess]||"Unknown").trim()))).sort();
+    const allSits = Array.from(new Set(mRows.flatMap(r => String(r[K.sitPlan]||"").split(/[,\n]+/).map(s=>s.trim()).filter(Boolean)))).sort();
+    const filteredRows = mRows.filter(r => {
+      const matchSp  = smSpFil  === "ALL" || String(r[K.subprocess]||"Unknown").trim() === smSpFil;
+      const matchSit = smSitFil === "ALL" || String(r[K.sitPlan]||"").split(/[,\n]+/).map(s=>s.trim()).includes(smSitFil);
+      return matchSp && matchSit;
+    });
 
     const SM_COLS = [
       { ck:"sm-id",  def:80,  label:"ID",        align:"left",   render: r => <span style={{color:C.muted,fontWeight:600,whiteSpace:"nowrap"}}>{String(r[K.id]||"—")}</span> },
       { ck:"sm-sp",  def:130, label:"SubProcess", align:"left",   render: r => <span style={{color:C.muted,whiteSpace:"nowrap"}}>{String(r[K.subprocess]||"—")}</span> },
       { ck:"sm-nm",  def:360, label:"Scenario",   align:"left",   render: r => <span style={{color:C.text,wordBreak:"break-word"}}>{String(r[K.name]||"—")}</span> },
       { ck:"sm-ec",  def:70,  label:"Est. Cases", align:"center", render: r => <span style={{fontWeight:700,color:C.navyLight}}>{r[K.estCases]||"—"}</span> },
-      { ck:"sm-sp2", def:90,  label:"Sprint",     align:"left",   render: r => <span style={{color:C.muted,whiteSpace:"nowrap"}}>{String(r[K.sprintPlan]||"—").split("\n").map(s=>s.replace(/^\d+\.\s*/,"").match(/s\d+/i)?.[0]||"").filter(Boolean).join(", ")||"—"}</span> },
       { ck:"sm-sit", def:100, label:"SIT Plan",   align:"left",   render: r => <span style={{color:C.muted}}>{String(r[K.sitPlan]||"—")}</span> },
       ...TEAMS.map(t => ({ ck:"sm-"+t.id, def:110, label:t.label, align:"center", render: r => {
         const sv = cleanSt(r[t.statusKey]);
@@ -5933,26 +5973,52 @@ function TestScenariosTab({ data, wp, req, subTab, setSubTab }) {
             <span style={{ color:"#fff", fontWeight:700, fontSize:13 }}>{title} <span style={{ opacity:.6, fontWeight:400 }}>({filteredRows.length}{filteredRows.length!==mRows.length?` of ${mRows.length}`:""} scenarios)</span></span>
             <button onClick={onClose} style={{ background:"rgba(255,255,255,0.15)", border:"none", color:"#fff", borderRadius:5, padding:"5px 14px", cursor:"pointer", fontSize:13, fontWeight:600 }}>✕</button>
           </div>
-          {allSps.length > 1 && (
-            <div style={{ background:"#f8fafc", borderBottom:`1px solid ${C.border}`, padding:"8px 16px", flexShrink:0, display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
-              <span style={{ fontSize:10, color:"#374151", fontWeight:700, minWidth:70 }}>Sub Process</span>
-              {["ALL", ...allSps].map(sp => {
-                const isActive = smSpFil === sp;
-                const count = sp === "ALL" ? mRows.length : mRows.filter(r => String(r[K.subprocess]||"Unknown").trim() === sp).length;
-                return (
-                  <button key={sp} onClick={() => setSmSpFil(sp)}
-                    style={{ display:"flex", alignItems:"center", gap:4, padding:"3px 9px", borderRadius:20,
-                      border:`2px solid ${isActive?C.navyLight:C.border}`,
-                      background:isActive?C.navyLight:C.white, color:isActive?"#fff":C.text,
-                      cursor:"pointer", fontSize:10, fontWeight:700, transition:"all .12s" }}>
-                    {sp === "ALL" ? "All" : sp}
-                    <span style={{ background:isActive?"rgba(255,255,255,0.25)":"#f1f5f9", color:isActive?"#fff":C.text,
-                      borderRadius:10, padding:"1px 6px", fontSize:10, fontWeight:800, minWidth:18, textAlign:"center" }}>
-                      {count}
-                    </span>
-                  </button>
-                );
-              })}
+          {(allSps.length > 1 || allSits.length > 0) && (
+            <div style={{ background:"#f8fafc", borderBottom:`1px solid ${C.border}`, padding:"8px 16px", flexShrink:0, display:"flex", flexDirection:"column", gap:6 }}>
+              {allSps.length > 1 && (
+                <div style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
+                  <span style={{ fontSize:10, color:"#374151", fontWeight:700, minWidth:70 }}>Sub Process</span>
+                  {["ALL", ...allSps].map(sp => {
+                    const isActive = smSpFil === sp;
+                    const count = sp === "ALL" ? mRows.length : mRows.filter(r => String(r[K.subprocess]||"Unknown").trim() === sp).length;
+                    return (
+                      <button key={sp} onClick={() => setSmSpFil(sp)}
+                        style={{ display:"flex", alignItems:"center", gap:4, padding:"3px 9px", borderRadius:20,
+                          border:`2px solid ${isActive?C.navyLight:C.border}`,
+                          background:isActive?C.navyLight:C.white, color:isActive?"#fff":C.text,
+                          cursor:"pointer", fontSize:10, fontWeight:700, transition:"all .12s" }}>
+                        {sp === "ALL" ? "All" : sp}
+                        <span style={{ background:isActive?"rgba(255,255,255,0.25)":"#f1f5f9", color:isActive?"#fff":C.text,
+                          borderRadius:10, padding:"1px 6px", fontSize:10, fontWeight:800, minWidth:18, textAlign:"center" }}>
+                          {count}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+              {allSits.length > 0 && (
+                <div style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
+                  <span style={{ fontSize:10, color:"#374151", fontWeight:700, minWidth:70 }}>SIT</span>
+                  {["ALL", ...allSits].map(sit => {
+                    const isActive = smSitFil === sit;
+                    const count = sit === "ALL" ? mRows.length : mRows.filter(r => String(r[K.sitPlan]||"").split(/[,\n]+/).map(s=>s.trim()).includes(sit)).length;
+                    return (
+                      <button key={sit} onClick={() => setSmSitFil(sit)}
+                        style={{ display:"flex", alignItems:"center", gap:4, padding:"3px 9px", borderRadius:20,
+                          border:`2px solid ${isActive?"#0d9488":C.border}`,
+                          background:isActive?"#0d9488":C.white, color:isActive?"#fff":C.text,
+                          cursor:"pointer", fontSize:10, fontWeight:700, transition:"all .12s" }}>
+                        {sit === "ALL" ? "All" : sit}
+                        <span style={{ background:isActive?"rgba(255,255,255,0.25)":"#f1f5f9", color:isActive?"#fff":C.text,
+                          borderRadius:10, padding:"1px 6px", fontSize:10, fontWeight:800, minWidth:18, textAlign:"center" }}>
+                          {count}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
           <div style={{ overflowY:"auto", overflowX:"auto", flex:1 }}>
@@ -6054,7 +6120,7 @@ function TestScenariosTab({ data, wp, req, subTab, setSubTab }) {
 
       {/* Review status table with subtotal row pinned below header */}
       <Card style={{ padding:0 }}>
-        <div style={{ overflowX:"auto" }}>
+        <div style={{ maxHeight:"calc(100vh - 230px)", overflowY:"auto", overflowX:"auto" }}>
           <table style={{ width:"100%", borderCollapse:"collapse", fontSize:11, tableLayout:"fixed" }}>
             <colgroup>
               <col style={{ width: rcw("rv-sp",  160) }} />
@@ -6074,8 +6140,8 @@ function TestScenariosTab({ data, wp, req, subTab, setSubTab }) {
                 <th style={{ padding:"8px 12px", textAlign:"left", color:"#fff", fontWeight:700, fontSize:10, position:"sticky", left:0, background:C.navy, borderRight:`1px solid rgba(255,255,255,0.15)`, zIndex:4, overflow:"hidden" }}>SubProcess / Component{rrh("rv-sp",160)}</th>
                 <th style={{ padding:"8px 8px", textAlign:"center", color:"#a8d8ff", fontWeight:700, fontSize:10, borderRight:`1px solid rgba(255,255,255,0.1)`, position:"relative", overflow:"hidden" }}>User Stories{rrh("rv-us",60)}</th>
                 <th style={{ padding:"8px 8px", textAlign:"center", color:"#a8d8ff", fontWeight:700, fontSize:10, borderRight:`1px solid rgba(255,255,255,0.1)`, position:"relative", overflow:"hidden" }}>Relevant{rrh("rv-rel",70)}</th>
-                <th style={{ padding:"8px 8px", textAlign:"center", color:"#fcd34d", fontWeight:700, fontSize:10, borderRight:`1px solid rgba(255,255,255,0.1)`, position:"relative", overflow:"hidden" }}>Untagged US{rrh("rv-unt",75)}</th>
-                <th style={{ padding:"8px 8px", textAlign:"center", color:"#c4f1c4", fontWeight:700, fontSize:10, borderRight:`1px solid rgba(255,255,255,0.1)`, position:"relative", overflow:"hidden" }}>Tagged US{rrh("rv-tag",70)}</th>
+                <th style={{ padding:"8px 8px", textAlign:"center", color:"#fcd34d", fontWeight:700, fontSize:10, borderRight:`1px solid rgba(255,255,255,0.1)`, position:"relative", overflow:"hidden" }}>Untagged User Story{rrh("rv-unt",75)}</th>
+                <th style={{ padding:"8px 8px", textAlign:"center", color:"#c4f1c4", fontWeight:700, fontSize:10, borderRight:`1px solid rgba(255,255,255,0.1)`, position:"relative", overflow:"hidden" }}>Tagged User Story{rrh("rv-tag",70)}</th>
                 <th style={{ padding:"8px 8px", textAlign:"center", color:"#a8d8ff", fontWeight:700, fontSize:10, borderRight:`1px solid rgba(255,255,255,0.1)`, position:"relative", overflow:"hidden" }}>Drafted{rrh("rv-dr",55)}</th>
                 <th style={{ padding:"8px 8px", textAlign:"center", color:"#fcd34d", fontWeight:700, fontSize:10, borderRight:`1px solid rgba(255,255,255,0.15)`, position:"relative", overflow:"hidden" }}>Open Fb{rrh("rv-of",60)}</th>
                 {TEAMS.flatMap(t => [
@@ -6267,7 +6333,7 @@ function TestScenariosTab({ data, wp, req, subTab, setSubTab }) {
         <span style={{ fontWeight:700, fontSize:13, color:C.navy }}>Overall Metrics — All SITs</span>
         <span style={{ fontSize:11, color:C.muted }}>Review % = scenarios reviewed by all 5 core teams (SD Consulting, PM SD, DT, D&A, PM Talent)</span>
       </div>
-      <div style={{ overflowX:"auto" }}>
+      <div style={{ maxHeight:"calc(100vh - 230px)", overflowY:"auto", overflowX:"auto" }}>
         <table style={{ width:"100%", borderCollapse:"collapse", fontSize:11 }}>
           <thead style={{ position:"sticky", top:0, zIndex:3 }}>
             <tr style={{ background:C.navy }}>
@@ -6549,7 +6615,7 @@ function TestScenariosTab({ data, wp, req, subTab, setSubTab }) {
 
       {/* Table */}
       <Card style={{ padding:0 }}>
-        <div style={{ overflowX:"auto" }}>
+        <div style={{ maxHeight:"calc(100vh - 230px)", overflowY:"auto", overflowX:"auto" }}>
           <table style={{ width:"100%", borderCollapse:"collapse", fontSize:11, tableLayout:"fixed" }}>
             {/* colgroup drives column widths — updated on resize drag (~1200px total default) */}
             <colgroup>
@@ -6679,13 +6745,13 @@ function TestScenariosTab({ data, wp, req, subTab, setSubTab }) {
                     <td style={{ padding:"8px 10px", color:C.muted, wordBreak:"break-word", borderRight:`1px solid ${C.border}`, width:scenColW["pers"]||60 }}>{String(r[K.persona]||"—")}</td>
                     <td style={{ padding:"8px 10px", textAlign:"center", fontWeight:700, color:C.text, borderRight:`1px solid ${C.border}`, width:scenColW["est"]||44 }}>{r[K.estCases]||"—"}</td>
                     <td style={{ padding:"8px 10px", color:C.muted, whiteSpace:"nowrap", borderRight:`1px solid ${C.border}`, width:scenColW["sit"]||56 }}>{String(r[K.sitPlan]||"—")}</td>
-                    <td style={{ padding:"8px 10px", textAlign:"center", borderRight:`1px solid ${C.border}`, width:scenColW["owner"]||70 }}>{_statusBadge(r[K.ownerReviewCompleted])}</td>
-                    <td style={{ padding:"8px 10px", textAlign:"center", borderRight:`1px solid ${C.border}`, width:scenColW["func"]||60 }}>{_statusBadge(r[K.funcStatus])}</td>
-                    <td style={{ padding:"8px 10px", textAlign:"center", borderRight:`1px solid ${C.border}`, width:scenColW["tech"]||60 }}>{_statusBadge(r[K.techStatus])}</td>
-                    <td style={{ padding:"8px 10px", textAlign:"center", borderRight:`1px solid ${C.border}`, width:scenColW["sd"]||72 }}>{_statusBadge(r[K.sdStatus])}</td>
-                    <td style={{ padding:"8px 10px", textAlign:"center", borderRight:`1px solid ${C.border}`, width:scenColW["pmtsd"]||58 }}>{_statusBadge(r[K.pmtStatus])}</td>
-                    <td style={{ padding:"8px 10px", textAlign:"center", borderRight:`1px solid ${C.border}`, width:scenColW["dt"]||44 }}>{_statusBadge(r[K.dtStatus])}</td>
-                    <td style={{ padding:"8px 10px", textAlign:"center", borderRight:`1px solid ${C.border}`, width:scenColW["da"]||58 }}>{_statusBadge(r[K.daStatus])}</td>
+                    <td style={{ padding:"8px 10px", textAlign:"center", overflow:"hidden", borderRight:`1px solid ${C.border}`, width:scenColW["owner"]||70 }}>{_statusBadge(r[K.ownerReviewCompleted])}</td>
+                    <td style={{ padding:"8px 10px", textAlign:"center", overflow:"hidden", borderRight:`1px solid ${C.border}`, width:scenColW["func"]||60 }}>{_statusBadge(r[K.funcStatus])}</td>
+                    <td style={{ padding:"8px 10px", textAlign:"center", overflow:"hidden", borderRight:`1px solid ${C.border}`, width:scenColW["tech"]||60 }}>{_statusBadge(r[K.techStatus])}</td>
+                    <td style={{ padding:"8px 10px", textAlign:"center", overflow:"hidden", borderRight:`1px solid ${C.border}`, width:scenColW["sd"]||72 }}>{_statusBadge(r[K.sdStatus])}</td>
+                    <td style={{ padding:"8px 10px", textAlign:"center", overflow:"hidden", borderRight:`1px solid ${C.border}`, width:scenColW["pmtsd"]||58 }}>{_statusBadge(r[K.pmtStatus])}</td>
+                    <td style={{ padding:"8px 10px", textAlign:"center", overflow:"hidden", borderRight:`1px solid ${C.border}`, width:scenColW["dt"]||44 }}>{_statusBadge(r[K.dtStatus])}</td>
+                    <td style={{ padding:"8px 10px", textAlign:"center", overflow:"hidden", borderRight:`1px solid ${C.border}`, width:scenColW["da"]||58 }}>{_statusBadge(r[K.daStatus])}</td>
                     <td style={{ padding:"8px 10px", textAlign:"center", borderRight:`1px solid ${C.border}`, width:scenColW["tagUs"]||48 }}>
                       {tagIds.length > 0
                         ? <span style={{ background:"#eff6ff", color:"#1d4ed8", borderRadius:4, padding:"2px 8px", fontSize:10, fontWeight:700 }}>{tagIds.length}</span>
@@ -7741,7 +7807,7 @@ function ScorecardClassicTab({ wp, raid, req, openModal }) {
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
       <Card style={{ padding:0 }}>
-        <div style={{ overflowX:"auto" }}>
+        <div style={{ maxHeight:"calc(100vh - 230px)", overflowY:"auto", overflowX:"auto" }}>
           <table style={{ width:"100%", borderCollapse:"collapse", fontSize:11 }}>
             <thead style={{ position:"sticky", top:0, zIndex:2 }}>
               <tr style={{ background:"#0a1f3d", borderBottom:"2px solid #2563eb" }}>
@@ -8464,7 +8530,7 @@ function ScorecardTab({ wp, raid, req, openModal }) {
 
       {/* Main table */}
       <Card style={{ padding:0 }}>
-        <div style={{ overflowX:"auto" }}>
+        <div style={{ maxHeight:"calc(100vh - 230px)", overflowY:"auto", overflowX:"auto" }}>
           <table style={{ width:"100%", borderCollapse:"collapse", fontSize:11 }}>
             <thead style={{ position:"sticky", top:0, zIndex:2 }}>
               {/* Group header row */}
