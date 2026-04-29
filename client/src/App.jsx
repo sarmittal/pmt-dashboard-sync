@@ -2922,6 +2922,12 @@ function ReqTraceabilityTab({ req, test }) {
         <div style={{overflowX:"auto"}}>
           <table style={{borderCollapse:"collapse",fontSize:11,tableLayout:"fixed",
             width:"100%",minWidth:28+Object.values(colConfig).reduce((s,c)=>s+c.w,0)}}>
+            <colgroup>
+              <col style={{width:28}}/>
+              {["covStatus","reqId","experience","component","bizReq","story","acceptance","reviewStatus","tags","buildStatus","scriptType","scenCount","estCases","rationalized","scriptLink"].map(k=>(
+                <col key={k} style={{width:colConfig[k]?.w}}/>
+              ))}
+            </colgroup>
             <thead style={{position:"sticky",top:0,zIndex:2}}>
               {/* Group header row */}
               <tr>
