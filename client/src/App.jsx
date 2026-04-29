@@ -2784,9 +2784,32 @@ function ReqTraceabilityTab({ req, test }) {
   );
   const isTestScript = r => { const v=String(r[reqK?.testScriptType]||"").toLowerCase().trim(); return v.includes("script")&&!v.includes("scenario"); };
 
-  const TH = ({children,style={}}) => (
+  const [colConfig, setColConfig] = useState({
+    covStatus:      {w:110}, reqId:       {w:80},  experience: {w:100},
+    component:      {w:110}, bizReq:      {w:220}, story:      {w:220},
+    acceptance:     {w:190}, tags:        {w:100}, buildStatus:{w:90},
+    reviewStatus:   {w:130}, scriptType:  {w:100}, scenCount:  {w:58},
+    estCases:       {w:66},  rationalized:{w:90},  scriptLink: {w:90},
+  });
+  const resizeCol = (key, e) => {
+    e.preventDefault();
+    const sx=e.clientX, sw=colConfig[key].w;
+    const mv=m=>setColConfig(p=>({...p,[key]:{w:Math.max(50,sw+m.clientX-sx)}}));
+    const up=()=>{window.removeEventListener("mousemove",mv);window.removeEventListener("mouseup",up);};
+    window.addEventListener("mousemove",mv); window.addEventListener("mouseup",up);
+  };
+  const RH = (key) => (
+    <div onMouseDown={e=>resizeCol(key,e)}
+      style={{position:"absolute",right:0,top:0,bottom:0,width:6,cursor:"col-resize",zIndex:10}}
+      onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,0.3)"}
+      onMouseLeave={e=>e.currentTarget.style.background="transparent"}/>
+  );
+  const TH = ({colKey, children, style={}}) => (
     <th style={{padding:"7px 8px",fontWeight:700,fontSize:10,color:"#fff",background:C.navy,
-      textAlign:"left",borderRight:"1px solid rgba(255,255,255,0.1)",whiteSpace:"nowrap",...style}}>{children}</th>
+      textAlign:"left",borderRight:"1px solid rgba(255,255,255,0.1)",whiteSpace:"nowrap",
+      position:"relative",overflow:"hidden",width:colKey?colConfig[colKey]?.w:undefined,...style}}>
+      {children}{colKey&&RH(colKey)}
+    </th>
   );
 
   // Build approach field list
@@ -2897,43 +2920,26 @@ function ReqTraceabilityTab({ req, test }) {
       {/* Table */}
       <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden",boxShadow:"0 1px 3px rgba(0,0,0,0.06)"}}>
         <div style={{overflowX:"auto"}}>
-          <table style={{width:"100%",borderCollapse:"collapse",fontSize:11,tableLayout:"fixed"}}>
-            <colgroup>
-              <col style={{width:28}}/>  {/* expand */}
-              <col style={{width:110}}/> {/* coverage status */}
-              <col style={{width:80}}/>  {/* req id */}
-              <col style={{width:72}}/>  {/* experience */}
-              <col style={{width:90}}/>  {/* sub process */}
-              <col style={{width:170}}/> {/* business req */}
-              <col style={{width:170}}/> {/* user story */}
-              <col style={{width:150}}/> {/* acceptance criteria */}
-              <col style={{width:100}}/> {/* tags */}
-              <col style={{width:90}}/>  {/* build status */}
-              <col style={{width:110}}/> {/* review status */}
-              <col style={{width:90}}/>  {/* test script/scenario */}
-              <col style={{width:58}}/>  {/* scen count */}
-              <col style={{width:66}}/>  {/* est cases */}
-              <col style={{width:90}}/>  {/* rationalized */}
-              <col style={{width:90}}/>  {/* test script link */}
-            </colgroup>
+          <table style={{borderCollapse:"collapse",fontSize:11,tableLayout:"fixed",
+            width:28+Object.values(colConfig).reduce((s,c)=>s+c.w,0)}}>
             <thead style={{position:"sticky",top:0,zIndex:2}}>
               <tr>
-                <TH></TH>
-                <TH>Coverage Status</TH>
-                <TH>Req ID</TH>
-                <TH>Experience</TH>
-                <TH>Sub Process</TH>
-                <TH>Business Requirement</TH>
-                <TH>User Story</TH>
-                <TH>Acceptance Criteria</TH>
-                <TH>Tags</TH>
-                <TH style={{textAlign:"center"}}>Build Status</TH>
-                <TH>Review Status</TH>
-                <TH>Test Script / Scenario</TH>
-                <TH style={{textAlign:"center"}}>Scen #</TH>
-                <TH style={{textAlign:"center"}}>Est. Cases</TH>
-                <TH style={{textAlign:"center"}}>Rationalized</TH>
-                <TH style={{textAlign:"center",borderRight:"none"}}>Script Link</TH>
+                <th style={{width:28,padding:"7px 8px",background:C.navy,borderRight:"1px solid rgba(255,255,255,0.1)"}}></th>
+                <TH colKey="covStatus">Coverage Status</TH>
+                <TH colKey="reqId">Req ID</TH>
+                <TH colKey="experience">Experience</TH>
+                <TH colKey="component">Sub Process</TH>
+                <TH colKey="bizReq">Business Requirement</TH>
+                <TH colKey="story">User Story</TH>
+                <TH colKey="acceptance">Acceptance Criteria</TH>
+                <TH colKey="tags">Tags</TH>
+                <TH colKey="buildStatus" style={{textAlign:"center"}}>Build Status</TH>
+                <TH colKey="reviewStatus">Review Status</TH>
+                <TH colKey="scriptType">Test Script / Scenario</TH>
+                <TH colKey="scenCount" style={{textAlign:"center"}}>Scen #</TH>
+                <TH colKey="estCases" style={{textAlign:"center"}}>Est. Cases</TH>
+                <TH colKey="rationalized" style={{textAlign:"center"}}>Rationalized</TH>
+                <TH colKey="scriptLink" style={{textAlign:"center",borderRight:"none"}}>Script Link</TH>
               </tr>
             </thead>
             <tbody>
@@ -3005,11 +3011,11 @@ function ReqTraceabilityTab({ req, test }) {
                       <td style={{padding:"7px 8px",textAlign:"center",color:isOpen?C.navyLight:C.muted,fontWeight:700,borderRight:`1px solid ${C.border}`}}>{isOpen?"▾":"▸"}</td>
                       {td(statusBadge,{verticalAlign:"middle"})}
                       {td(<span style={{fontWeight:700,color:C.navyLight,whiteSpace:"nowrap",fontSize:11}}>{id||"—"}</span>)}
-                      {td(<span style={{fontSize:10,color:C.muted,whiteSpace:"nowrap"}}>{_fieldVal(r[reqK?.pmExperience])}</span>)}
-                      {td(<span style={{fontSize:10,color:C.text}}>{_fieldVal(r[reqK?.component])}</span>)}
-                      {td(<span style={{display:"-webkit-box",WebkitLineClamp:3,WebkitBoxOrient:"vertical",overflow:"hidden",lineHeight:1.45,fontSize:11}}>{_fieldVal(r[reqK?.bizReq])}</span>)}
-                      {td(<span style={{display:"-webkit-box",WebkitLineClamp:3,WebkitBoxOrient:"vertical",overflow:"hidden",lineHeight:1.45,fontSize:11}}>{_fieldVal(r[reqK?.story])}</span>)}
-                      {td(<span style={{display:"-webkit-box",WebkitLineClamp:3,WebkitBoxOrient:"vertical",overflow:"hidden",lineHeight:1.45,color:C.muted,fontSize:11}}>{_fieldVal(r[reqK?.acceptance])}</span>)}
+                      {td(<span style={{fontSize:10,color:C.muted,wordBreak:"break-word"}}>{_fieldVal(r[reqK?.pmExperience])}</span>)}
+                      {td(<span style={{fontSize:10,color:C.text,wordBreak:"break-word"}}>{_fieldVal(r[reqK?.component])}</span>)}
+                      {td(<span style={{lineHeight:1.5,fontSize:11,wordBreak:"break-word"}}>{_fieldVal(r[reqK?.bizReq])}</span>)}
+                      {td(<span style={{lineHeight:1.5,fontSize:11,wordBreak:"break-word"}}>{_fieldVal(r[reqK?.story])}</span>)}
+                      {td(<span style={{lineHeight:1.5,fontSize:11,color:C.muted,wordBreak:"break-word"}}>{_fieldVal(r[reqK?.acceptance])}</span>)}
                       {td(tagPills)}
                       {td(_buildBadge(r),{textAlign:"center",verticalAlign:"middle"})}
                       {td(_reviewBadge(r),{verticalAlign:"middle"})}
@@ -3025,6 +3031,36 @@ function ReqTraceabilityTab({ req, test }) {
                       <tr style={{background:"#f0f6ff",borderBottom:`2px solid #93c5fd`}}>
                         <td colSpan={16} style={{padding:0}}>
                           <div style={{padding:"14px 18px 16px 44px",display:"flex",flexDirection:"column",gap:14}}>
+
+                            {/* Section 0: User Story Details */}
+                            <div>
+                              <div style={{fontSize:10,fontWeight:700,color:C.navy,textTransform:"uppercase",letterSpacing:"0.07em",borderBottom:`1px solid #bfdbfe`,paddingBottom:4,marginBottom:8}}>
+                                User Story Details
+                              </div>
+                              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px 24px"}}>
+                                {[
+                                  {label:"Experience",            val:_fieldVal(r[reqK?.pmExperience])},
+                                  {label:"Sub Process",           val:_fieldVal(r[reqK?.component])},
+                                ].map(({label,val})=>(
+                                  <div key={label} style={{display:"flex",flexDirection:"column",gap:2}}>
+                                    <span style={{fontSize:9,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:"0.05em"}}>{label}</span>
+                                    <span style={{fontSize:11,color:C.text,lineHeight:1.5}}>{val}</span>
+                                  </div>
+                                ))}
+                              </div>
+                              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:"10px 24px",marginTop:10}}>
+                                {[
+                                  {label:"Business Requirement",  val:_fieldVal(r[reqK?.bizReq])},
+                                  {label:"User Story",            val:_fieldVal(r[reqK?.story])},
+                                  {label:"Acceptance Criteria",   val:_fieldVal(r[reqK?.acceptance])},
+                                ].map(({label,val})=>(
+                                  <div key={label} style={{display:"flex",flexDirection:"column",gap:2}}>
+                                    <span style={{fontSize:9,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:"0.05em"}}>{label}</span>
+                                    <span style={{fontSize:11,color:C.text,lineHeight:1.5,whiteSpace:"pre-wrap",wordBreak:"break-word"}}>{val}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
 
                             {/* Section 1: Build Approach */}
                             <div>
