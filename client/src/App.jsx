@@ -2706,15 +2706,22 @@ function ReqTraceabilityTab({ req, test }) {
 
   const _fieldVal = v => { const s=String(v||"").trim(); return (!s||s==="nan"||s==="None")?"—":s; };
 
-  // KPI counts
-  const covCnt  = filtered.filter(r=>(scensByReqId[String(r[reqK?.reqId]||"")]?.length||0)>0).length;
-  const gapCnt  = filtered.length - covCnt;
-  const totScen = filtered.reduce((s,r)=>s+(scensByReqId[String(r[reqK?.reqId]||"")]?.length||0),0);
+  // Determine coverage approach per row
+  const isTestScript = r => {
+    const v = String(r[reqK?.testScriptType]||"").toLowerCase().trim();
+    return v.includes("script") && !v.includes("scenario");
+  };
+
+  // KPI counts — only scenario-type rows can be gaps
+  const scriptRows = filtered.filter(r => isTestScript(r));
+  const scenTypeRows= filtered.filter(r => !isTestScript(r));
+  const covCnt  = scenTypeRows.filter(r=>(scensByReqId[String(r[reqK?.reqId]||"")]?.length||0)>0).length;
+  const gapCnt  = scenTypeRows.filter(r=>(scensByReqId[String(r[reqK?.reqId]||"")]?.length||0)===0).length;
   const totEst  = filtered.reduce((s,r)=>{
     const sc=scensByReqId[String(r[reqK?.reqId]||"")]||[];
     return s+sc.reduce((ss,t)=>ss+(parseFloat(t[tK?.estCases])||0),0);
   },0);
-  const covPct = filtered.length ? Math.round(covCnt/filtered.length*100) : 0;
+  const covPct = scenTypeRows.length ? Math.round(covCnt/scenTypeRows.length*100) : 0;
 
   const TH = ({children,style={}}) => (
     <th style={{padding:"7px 8px",fontWeight:700,fontSize:10,color:"#fff",background:C.navy,
@@ -2740,12 +2747,16 @@ function ReqTraceabilityTab({ req, test }) {
     <div style={{display:"flex",flexDirection:"column",gap:14}}>
 
       {/* KPI row */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12}}>
-        <KpiCard label="Total Requirements"   value={filtered.length} color={C.navyLight} />
-        <KpiCard label="Scenarios Linked"     value={covCnt}  color={C.complete}
-          sub={`${covPct}% coverage`} subColor={covPct>=80?C.complete:covPct>=50?"#d97706":C.delayed} />
-        <KpiCard label="No Scenarios (Gap)"   value={gapCnt}  color={gapCnt>0?C.delayed:C.complete} />
-        <KpiCard label="Est. Test Cases"      value={totEst}  color={C.navyLight}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:12}}>
+        <KpiCard label="Total Requirements"      value={filtered.length} color={C.navyLight} />
+        <KpiCard label="Scenario Type — Covered" value={covCnt}  color={C.complete}
+          sub={`${covPct}% of ${scenTypeRows.length} scenario-type reqs`}
+          subColor={covPct>=80?C.complete:covPct>=50?"#d97706":C.delayed} />
+        <KpiCard label="Scenario Gap"            value={gapCnt}  color={gapCnt>0?C.delayed:C.complete}
+          sub={gapCnt>0?"Requires test scenario link":undefined} />
+        <KpiCard label="Test Script Type"        value={scriptRows.length} color="#6d28d9"
+          sub={scriptRows.length>0?"Requires test script link":undefined} />
+        <KpiCard label="Est. Test Cases"         value={totEst}  color={C.navyLight}
           sub={test?"":"Upload Test Scenarios file"} />
       </div>
 
@@ -2813,12 +2824,14 @@ function ReqTraceabilityTab({ req, test }) {
                 <tr><td colSpan={14} style={{padding:24,textAlign:"center",color:C.muted}}>No requirements match selected filters.</td></tr>
               )}
               {filtered.map((r,i)=>{
-                const id    = String(r[reqK?.reqId]||"").trim()||String(i);
-                const scens = scensByReqId[id]||[];
-                const estSum= scens.reduce((s,t)=>s+(parseFloat(t[tK?.estCases])||0),0);
-                const isOpen= expanded.has(id);
-                const gap   = scens.length===0;
-                const rowBg = gap?"#fffbeb":i%2===0?C.white:"#f9fafb";
+                const id       = String(r[reqK?.reqId]||"").trim()||String(i);
+                const scens    = scensByReqId[id]||[];
+                const estSum   = scens.reduce((s,t)=>s+(parseFloat(t[tK?.estCases])||0),0);
+                const isOpen   = expanded.has(id);
+                const isScript = isTestScript(r);
+                // Gap = scenario-type req with no linked scenarios; test-script rows are never gaps
+                const gap      = !isScript && scens.length===0;
+                const rowBg    = gap?"#fffbeb":isScript&&i%2===0?"#faf5ff":isScript?"#f5f3ff":i%2===0?C.white:"#f9fafb";
                 const td = (children, style={}) => (
                   <td style={{padding:"7px 8px",verticalAlign:"top",borderRight:`1px solid ${C.border}`,overflow:"hidden",textOverflow:"ellipsis",...style}}>{children}</td>
                 );
@@ -2874,9 +2887,14 @@ function ReqTraceabilityTab({ req, test }) {
                             {/* Section 2: Test Scenario Details */}
                             <div>
                               <div style={{fontSize:10,fontWeight:700,color:C.navy,textTransform:"uppercase",letterSpacing:"0.07em",borderBottom:`1px solid #bfdbfe`,paddingBottom:4,marginBottom:8}}>
-                                2 — Test Scenario Details {scens.length>0&&<span style={{fontWeight:400,color:C.muted,textTransform:"none",letterSpacing:0}}>({scens.length} scenarios)</span>}
+                                2 — Test Scenario Details {scens.length>0&&!isScript&&<span style={{fontWeight:400,color:C.muted,textTransform:"none",letterSpacing:0}}>({scens.length} scenarios)</span>}
                               </div>
-                              {scens.length===0?(
+                              {isScript?(
+                                <div style={{background:"#f5f3ff",border:"1px solid #c4b5fd",borderRadius:6,padding:"8px 12px",display:"flex",alignItems:"center",gap:8}}>
+                                  <span style={{fontSize:13}}>📋</span>
+                                  <span style={{fontSize:11,color:"#6d28d9",fontWeight:600}}>Covered by Test Script — not linked to test scenarios. Test script link required (see Test Script Link column).</span>
+                                </div>
+                              ):scens.length===0?(
                                 <div style={{background:"#fff7ed",border:"1px solid #fed7aa",borderRadius:6,padding:"8px 12px",display:"flex",alignItems:"center",gap:8}}>
                                   <span style={{fontSize:13}}>⚠</span>
                                   <span style={{fontSize:11,color:"#c2410c",fontWeight:600}}>No test scenarios linked — coverage gap</span>
@@ -2955,9 +2973,15 @@ function ReqTraceabilityTab({ req, test }) {
             <span>Showing <strong style={{color:C.text}}>{filtered.length}</strong> requirements</span>
             <span>Coverage: <strong style={{color:covPct>=80?C.complete:covPct>=50?"#d97706":C.delayed}}>{covPct}%</strong> ({covCnt} with scenarios, {gapCnt} gaps)</span>
             <span>Total est. cases: <strong style={{color:C.navyLight}}>{totEst}</strong></span>
-            <span style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:6}}>
-              <span style={{display:"inline-block",width:12,height:12,background:"#fffbeb",border:"1px solid #fde68a",borderRadius:2}}></span>
-              <span>Yellow rows = no linked test scenarios (coverage gap)</span>
+            <span style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:12}}>
+              <span style={{display:"flex",alignItems:"center",gap:5}}>
+                <span style={{display:"inline-block",width:12,height:12,background:"#fffbeb",border:"1px solid #fde68a",borderRadius:2}}></span>
+                <span>Yellow = scenario gap (missing test scenario link)</span>
+              </span>
+              <span style={{display:"flex",alignItems:"center",gap:5}}>
+                <span style={{display:"inline-block",width:12,height:12,background:"#f5f3ff",border:"1px solid #c4b5fd",borderRadius:2}}></span>
+                <span>Purple = test script type (requires script link)</span>
+              </span>
             </span>
           </div>
         )}
