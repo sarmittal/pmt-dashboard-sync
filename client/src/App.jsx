@@ -2617,6 +2617,7 @@ function ReqTraceabilityTab({ req, test }) {
   const [buildFilter,  setBuildFilter]  = useState("ALL"); // Build Status bucket
   const [covFilter,    setCovFilter]    = useState("ALL"); // Coverage Status
   const [tagFilter,    setTagFilter]    = useState("ALL"); // Tag
+  const [reviewFilter, setReviewFilter] = useState("ALL"); // Review Status
   const [search,       setSearch]       = useState("");
   const [expanded,     setExpanded]     = useState(new Set());
   const [expandedSc,   setExpandedSc]   = useState(new Set());
@@ -2658,6 +2659,9 @@ function ReqTraceabilityTab({ req, test }) {
   const allTags = Array.from(new Set(
     baseRows.flatMap(r=>String(r[reqK?.tags]||"").split(/[\n,;]+/).map(t=>t.trim()).filter(Boolean))
   )).sort();
+  const allReviewStatuses = Array.from(new Set(
+    baseRows.map(r=>String(r[reqK?.derivedStatus]||"").trim()).filter(Boolean)
+  )).sort();
 
   // Build status bucket (worst of func+tech) — shared by filter + badge
   const _statusBucket = r => {
@@ -2695,7 +2699,8 @@ function ReqTraceabilityTab({ req, test }) {
       (spFilter   ==="ALL"||sp===spFilter) &&
       (buildFilter==="ALL"||_statusBucket(r)===buildFilter) &&
       (covFilter  ==="ALL"||_covKey(r)===covFilter) &&
-      (tagFilter  ==="ALL"||tags.includes(tagFilter)) &&
+      (tagFilter    ==="ALL"||tags.includes(tagFilter)) &&
+      (reviewFilter ==="ALL"||String(r[reqK?.derivedStatus]||"").trim()===reviewFilter) &&
       (!q||id.toLowerCase().includes(q)||String(r[reqK?.story]||"").toLowerCase().includes(q)||String(r[reqK?.bizReq]||"").toLowerCase().includes(q))
     );
   });
@@ -2716,6 +2721,23 @@ function ReqTraceabilityTab({ req, test }) {
     const b = _statusBucket(r);
     const s = BUILD_STATUS_META[b]||BUILD_STATUS_META.notStarted;
     return <span style={{background:s.bg,color:s.c,border:`1px solid ${s.br}`,borderRadius:4,padding:"2px 7px",fontSize:10,fontWeight:600,whiteSpace:"nowrap"}}>{s.l}</span>;
+  };
+
+  const _reviewBadge = r => {
+    const raw = String(r[reqK?.derivedStatus]||"").trim();
+    if (!raw||raw==="nan"||raw==="None") return <span style={{color:C.muted,fontSize:10}}>—</span>;
+    const v = raw.toLowerCase();
+    const [bg,c,br] = v.includes("requested")
+      ? ["#fef3c7","#92400e","#fcd34d"]
+      : v.includes("reviewed")
+      ? ["#dcfce7","#166534","#86efac"]
+      : v.includes("ready")
+      ? ["#dbeafe","#1e40af","#93c5fd"]
+      : v.includes("not applicable")||v.includes("n/a")
+      ? ["#f1f5f9","#64748b","#cbd5e1"]
+      : ["#f8fafc","#475569","#e2e8f0"];
+    const label = raw.replace(/^\d+\.\s*/, "");
+    return <span style={{background:bg,color:c,border:`1px solid ${br}`,borderRadius:4,padding:"2px 6px",fontSize:9,fontWeight:700,whiteSpace:"nowrap",display:"inline-block"}}>{label}</span>;
   };
 
   const _pill = (label, active, count, onClick) => (
@@ -2790,6 +2812,9 @@ function ReqTraceabilityTab({ req, test }) {
         <input value={search} onChange={e=>setSearch(e.target.value)}
           placeholder="Search by Req ID, Business Requirement or User Story…"
           style={{padding:"6px 10px",border:`1px solid ${C.border}`,borderRadius:6,fontSize:12,width:"100%",boxSizing:"border-box",outline:"none"}} />
+
+        {/* ── Group 1: Scope filters ── */}
+        {(allExps.length>0||allSPs.length>0)&&<div style={{borderTop:`1px solid ${C.border}`,margin:"2px 0"}}/>}
         {allExps.length>0&&(
           <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
             <span style={{fontSize:10,fontWeight:700,color:C.text,minWidth:90}}>Experience</span>
@@ -2804,15 +2829,29 @@ function ReqTraceabilityTab({ req, test }) {
             {allSPs.map(v=>_pill(v,spFilter===v,baseRows.filter(r=>String(r[reqK?.component]||"").trim()===v).length,()=>setSpFilter(spFilter===v?"ALL":v)))}
           </div>
         )}
-        {/* Build Status filter */}
-        <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",paddingTop:4,borderTop:`1px dashed ${C.border}`}}>
+
+        {/* ── Group 2: Status filters ── */}
+        <div style={{borderTop:`1px solid ${C.border}`,margin:"2px 0"}}/>
+        <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
           <span style={{fontSize:10,fontWeight:700,color:C.text,minWidth:90}}>Build Status</span>
           {_pill("All",buildFilter==="ALL",null,()=>setBuildFilter("ALL"))}
           {Object.entries(BUILD_STATUS_META).map(([key,{l}])=>
             _pill(l, buildFilter===key, baseRows.filter(r=>_statusBucket(r)===key).length, ()=>setBuildFilter(buildFilter===key?"ALL":key))
           )}
         </div>
-        {/* Coverage Status filter */}
+        {allReviewStatuses.length>0&&(
+          <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+            <span style={{fontSize:10,fontWeight:700,color:C.text,minWidth:90}}>Review Status</span>
+            {_pill("All",reviewFilter==="ALL",null,()=>setReviewFilter("ALL"))}
+            {allReviewStatuses.map(v=>{
+              const cnt = baseRows.filter(r=>String(r[reqK?.derivedStatus]||"").trim()===v).length;
+              return _pill(v.replace(/^\d+\.\s*/,""), reviewFilter===v, cnt, ()=>setReviewFilter(reviewFilter===v?"ALL":v));
+            })}
+          </div>
+        )}
+
+        {/* ── Group 3: Coverage & tags ── */}
+        <div style={{borderTop:`1px solid ${C.border}`,margin:"2px 0"}}/>
         <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
           <span style={{fontSize:10,fontWeight:700,color:C.text,minWidth:90}}>Coverage</span>
           {_pill("All",covFilter==="ALL",null,()=>setCovFilter("ALL"))}
@@ -2833,7 +2872,6 @@ function ReqTraceabilityTab({ req, test }) {
             </button>
           ))}
         </div>
-        {/* Tags filter */}
         {allTags.length>0&&(
           <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
             <span style={{fontSize:10,fontWeight:700,color:C.text,minWidth:90}}>Tags</span>
@@ -2861,6 +2899,7 @@ function ReqTraceabilityTab({ req, test }) {
               <col style={{width:150}}/> {/* acceptance criteria */}
               <col style={{width:100}}/> {/* tags */}
               <col style={{width:90}}/>  {/* build status */}
+              <col style={{width:110}}/> {/* review status */}
               <col style={{width:90}}/>  {/* test script/scenario */}
               <col style={{width:58}}/>  {/* scen count */}
               <col style={{width:66}}/>  {/* est cases */}
@@ -2879,6 +2918,7 @@ function ReqTraceabilityTab({ req, test }) {
                 <TH>Acceptance Criteria</TH>
                 <TH>Tags</TH>
                 <TH style={{textAlign:"center"}}>Build Status</TH>
+                <TH>Review Status</TH>
                 <TH>Test Script / Scenario</TH>
                 <TH style={{textAlign:"center"}}>Scen #</TH>
                 <TH style={{textAlign:"center"}}>Est. Cases</TH>
@@ -2888,7 +2928,7 @@ function ReqTraceabilityTab({ req, test }) {
             </thead>
             <tbody>
               {filtered.length===0&&(
-                <tr><td colSpan={15} style={{padding:24,textAlign:"center",color:C.muted}}>No requirements match selected filters.</td></tr>
+                <tr><td colSpan={16} style={{padding:24,textAlign:"center",color:C.muted}}>No requirements match selected filters.</td></tr>
               )}
               {filtered.map((r,i)=>{
                 const id       = String(r[reqK?.reqId]||"").trim()||String(i);
@@ -2936,6 +2976,7 @@ function ReqTraceabilityTab({ req, test }) {
                       {td(<span style={{display:"-webkit-box",WebkitLineClamp:3,WebkitBoxOrient:"vertical",overflow:"hidden",lineHeight:1.45,color:C.muted,fontSize:11}}>{_fieldVal(r[reqK?.acceptance])}</span>)}
                       {td(tagPills)}
                       {td(_buildBadge(r),{textAlign:"center",verticalAlign:"middle"})}
+                      {td(_reviewBadge(r),{verticalAlign:"middle"})}
                       {td(<span style={{fontSize:10,color:C.text}}>{_fieldVal(r[reqK?.testScriptType])}</span>)}
                       {td(<span style={{fontWeight:700,color:C.navyLight}}>{scens.length||"0"}</span>,{textAlign:"center",verticalAlign:"middle"})}
                       {td(<span style={{fontWeight:estSum>0?700:400,color:estSum>0?C.navyLight:C.muted}}>{estSum||"—"}</span>,{textAlign:"center",verticalAlign:"middle"})}
@@ -2946,7 +2987,7 @@ function ReqTraceabilityTab({ req, test }) {
                     {/* ── Inline expansion ── */}
                     {isOpen&&(
                       <tr style={{background:"#f0f6ff",borderBottom:`2px solid #93c5fd`}}>
-                        <td colSpan={15} style={{padding:0}}>
+                        <td colSpan={16} style={{padding:0}}>
                           <div style={{padding:"14px 18px 16px 44px",display:"flex",flexDirection:"column",gap:14}}>
 
                             {/* Section 1: Build Approach */}
@@ -3058,6 +3099,48 @@ function ReqTraceabilityTab({ req, test }) {
                   </React.Fragment>
                 );
               })}
+              {/* Subtotal row */}
+              {filtered.length>0&&(()=>{
+                const stCovered = filtered.filter(r=>_covKey(r)==="covered").length;
+                const stGap     = filtered.filter(r=>_covKey(r)==="gap").length;
+                const stScript  = filtered.filter(r=>_covKey(r)==="script").length;
+                const stScens   = filtered.reduce((s,r)=>{
+                  const id=String(r[reqK?.reqId]||"").trim();
+                  return s+(scensByReqId[id]?.length||0);
+                },0);
+                const stEst = filtered.reduce((s,r)=>{
+                  const id=String(r[reqK?.reqId]||"").trim();
+                  return s+(scensByReqId[id]||[]).reduce((ss,t)=>ss+(parseFloat(t[tK?.estCases])||0),0);
+                },0);
+                const br = `1px solid ${C.border}`;
+                const num = (v,c=C.navyLight) => <span style={{color:c,fontWeight:800,fontSize:11}}>{v}</span>;
+                return (
+                  <tr style={{background:"#eef4ff",borderBottom:`2px solid ${C.navyLight}`}}>
+                    <td style={{padding:"6px 8px",textAlign:"center",color:C.navy,fontSize:9,fontWeight:800,letterSpacing:"0.05em",borderRight:br}}>∑</td>
+                    <td style={{padding:"6px 8px",borderRight:br}}>
+                      <div style={{display:"flex",flexWrap:"wrap",gap:3}}>
+                        <span style={{fontSize:9,fontWeight:700,color:"#166534"}}>{stCovered} cvd</span>
+                        <span style={{fontSize:9,fontWeight:700,color:"#b91c1c"}}>{stGap} gap</span>
+                        <span style={{fontSize:9,fontWeight:700,color:"#6d28d9"}}>{stScript} scr</span>
+                      </div>
+                    </td>
+                    <td style={{padding:"6px 8px",textAlign:"center",borderRight:br}}>{num(filtered.length)}</td>
+                    <td style={{padding:"6px 8px",borderRight:br}}/>
+                    <td style={{padding:"6px 8px",borderRight:br}}/>
+                    <td style={{padding:"6px 8px",borderRight:br}}/>
+                    <td style={{padding:"6px 8px",borderRight:br}}/>
+                    <td style={{padding:"6px 8px",borderRight:br}}/>
+                    <td style={{padding:"6px 8px",borderRight:br}}/>
+                    <td style={{padding:"6px 8px",borderRight:br}}/>
+                    <td style={{padding:"6px 8px",borderRight:br}}/>
+                    <td style={{padding:"6px 8px",borderRight:br}}/>
+                    <td style={{padding:"6px 8px",textAlign:"center",borderRight:br}}>{num(stScens)}</td>
+                    <td style={{padding:"6px 8px",textAlign:"center",borderRight:br}}>{num(stEst||"—")}</td>
+                    <td style={{padding:"6px 8px",borderRight:br}}/>
+                    <td style={{padding:"6px 8px"}}/>
+                  </tr>
+                );
+              })()}
             </tbody>
           </table>
         </div>
