@@ -2757,15 +2757,22 @@ function ReqTraceabilityTab({ req, test }) {
       scenPct:n?Math.round(scenarioMapped/n*100):0, scriptPct:n?Math.round(scriptMapped/n*100):0};
   }, [filtered, scensByReqId, reqK, tK]);
 
+  const [colConfig, setColConfig] = useState({
+    covStatus:      {w:110}, reqId:       {w:80},  experience: {w:100},
+    component:      {w:110}, bizReq:      {w:220}, story:      {w:220},
+    acceptance:     {w:190}, tags:        {w:100}, buildStatus:{w:90},
+    reviewStatus:   {w:130}, scriptType:  {w:100}, scenCount:  {w:58},
+    estCases:       {w:66},  rationalized:{w:90},  scriptLink: {w:90},
+  });
+
+  // ── All hooks above this line ─────────────────────────────────────────────
   if (!req) return <Empty label="Upload Requirements file to view Req Traceability." />;
 
   const {scenarioMapped,scriptMapped,pendingMapping,stCovered,stGap,stScript,stScens,totEst,scenPct,scriptPct} = stats;
-
   const _statusBucket = r => _statusBucketOf(r, reqK);
   const _covKey       = r => _covKeyOf(r, reqK, scensByReqId);
   const _toggle   = id => setExpanded  (p => { const n=new Set(p); n.has(id)?n.delete(id):n.add(id); return n; });
   const _toggleSc = id => setExpandedSc(p => { const n=new Set(p); n.has(id)?n.delete(id):n.add(id); return n; });
-
   const _buildBadge = r => {
     const b=_statusBucket(r), s=BUILD_STATUS_META[b]||BUILD_STATUS_META.notStarted;
     return <span style={{background:s.bg,color:s.c,border:`1px solid ${s.br}`,borderRadius:4,padding:"2px 7px",fontSize:10,fontWeight:600,whiteSpace:"nowrap"}}>{s.l}</span>;
@@ -2784,13 +2791,6 @@ function ReqTraceabilityTab({ req, test }) {
   );
   const isTestScript = r => { const v=String(r[reqK?.testScriptType]||"").toLowerCase().trim(); return v.includes("script")&&!v.includes("scenario"); };
 
-  const [colConfig, setColConfig] = useState({
-    covStatus:      {w:110}, reqId:       {w:80},  experience: {w:100},
-    component:      {w:110}, bizReq:      {w:220}, story:      {w:220},
-    acceptance:     {w:190}, tags:        {w:100}, buildStatus:{w:90},
-    reviewStatus:   {w:130}, scriptType:  {w:100}, scenCount:  {w:58},
-    estCases:       {w:66},  rationalized:{w:90},  scriptLink: {w:90},
-  });
   const resizeCol = (key, e) => {
     e.preventDefault();
     const sx=e.clientX, sw=colConfig[key].w;
