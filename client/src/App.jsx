@@ -2758,11 +2758,11 @@ function ReqTraceabilityTab({ req, test }) {
   }, [filtered, scensByReqId, reqK, tK]);
 
   const [colConfig, setColConfig] = useState({
-    covStatus:      {w:110}, reqId:       {w:80},  experience: {w:100},
-    component:      {w:110}, bizReq:      {w:220}, story:      {w:220},
-    acceptance:     {w:190}, tags:        {w:100}, buildStatus:{w:90},
-    reviewStatus:   {w:130}, scriptType:  {w:100}, scenCount:  {w:58},
-    estCases:       {w:66},  rationalized:{w:90},  scriptLink: {w:90},
+    covStatus:      {w:88},  reqId:       {w:68},  experience: {w:72},
+    component:      {w:82},  bizReq:      {w:140}, story:      {w:140},
+    acceptance:     {w:115}, tags:        {w:78},  buildStatus:{w:75},
+    reviewStatus:   {w:100}, scriptType:  {w:82},  scenCount:  {w:45},
+    estCases:       {w:52},  rationalized:{w:65},  scriptLink: {w:65},
   });
 
   // ── All hooks above this line ─────────────────────────────────────────────
@@ -2921,7 +2921,7 @@ function ReqTraceabilityTab({ req, test }) {
       <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden",boxShadow:"0 1px 3px rgba(0,0,0,0.06)"}}>
         <div style={{overflowX:"auto"}}>
           <table style={{borderCollapse:"collapse",fontSize:11,tableLayout:"fixed",
-            width:28+Object.values(colConfig).reduce((s,c)=>s+c.w,0)}}>
+            width:"100%",minWidth:28+Object.values(colConfig).reduce((s,c)=>s+c.w,0)}}>
             <thead style={{position:"sticky",top:0,zIndex:2}}>
               <tr>
                 <th style={{width:28,padding:"7px 8px",background:C.navy,borderRight:"1px solid rgba(255,255,255,0.1)"}}></th>
