@@ -2965,7 +2965,7 @@ function ReqTraceabilityTab({ req, test }) {
                   <td style={{padding:"6px 8px",borderRight:`1px solid ${C.border}`}}/>
                   <td style={{padding:"6px 8px",borderRight:`1px solid ${C.border}`}}/>
                   <td style={{padding:"6px 8px",textAlign:"center",fontWeight:800,fontSize:11,color:C.navyLight,borderRight:`1px solid ${C.border}`}}>{stScens}</td>
-                  <td style={{padding:"6px 8px",textAlign:"center",fontWeight:800,fontSize:11,color:C.navyLight,borderRight:`1px solid ${C.border}`}}>{stEst||"—"}</td>
+                  <td style={{padding:"6px 8px",textAlign:"center",fontWeight:800,fontSize:11,color:C.navyLight,borderRight:`1px solid ${C.border}`}}>{totEst||"—"}</td>
                   <td style={{padding:"6px 8px",borderRight:`1px solid ${C.border}`}}/>
                   <td style={{padding:"6px 8px"}}/>
                 </tr>
