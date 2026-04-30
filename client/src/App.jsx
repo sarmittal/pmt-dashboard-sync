@@ -2904,11 +2904,7 @@ function ReqTraceabilityTab({ req, test }) {
     return map;
   }, [activeTestRows, tK]);
 
-  const baseRows = useMemo(() => reqRows.filter(r => {
-    if (!String(r[reqK?.reqId]||"").trim()) return false;
-    const v = String(r[reqK?.pmExperience]||"").toLowerCase().trim();
-    return !REQ_EXCL_EXP.some(e => v.includes(e));
-  }), [reqRows, reqK]);
+  const baseRows = useMemo(() => reqRows, [reqRows]);
 
   const allExps = useMemo(() =>
     Array.from(new Set(baseRows.map(r=>String(r[reqK?.pmExperience]||"").trim()).filter(Boolean))).sort(),
@@ -8496,10 +8492,7 @@ function ScorecardTab({ wp, raid, req, openModal }) {
       {(() => {
         // Use pre-computed bucket counts from parseRequirements (already handles fallback to Status column)
         const compData    = req ? Object.values(req.byComponent || {}) : [];
-        const allCompRows = compData.flatMap(d => d.rows || []).filter(r => {
-          if (!String(r[req?.keys?.reqId]||"").trim()) return false;
-          return !REQ_EXCL_EXP.some(e => String(r[req?.keys?.pmExperience]||"").toLowerCase().includes(e));
-        });
+        const allCompRows = compData.flatMap(d => d.rows || []);
 
         // statusBucket with fallback: func/tech build status → Status column
         const statusBucket = r => {
