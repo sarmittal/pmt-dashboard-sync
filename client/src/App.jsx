@@ -3980,12 +3980,14 @@ function RaidAnalysisTab({ raid }) {
   const K = raid.keys;
 
   // Defensive fallback — if K.team not detected, try known column names
-  const teamKey = K.team 
+  const teamKey = K.team
     || Object.keys(raid.items[0] || {}).find(k => k === "Primary Team (Owner)")
     || Object.keys(raid.items[0] || {}).find(k => k === "Primary Team")
     || Object.keys(raid.items[0] || {}).find(k => /primary.?team/i.test(k))
     || "Primary Team (Owner)";
   console.log("[RAID] K.team:", K.team, "teamKey:", teamKey, "sample cols:", Object.keys(raid.items[0]||{}).filter(k => /team/i.test(k)));
+
+  const raidTagOptions = K.tag ? Array.from(new Set(raid.items.flatMap(r => String(r[K.tag]||"").split(/[,\n;]+/).map(s=>s.trim()).filter(Boolean)))).sort() : [];
 
   // ── Teams ─────────────────────────────────────────────────────────────────
   const allTeams = Array.from(new Set(
@@ -9004,6 +9006,7 @@ function ScorecardTab({ wp, raid, req, openModal }) {
       {raidModal && raid && (() => {
         const K = raid.keys;
         const teamKey = K.team || "Primary Team (Owner)";
+        const raidTagOptions = K.tag ? Array.from(new Set(raidModal.rows.flatMap(r => String(r[K.tag]||"").split(/[,\n;]+/).map(s=>s.trim()).filter(Boolean)))).sort() : [];
         const statusCol = s => { const sl = String(s||"").toLowerCase(); return sl.includes("delay") ? C.delayed : sl.includes("complete") ? C.complete : C.onTrack; };
         const allModalTeams = Array.from(new Set(raidModal.rows.map(r => String(r[teamKey]||"").trim()).filter(Boolean))).sort();
         const allModalTypes = Array.from(new Set(raidModal.rows.map(r => String(r[K.type]||"").trim()).filter(Boolean))).sort();
