@@ -289,14 +289,18 @@ function parseRequirements(sheets) {
   console.log("[PMT] Req key mapping:", K);
 
   // Exclude rows where User Story Review Status (D&A) is "5. Deprecated" or "6. Deferred"
-  // Blank status rows are valid (not yet reviewed) and must be counted
-  const EXCLUDED = ["5. deprecated", "6. deferred", "deferred"];
+  // Also exclude "3 - Leadership" and "6 - E&P" PM Experience tracks from all in-scope counts.
+  // Blank status rows are valid (not yet reviewed) and must be counted.
+  const EXCL_STATUS = ["5. deprecated", "6. deferred", "deferred"];
+  const EXCL_EXP    = ["3 - leadership", "3-leadership", "6 - e&p", "6-e&p"];
   const isExcluded = r => {
-    const v = String(r[K.derivedStatus] || "").toLowerCase().trim();
-    return EXCLUDED.some(e => v.includes(e));
+    const status = String(r[K.derivedStatus] || "").toLowerCase().trim();
+    if (EXCL_STATUS.some(e => status.includes(e))) return true;
+    const exp = String(r[K.pmExperience] || "").toLowerCase().trim();
+    return EXCL_EXP.some(e => exp.includes(e));
   };
   const activeRows = rows.filter(r => !isExcluded(r));
-  console.log("[PMT] Req active rows:", activeRows.length, "of", rows.length);
+  console.log("[PMT] Req active rows (in-scope, excl. Deprecated/Deferred/Leadership/E&P):", activeRows.length, "of", rows.length);
 
   // Status buckets — use the worst of funcBuildStatus and techBuildStatus
   // (mirrors the Smartsheet consolidated status formula)
@@ -1846,35 +1850,12 @@ function ExecutiveSummaryTab({ wp, raid, req, cap, openModal }) {
             <table style={{ width:"100%", borderCollapse:"collapse", fontSize:11 }}>
               <thead>
                 <tr style={{ background:"#162f50" }}>
-                  {["Sprint","Total","% Done","Complete","In Progress","Blocked","Not Started","Partial"].map((h,i) => (
-                    <th key={h} style={{ padding:"8px 12px", textAlign:i===0?"left":"center", color:"#fff", fontSize:10, fontWeight:700, whiteSpace:"nowrap" }}>{h}</th>
+                  {["Sprint", `Total (${req?.total ?? 0} User Stories in Scope — Non E&P/Leadership)`, "% Done", "Complete", "In Progress", "Blocked", "Not Started", "Partial"].map((h,i) => (
+                    <th key={i} style={{ padding:"8px 12px", textAlign:i===0?"left":"center", color:"#fff", fontSize:10, fontWeight:700, whiteSpace:"nowrap" }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {sprintRows.length > 0 && (() => {
-                  const tot = sprintRows.reduce((a,sp) => ({
-                    total:sp.total+(a.total||0), complete:(sp.complete||0)+(a.complete||0),
-                    inProgress:(sp.inProgress||0)+(a.inProgress||0), blocked:(sp.blocked||0)+(a.blocked||0),
-                    notStarted:(sp.notStarted||0)+(a.notStarted||0), partial:(sp.partial||0)+(a.partial||0),
-                    rows:[...(a.rows||[]),...(sp.rows||[])],
-                  }), {total:0,complete:0,inProgress:0,blocked:0,notStarted:0,partial:0,rows:[]});
-                  const mkTotCell = (count, bkt, color) => count > 0
-                    ? <span onClick={e=>{e.stopPropagation();setStoryModal({title:`All Sprints${bkt?` — ${bkt}`:""}`, rows:bkt?tot.rows.filter(r=>_rowBucket(r)===bkt):tot.rows});}} style={{ fontWeight:800, color, cursor:"pointer", textDecoration:"underline dotted" }}>{count}</span>
-                    : <span style={{ color:C.muted }}>—</span>;
-                  return (
-                    <tr style={{ background:"#e8eef7", borderBottom:`2px solid #162f50` }}>
-                      <td style={{ padding:"8px 12px", fontWeight:800, color:"#162f50", fontSize:11 }}>TOTAL</td>
-                      <td style={{ padding:"8px 12px", textAlign:"center" }}>{mkTotCell(tot.total,     null,       "#162f50")}</td>
-                      <td style={{ padding:"8px 12px", textAlign:"center" }}>{tot.total>0?(() => { const pct=Math.round((tot.complete||0)/tot.total*100); const [bg,c]=pct>=80?["#dcfce7","#166534"]:pct>=50?["#fef3c7","#92400e"]:["#fee2e2","#b91c1c"]; return <span style={{background:bg,color:c,borderRadius:4,padding:"2px 7px",fontSize:10,fontWeight:800}}>{pct}%</span>; })():<span style={{color:C.muted}}>—</span>}</td>
-                      <td style={{ padding:"8px 12px", textAlign:"center" }}>{mkTotCell(tot.complete,  "complete",  "#1d4ed8")}</td>
-                      <td style={{ padding:"8px 12px", textAlign:"center" }}>{mkTotCell(tot.inProgress,"inProgress","#15803d")}</td>
-                      <td style={{ padding:"8px 12px", textAlign:"center" }}>{mkTotCell(tot.blocked,   "blocked",   "#b91c1c")}</td>
-                      <td style={{ padding:"8px 12px", textAlign:"center" }}>{mkTotCell(tot.notStarted,"notStarted","#475569")}</td>
-                      <td style={{ padding:"8px 12px", textAlign:"center" }}>{mkTotCell(tot.partial,   "partial",   "#0369a1")}</td>
-                    </tr>
-                  );
-                })()}
                 {sprintRows.map((sp, i) => {
                   const mkCell = (count, bkt, color) => count > 0
                     ? <span onClick={e=>{e.stopPropagation();setStoryModal({title:`Sprint: ${sp.name}${bkt?` — ${bkt}`:""}`, rows:bkt?_spBucket(sp,bkt):sp.rows});}} style={{ fontWeight:700, color, cursor:"pointer", textDecoration:"underline dotted" }}>{count}</span>
@@ -8588,7 +8569,7 @@ function ScorecardTab({ wp, raid, req, openModal }) {
       <Card style={{ padding:"10px 16px" }}>
         <div style={{ display:"flex", gap:20, flexWrap:"wrap", alignItems:"center" }}>
           <span style={{ fontSize:12, color:C.muted }}><b style={{ color:C.text }}>RAID:</b> <code style={{ background:"#f0f2f5", padding:"1px 5px", borderRadius:3 }}>Component</code> column</span>
-          <span style={{ fontSize:12, color:C.muted }}><b style={{ color:C.text }}>Stories:</b> <code style={{ background:"#f0f2f5", padding:"1px 5px", borderRadius:3 }}>Sub Process</code> column · Sprint from <code style={{ background:"#f0f2f5", padding:"1px 5px", borderRadius:3 }}>Build Cycle</code> · Excl. Deprecated (5.) / Deferred (6.) via <code style={{ background:"#f0f2f5", padding:"1px 5px", borderRadius:3 }}>User Story Review Status (D&A)</code></span>
+          <span style={{ fontSize:12, color:C.muted }}><b style={{ color:C.text }}>Stories:</b> In-scope only — excl. Deprecated (5.) / Deferred (6.) via <code style={{ background:"#f0f2f5", padding:"1px 5px", borderRadius:3 }}>User Story Review Status (D&A)</code> · excl. Leadership (3) / E&amp;P (6) via <code style={{ background:"#f0f2f5", padding:"1px 5px", borderRadius:3 }}>PM Experience</code></span>
           <span style={{ fontSize:12, color:C.muted }}><b style={{ color:C.text }}>Workplan:</b> matched on <code style={{ background:"#f0f2f5", padding:"1px 5px", borderRadius:3 }}>Activity Grp - Lvl 3</code> · Design/Build status rolled up from child tasks · click pill to drill down</span>
           <div style={{ display:"flex", gap:16, flexWrap:"wrap", alignItems:"center" }}>
             <div style={{ display:"flex", gap:8, flexWrap:"wrap", alignItems:"center" }}>
