@@ -802,9 +802,22 @@ function EditableCell({ sheet, rowId, colName, value, multiline = false, multi =
   const [draft,   setDraft]     = useState(value ?? "");
   const [saving,  setSaving]    = useState(false);
   const [error,   setError]     = useState(null);
+  const [dropPos, setDropPos]   = useState({ top:0, left:0, width:240 });
   const triggerRef              = useRef(null);
 
   const options = optionsProp ?? _colOptions[sheet]?.[colName] ?? null;
+
+  // Recompute fixed dropdown position after trigger mounts
+  useEffect(() => {
+    if (editing && multi && triggerRef.current) {
+      const r = triggerRef.current.getBoundingClientRect();
+      setDropPos({
+        top:   Math.min(r.bottom + 4, window.innerHeight - 244),
+        left:  r.left,
+        width: Math.max(r.width, 240),
+      });
+    }
+  }, [editing, multi]);
 
   const startEdit = () => { setDraft(value ?? ""); setError(null); setEditing(true); };
 
@@ -855,11 +868,6 @@ function EditableCell({ sheet, rowId, colName, value, multiline = false, multi =
         setDraft([...next].join(", "));
       };
       const saveMulti = () => { save(draft); };
-      // Compute dropdown position from trigger element's bounding rect
-      const rect = triggerRef.current?.getBoundingClientRect();
-      const dropTop  = rect ? Math.min(rect.bottom + 4, window.innerHeight - 240) : 0;
-      const dropLeft = rect ? rect.left : 0;
-      const dropW    = rect ? Math.max(rect.width, 240) : 240;
       return (
         <div>
           <div ref={triggerRef} style={{ border:`1.5px solid ${C.navyLight}`, borderRadius:4, background:C.white, padding:"2px 4px",
@@ -870,7 +878,7 @@ function EditableCell({ sheet, rowId, colName, value, multiline = false, multi =
               : <span style={{color:C.muted,fontSize:11,padding:"2px 4px"}}>— select —</span>}
           </div>
           {/* Dropdown rendered via fixed position to escape table overflow clipping */}
-          <div style={{ position:"fixed", top:dropTop, left:dropLeft, width:dropW, zIndex:9999, background:C.white,
+          <div style={{ position:"fixed", top:dropPos.top, left:dropPos.left, width:dropPos.width, zIndex:9999, background:C.white,
             border:`1px solid ${C.border}`, borderRadius:6, boxShadow:"0 8px 24px rgba(0,0,0,0.18)",
             maxHeight:230, overflowY:"auto" }}
             onClick={e => e.stopPropagation()}>
