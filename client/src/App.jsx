@@ -804,6 +804,7 @@ function EditableCell({ sheet, rowId, colName, value, multiline = false, multi =
   const [error,   setError]     = useState(null);
   const [dropPos, setDropPos]   = useState({ top:0, left:0, width:240 });
   const triggerRef              = useRef(null);
+  const containerRef            = useRef(null);
 
   const options = optionsProp ?? _colOptions[sheet]?.[colName] ?? null;
 
@@ -817,6 +818,18 @@ function EditableCell({ sheet, rowId, colName, value, multiline = false, multi =
         width: Math.max(r.width, 240),
       });
     }
+  }, [editing, multi]);
+
+  // Close multiselect dropdown on click outside
+  useEffect(() => {
+    if (!editing || !multi) return;
+    const handleOutside = e => {
+      if (containerRef.current && !containerRef.current.contains(e.target)) {
+        setEditing(false);
+      }
+    };
+    document.addEventListener("mousedown", handleOutside);
+    return () => document.removeEventListener("mousedown", handleOutside);
   }, [editing, multi]);
 
   const startEdit = () => { setDraft(value ?? ""); setError(null); setEditing(true); };
@@ -869,7 +882,7 @@ function EditableCell({ sheet, rowId, colName, value, multiline = false, multi =
       };
       const saveMulti = () => { save(draft); };
       return (
-        <div>
+        <div ref={containerRef}>
           <div ref={triggerRef} style={{ border:`1.5px solid ${C.navyLight}`, borderRadius:4, background:C.white, padding:"2px 4px",
             display:"flex", flexWrap:"wrap", gap:2, minHeight:28, maxHeight:60, overflowY:"auto" }}
             onClick={e => e.stopPropagation()}>
@@ -909,7 +922,7 @@ function EditableCell({ sheet, rowId, colName, value, multiline = false, multi =
       return (
         <div>
           <select value={draft} onChange={e => setDraft(e.target.value)}
-            onBlur={save} autoFocus style={{ ...sharedStyle, background: C.white }}>
+            onBlur={() => save()} autoFocus style={{ ...sharedStyle, background: C.white }}>
             <option value="">— select —</option>
             {options.map(o => <option key={o} value={o}>{o}</option>)}
           </select>
@@ -921,9 +934,9 @@ function EditableCell({ sheet, rowId, colName, value, multiline = false, multi =
       <div>
         {multiline
           ? <textarea rows={3} value={draft} onChange={e => setDraft(e.target.value)}
-              onBlur={save} onKeyDown={onKey} autoFocus style={{ ...sharedStyle, resize: "vertical" }} />
+              onBlur={() => save()} onKeyDown={onKey} autoFocus style={{ ...sharedStyle, resize: "vertical" }} />
           : <input value={draft} onChange={e => setDraft(e.target.value)}
-              onBlur={save} onKeyDown={onKey} autoFocus style={sharedStyle} />
+              onBlur={() => save()} onKeyDown={onKey} autoFocus style={sharedStyle} />
         }
         {error && <div style={{ color: C.delayed, fontSize: 10, marginTop: 2 }}>{error}</div>}
       </div>
