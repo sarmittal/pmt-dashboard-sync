@@ -1756,7 +1756,7 @@ function ExecutiveSummaryTab({ wp, raid, req, cap, openModal }) {
                   const delayedRows = d.rows.filter(r => String(r[K.status]||"").toLowerCase().includes("delay"));
                   return (
                     <div key={pri} style={{ display:"flex", alignItems:"center", gap:8 }}>
-                      <div style={{ minWidth:100, fontSize:11, fontWeight:700, color:C.text, whiteSpace:"nowrap" }}>{pri}</div>
+                      <div style={{ minWidth:100, maxWidth:160, fontSize:11, fontWeight:700, color:C.text, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }} title={pri}>{pri}</div>
                       <div style={{ flex:1, display:"flex", height:20, borderRadius:4, overflow:"hidden", background:"#f0f2f5" }}>
                         {d.open > 0 && <div style={{ width:`${(d.open/maxTotal)*100}%`, background:C.onTrack, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", minWidth:4 }} onClick={()=>setRaidModal({ title:`${pri}`, rows:d.rows })}>{d.open >= 2 && <span style={{ color:"#fff", fontSize:10, fontWeight:700 }}>{d.open}</span>}</div>}
                         {d.delayed > 0 && <div style={{ width:`${(d.delayed/maxTotal)*100}%`, background:C.delayed, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", minWidth:4 }} onClick={()=>setRaidModal({ title:`${pri} — Delayed`, rows:delayedRows, initialStatusFilter:"Delayed" })}>{d.delayed >= 2 && <span style={{ color:"#fff", fontSize:10, fontWeight:700 }}>{d.delayed}</span>}</div>}
@@ -3647,7 +3647,7 @@ function BacklogTab({ raid }) {
   ];
 
   return (
-    <div style={{display:"flex",flexDirection:"column",gap:14}}>
+    <div style={{display:"flex",flexDirection:"column",gap:14,overflowX:"hidden"}}>
 
       {/* Experience × Priority chart — bars clickable as filters */}
       <Card>
@@ -4044,7 +4044,7 @@ function RaidAnalysisTab({ raid }) {
   };
 
   return (
-    <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+    <div style={{ display:"flex", flexDirection:"column", gap:14, overflowX:"hidden" }}>
 
       {/* ── KPI tiles — same as RAID Summary on Overview ─────────────────── */}
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(160px,1fr))", gap:10 }}>
@@ -4094,7 +4094,7 @@ function RaidAnalysisTab({ raid }) {
               const delayedRows = d.rows.filter(r => String(r[K.status]||"").toLowerCase().includes("delay"));
               return (
                 <div key={pri} style={{ display:"flex", alignItems:"center", gap:8 }}>
-                  <div style={{ minWidth:100, fontSize:11, fontWeight:700, color:C.text, whiteSpace:"nowrap" }}>{pri}</div>
+                  <div style={{ minWidth:100, maxWidth:160, fontSize:11, fontWeight:700, color:C.text, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }} title={pri}>{pri}</div>
                   <div style={{ flex:1, display:"flex", height:20, borderRadius:4, overflow:"hidden", background:"#f0f2f5" }}>
                     {d.open > 0 && <div style={{ width:`${(d.open/maxTotal)*100}%`, background:C.onTrack, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", minWidth:4 }} onClick={()=>setRaidModal({ title:`${pri}`, rows:openRows, hideStatus:false })}>{d.open >= 2 && <span style={{ color:"#fff", fontSize:10, fontWeight:700 }}>{d.open}</span>}</div>}
                     {d.delayed > 0 && <div style={{ width:`${(d.delayed/maxTotal)*100}%`, background:C.delayed, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", minWidth:4 }} onClick={()=>setRaidModal({ title:`${pri} — Delayed`, rows:delayedRows, hideStatus:false })}>{d.delayed >= 2 && <span style={{ color:"#fff", fontSize:10, fontWeight:700 }}>{d.delayed}</span>}</div>}
