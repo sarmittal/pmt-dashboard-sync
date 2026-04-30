@@ -3797,8 +3797,8 @@ function BacklogTab({ raid }) {
         </div>
 
         {/* Table */}
-        <div style={{ maxHeight:"calc(100vh - 230px)", overflowY:"auto", overflowX:"hidden" }}>
-          <table style={{borderCollapse:"collapse",fontSize:11,tableLayout:"fixed",width:"100%"}}>
+        <div style={{ maxHeight:"calc(100vh - 230px)", overflowY:"auto", overflowX:"auto" }}>
+          <table style={{borderCollapse:"collapse",fontSize:11,tableLayout:"fixed",minWidth:tableWidth}}>
             <thead style={{ position:"sticky", top:0, zIndex:2 }}>
               <tr style={{background:"#162f50"}}>
                 {COL_KEYS.filter(([key])=>colConfig[key]?.visible).map(([key,label],idx,arr)=>(
@@ -4258,8 +4258,8 @@ function RaidAnalysisTab({ raid }) {
             </div>
 
             {/* Table */}
-            <div style={{ maxHeight:"calc(100vh - 230px)", overflowY:"auto", overflowX:"hidden" }}>
-              <table style={{ borderCollapse:"collapse", fontSize:11, tableLayout:"fixed", width:"100%" }}>
+            <div style={{ maxHeight:"calc(100vh - 230px)", overflowY:"auto", overflowX:"auto" }}>
+              <table style={{ borderCollapse:"collapse", fontSize:11, tableLayout:"fixed", minWidth: Object.values(colConfig).filter(c=>c.visible).reduce((s,c)=>s+c.width,0) }}>
                 <thead style={{ position:"sticky", top:0, zIndex:2 }}>
                   <tr style={{ background:"#162f50" }}>
                     {[
