@@ -802,6 +802,7 @@ function EditableCell({ sheet, rowId, colName, value, multiline = false, multi =
   const [draft,   setDraft]     = useState(value ?? "");
   const [saving,  setSaving]    = useState(false);
   const [error,   setError]     = useState(null);
+  const triggerRef              = useRef(null);
 
   const options = optionsProp ?? _colOptions[sheet]?.[colName] ?? null;
 
@@ -845,7 +846,7 @@ function EditableCell({ sheet, rowId, colName, value, multiline = false, multi =
       borderRadius: 4, outline: "none", fontFamily: "inherit", boxSizing: "border-box",
     };
 
-    // Multi-select checkbox dropdown
+    // Multi-select checkbox dropdown — uses position:fixed to escape overflow:hidden table cells
     if (multi && options && options.length > 0) {
       const selected = new Set(draft.split(/[,\n;]+/).map(s => s.trim()).filter(Boolean));
       const toggle = opt => {
@@ -854,21 +855,27 @@ function EditableCell({ sheet, rowId, colName, value, multiline = false, multi =
         setDraft([...next].join(", "));
       };
       const saveMulti = () => { save(draft); };
+      // Compute dropdown position from trigger element's bounding rect
+      const rect = triggerRef.current?.getBoundingClientRect();
+      const dropTop  = rect ? Math.min(rect.bottom + 4, window.innerHeight - 240) : 0;
+      const dropLeft = rect ? rect.left : 0;
+      const dropW    = rect ? Math.max(rect.width, 240) : 240;
       return (
-        <div style={{ position:"relative" }}>
-          <div style={{ border:`1.5px solid ${C.navyLight}`, borderRadius:4, background:C.white, padding:"2px 4px",
-            display:"flex", flexWrap:"wrap", gap:2, minHeight:28, cursor:"pointer", maxHeight:80, overflowY:"auto" }}
+        <div>
+          <div ref={triggerRef} style={{ border:`1.5px solid ${C.navyLight}`, borderRadius:4, background:C.white, padding:"2px 4px",
+            display:"flex", flexWrap:"wrap", gap:2, minHeight:28, maxHeight:60, overflowY:"auto" }}
             onClick={e => e.stopPropagation()}>
             {selected.size > 0
               ? [...selected].map((v,i) => <span key={i} style={{background:"#fef3c7",color:"#92400e",border:"1px solid #fcd34d",borderRadius:3,padding:"2px 5px",fontSize:10,whiteSpace:"nowrap"}}>{v}</span>)
               : <span style={{color:C.muted,fontSize:11,padding:"2px 4px"}}>— select —</span>}
           </div>
-          <div style={{ position:"absolute", top:"100%", left:0, zIndex:200, background:C.white,
-            border:`1px solid ${C.border}`, borderRadius:6, boxShadow:"0 4px 16px rgba(0,0,0,0.15)",
-            minWidth:220, maxHeight:220, overflowY:"auto", marginTop:2 }}
+          {/* Dropdown rendered via fixed position to escape table overflow clipping */}
+          <div style={{ position:"fixed", top:dropTop, left:dropLeft, width:dropW, zIndex:9999, background:C.white,
+            border:`1px solid ${C.border}`, borderRadius:6, boxShadow:"0 8px 24px rgba(0,0,0,0.18)",
+            maxHeight:230, overflowY:"auto" }}
             onClick={e => e.stopPropagation()}>
             {options.map(opt => (
-              <label key={opt} style={{ display:"flex", alignItems:"center", gap:8, padding:"6px 12px",
+              <label key={opt} style={{ display:"flex", alignItems:"center", gap:8, padding:"7px 12px",
                 cursor:"pointer", background:selected.has(opt)?"#fef3c7":C.white,
                 borderBottom:`1px solid ${C.border}` }}
                 onMouseEnter={e => { if (!selected.has(opt)) e.currentTarget.style.background="#f8fafc"; }}
@@ -5756,66 +5763,73 @@ function TestScenariosTab({ data, wp, req, subTab, setSubTab }) {
                 {allSps.map(sp => fpill(sp, spFilter===sp, mRows.filter(r=>String(r[K.subprocess]||"Unknown").trim()===sp).length, ()=>setSpFilter(spFilter===sp?"ALL":sp), "#991b1b"))}
               </div>
             )}
-            {!singleTeam && <div style={{ fontSize:10, color:C.muted, fontStyle:"italic" }}>Select a team above to see Reviewer and Feedback columns</div>}
           </div>
           <div style={{ overflowY:"auto", overflowX:"auto", flex:1 }}>
-            <table style={{ borderCollapse:"collapse", fontSize:11, tableLayout:"fixed" }}>
+            <table style={{ borderCollapse:"collapse", fontSize:11, tableLayout:"fixed", width:"100%", minWidth: singleTeam ? 860 : 730 }}>
               <colgroup>
                 <col style={{ width: ocw("of-id",  80) }} />
                 <col style={{ width: ocw("of-tag", 100) }} />
-                <col style={{ width: ocw("of-scen",singleTeam?420:320) }} />
-                <col style={{ width: ocw("of-sp",  130) }} />
-                {singleTeam
-                  ? visTeams.flatMap(t => [
+                <col style={{ width: ocw("of-scen", 320) }} />
+                <col style={{ width: ocw("of-sp",  120) }} />
+                {visTeams.flatMap(t => singleTeam
+                  ? [
                       <col key={t.id+"-rv"} style={{ width: ocw("of-"+t.id+"-rv", 120) }} />,
-                      <col key={t.id+"-fb"} style={{ width: ocw("of-"+t.id+"-fb", 280) }} />,
-                      <col key={t.id+"-st"} style={{ width: ocw("of-"+t.id+"-st", 130) }} />,
-                    ])
-                  : visTeams.map(t => <col key={t.id+"-st"} style={{ width: ocw("of-"+t.id+"-st", 110) }} />)
-                }
+                      <col key={t.id+"-fb"} style={{ width: ocw("of-"+t.id+"-fb", 260) }} />,
+                      <col key={t.id+"-st"} style={{ width: ocw("of-"+t.id+"-st", 120) }} />,
+                    ]
+                  : [
+                      <col key={t.id+"-fb"} style={{ width: ocw("of-"+t.id+"-fb", 200) }} />,
+                      <col key={t.id+"-st"} style={{ width: ocw("of-"+t.id+"-st", 100) }} />,
+                    ]
+                )}
               </colgroup>
               <thead style={{ position:"sticky", top:0, zIndex:2 }}>
                 <tr>
                   <th colSpan={4} style={{ padding:"4px 10px", textAlign:"center", background:C.navy, color:"rgba(255,255,255,0.5)", fontWeight:700, fontSize:9, textTransform:"uppercase", letterSpacing:"0.07em", borderRight:"1px solid rgba(255,255,255,0.25)", borderBottom:"1px solid rgba(255,255,255,0.12)" }}>Scenario Details</th>
-                  {singleTeam
-                    ? visTeams.map(t => <th key={t.id} colSpan={3} style={{ padding:"4px 10px", textAlign:"center", background:t.color, color:"#fff", fontWeight:700, fontSize:9, textTransform:"uppercase", letterSpacing:"0.07em", borderRight:"1px solid rgba(255,255,255,0.3)", borderBottom:"1px solid rgba(255,255,255,0.2)" }}>{t.label}</th>)
-                    : visTeams.map(t => <th key={t.id} colSpan={1} style={{ padding:"4px 10px", textAlign:"center", background:t.color, color:"#fff", fontWeight:700, fontSize:9, textTransform:"uppercase", letterSpacing:"0.07em", borderRight:"1px solid rgba(255,255,255,0.3)", borderBottom:"1px solid rgba(255,255,255,0.2)" }}>{t.label}</th>)
-                  }
+                  {visTeams.map(t => (
+                    <th key={t.id} colSpan={singleTeam?3:2} style={{ padding:"4px 10px", textAlign:"center", background:t.color, color:"#fff", fontWeight:700, fontSize:9, textTransform:"uppercase", letterSpacing:"0.07em", borderRight:"1px solid rgba(255,255,255,0.3)", borderBottom:"1px solid rgba(255,255,255,0.2)" }}>{t.label}</th>
+                  ))}
                 </tr>
                 <tr style={{ background:C.navy }}>
-                  {[["of-id","ID"],["of-tag","Tag"],["of-scen","Scenario"],["of-sp","SubProcess"]].map(([ck,h],i) => (
+                  {[["of-id","ID",80],["of-tag","Tag",100],["of-scen","Scenario",320],["of-sp","Sub Process",120]].map(([ck,h,def],i) => (
                     <th key={ck} style={{ padding:"8px 10px", textAlign:"left", color:"#fff", fontWeight:700, fontSize:10, position:"relative", overflow:"hidden", borderRight:i===3?"1px solid rgba(255,255,255,0.25)":"1px solid rgba(255,255,255,0.08)" }}>
-                      {h}{orh(ck, [80,100,singleTeam?420:320,130][i])}
+                      {h}{orh(ck, def)}
                     </th>
                   ))}
-                  {singleTeam
-                    ? visTeams.flatMap(t => [
-                        <th key={t.id+"-rv"} style={{ padding:"8px 10px", textAlign:"left", color:"rgba(255,255,255,0.8)", fontWeight:600, fontSize:10, position:"relative", overflow:"hidden", borderRight:"1px solid rgba(255,255,255,0.08)" }}>Reviewer{orh("of-"+t.id+"-rv",120)}</th>,
-                        <th key={t.id+"-fb"} style={{ padding:"8px 10px", textAlign:"left", color:"rgba(255,255,255,0.8)", fontWeight:600, fontSize:10, position:"relative", overflow:"hidden", borderRight:"1px solid rgba(255,255,255,0.08)" }}>Feedback{orh("of-"+t.id+"-fb",280)}</th>,
-                        <th key={t.id+"-st"} style={{ padding:"8px 10px", textAlign:"left", color:"rgba(255,255,255,0.8)", fontWeight:600, fontSize:10, position:"relative", overflow:"hidden", borderRight:"1px solid rgba(255,255,255,0.25)" }}>Status{orh("of-"+t.id+"-st",130)}</th>,
-                      ])
-                    : visTeams.map(t => <th key={t.id+"-st"} style={{ padding:"8px 10px", textAlign:"center", color:"rgba(255,255,255,0.8)", fontWeight:600, fontSize:10, position:"relative", overflow:"hidden", borderRight:"1px solid rgba(255,255,255,0.25)" }}>Status{orh("of-"+t.id+"-st",110)}</th>)
-                  }
+                  {visTeams.flatMap(t => singleTeam
+                    ? [
+                        <th key={t.id+"-rv"} style={{ padding:"8px 10px", color:"rgba(255,255,255,0.8)", fontWeight:600, fontSize:10, position:"relative", overflow:"hidden", borderRight:"1px solid rgba(255,255,255,0.08)" }}>Reviewer{orh("of-"+t.id+"-rv",120)}</th>,
+                        <th key={t.id+"-fb"} style={{ padding:"8px 10px", color:"rgba(255,255,255,0.8)", fontWeight:600, fontSize:10, position:"relative", overflow:"hidden", borderRight:"1px solid rgba(255,255,255,0.08)" }}>Feedback{orh("of-"+t.id+"-fb",260)}</th>,
+                        <th key={t.id+"-st"} style={{ padding:"8px 10px", color:"rgba(255,255,255,0.8)", fontWeight:600, fontSize:10, position:"relative", overflow:"hidden", borderRight:"1px solid rgba(255,255,255,0.25)" }}>Status{orh("of-"+t.id+"-st",120)}</th>,
+                      ]
+                    : [
+                        <th key={t.id+"-fb"} style={{ padding:"8px 10px", color:"rgba(255,255,255,0.8)", fontWeight:600, fontSize:10, position:"relative", overflow:"hidden", borderRight:"1px solid rgba(255,255,255,0.08)" }}>Feedback{orh("of-"+t.id+"-fb",200)}</th>,
+                        <th key={t.id+"-st"} style={{ padding:"8px 10px", color:"rgba(255,255,255,0.8)", fontWeight:600, fontSize:10, position:"relative", overflow:"hidden", borderRight:"1px solid rgba(255,255,255,0.25)" }}>Status{orh("of-"+t.id+"-st",100)}</th>,
+                      ]
+                  )}
                 </tr>
               </thead>
               <tbody>
                 {filteredRows.length === 0 && (
-                  <tr><td colSpan={4+(singleTeam?visTeams.length*3:visTeams.length)} style={{ padding:24, textAlign:"center", color:C.muted }}>No scenarios</td></tr>
+                  <tr><td colSpan={4+(singleTeam?visTeams.length*3:visTeams.length*2)} style={{ padding:24, textAlign:"center", color:C.muted }}>No scenarios</td></tr>
                 )}
                 {filteredRows.map((r, i) => (
                   <tr key={i} style={{ background:i%2===0?C.white:"#f7f9fc", borderBottom:`1px solid ${C.border}`, verticalAlign:"top" }}>
-                    <td style={{ padding:"8px 10px", color:C.muted, fontWeight:600, overflow:"hidden", borderRight:`1px solid ${C.border}` }}>{String(r[K.id]||"—")}</td>
+                    <td style={{ padding:"8px 10px", color:C.muted, fontWeight:600, overflow:"hidden", whiteSpace:"nowrap", borderRight:`1px solid ${C.border}` }}>{String(r[K.id]||"—")}</td>
                     <td style={{ padding:"8px 10px", overflow:"hidden", borderRight:`1px solid ${C.border}` }}>{multiVal(r[K.tag])}</td>
-                    <td style={{ padding:"8px 10px", color:C.text, wordBreak:"break-word", overflow:"hidden", borderRight:`1px solid ${C.border}` }}>{String(r[K.name]||"—")}</td>
-                    <td style={{ padding:"8px 10px", color:C.muted, overflow:"hidden", borderRight:"1px solid #94a3b8" }}>{String(r[K.subprocess]||"—")}</td>
-                    {singleTeam
-                      ? visTeams.flatMap(t => [
-                          <td key={t.id+"-rv"} style={{ padding:"8px 10px", fontWeight:600, overflow:"hidden", borderRight:`1px solid ${C.border}` }}>{String(r[t.reviewerKey]||"—")}</td>,
-                          <td key={t.id+"-fb"} style={{ padding:"8px 10px", color:C.muted, wordBreak:"break-word", overflow:"hidden", borderRight:`1px solid ${C.border}` }}>{String(r[t.feedbackKey]||"—")}</td>,
+                    <td style={{ padding:"8px 10px", color:C.text, wordBreak:"break-word", lineHeight:1.5, borderRight:`1px solid ${C.border}` }}>{String(r[K.name]||"—")}</td>
+                    <td style={{ padding:"8px 10px", color:C.muted, wordBreak:"break-word", borderRight:"1px solid #94a3b8" }}>{String(r[K.subprocess]||"—")}</td>
+                    {visTeams.flatMap(t => singleTeam
+                      ? [
+                          <td key={t.id+"-rv"} style={{ padding:"8px 10px", fontWeight:600, wordBreak:"break-word", overflow:"hidden", borderRight:`1px solid ${C.border}` }}>{String(r[t.reviewerKey]||"—")}</td>,
+                          <td key={t.id+"-fb"} style={{ padding:"8px 10px", color:C.text, wordBreak:"break-word", lineHeight:1.5, borderRight:`1px solid ${C.border}` }}>{String(r[t.feedbackKey]||"—")}</td>,
                           <td key={t.id+"-st"} style={{ padding:"8px 10px", overflow:"hidden", borderRight:"1px solid #94a3b8" }}>{stPill(r, t)}</td>,
-                        ])
-                      : visTeams.map(t => <td key={t.id+"-st"} style={{ padding:"8px 10px", textAlign:"center", overflow:"hidden", borderRight:"1px solid #94a3b8" }}>{stPill(r, t)}</td>)
-                    }
+                        ]
+                      : [
+                          <td key={t.id+"-fb"} style={{ padding:"8px 10px", color:C.text, wordBreak:"break-word", lineHeight:1.4, fontSize:10, borderRight:`1px solid ${C.border}` }}>{String(r[t.feedbackKey]||"—")}</td>,
+                          <td key={t.id+"-st"} style={{ padding:"8px 10px", overflow:"hidden", borderRight:"1px solid #94a3b8" }}>{stPill(r, t)}</td>,
+                        ]
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -6692,7 +6706,6 @@ function TestScenariosTab({ data, wp, req, subTab, setSubTab }) {
           <table style={{ width:"100%", borderCollapse:"collapse", fontSize:11, tableLayout:"fixed" }}>
             {/* colgroup drives column widths — updated on resize drag (~1200px total default) */}
             <colgroup>
-              <col style={{ width: scenColW["expand"]||28  }} />
               <col style={{ width: scenColW["del"]   ||46  }} />
               <col style={{ width: scenColW["dup"]   ||46  }} />
               <col style={{ width: scenColW["openFb"]||46  }} />
@@ -6716,7 +6729,6 @@ function TestScenariosTab({ data, wp, req, subTab, setSubTab }) {
             <thead style={{ position:"sticky", top:0, zIndex:2 }}>
               {/* Group header row */}
               <tr style={{ background:C.navy }}>
-                <th rowSpan={2} style={{ padding:"6px 4px",  color:"#fff",    fontWeight:700, fontSize:10, borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative", verticalAlign:"bottom" }}>{_rh("expand",28)}</th>
                 <th rowSpan={2} style={{ padding:"6px 4px",  textAlign:"center", color:"#fda4af", fontWeight:700, fontSize:10, borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative", verticalAlign:"bottom" }}>To Be Deleted{_rh("del",46)}</th>
                 <th rowSpan={2} style={{ padding:"6px 4px",  textAlign:"center", color:"#fbbf24", fontWeight:700, fontSize:10, borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative", verticalAlign:"bottom" }}>Dup / Data Mining / NA{_rh("dup",46)}</th>
                 <th rowSpan={2} style={{ padding:"6px 4px",  textAlign:"center", color:"#fde68a", fontWeight:700, fontSize:10, borderRight:"1px solid rgba(255,255,255,0.1)", position:"relative", verticalAlign:"bottom" }}>Open Feedback{_rh("openFb",46)}</th>
@@ -6744,7 +6756,7 @@ function TestScenariosTab({ data, wp, req, subTab, setSubTab }) {
             </thead>
             <tbody>
               {_scenFiltered.length === 0 && (
-                <tr><td colSpan={20} style={{ padding:24, textAlign:"center", color:C.muted }}>No scenarios match selected filters</td></tr>
+                <tr><td colSpan={19} style={{ padding:24, textAlign:"center", color:C.muted }}>No scenarios match selected filters</td></tr>
               )}
               {/* Subtotal row */}
               {(() => {
@@ -6762,7 +6774,6 @@ function TestScenariosTab({ data, wp, req, subTab, setSubTab }) {
                 );
                 return (
                   <tr style={{ background:bg, borderBottom:`2px solid ${C.navyLight}` }}>
-                    <td style={{ padding:"6px 8px", textAlign:"center", color:C.navy, fontSize:9, fontWeight:800, letterSpacing:"0.05em", borderRight:br }}>∑</td>
                     <td style={{ padding:"6px 8px", textAlign:"center", borderRight:br }}>{num(stDel, "#b91c1c")}</td>
                     <td style={{ padding:"6px 8px", textAlign:"center", borderRight:br }}>{num(stDup, "#92400e")}</td>
                     <td style={{ padding:"6px 8px", textAlign:"center", borderRight:br }}>{num(stFb,  "#854d0e")}</td>
@@ -6798,7 +6809,6 @@ function TestScenariosTab({ data, wp, req, subTab, setSubTab }) {
                 return (
                   <tr key={scenId} style={{ background:rowBg, borderBottom:flagBorder, verticalAlign:"top", cursor:"pointer" }}
                     onClick={() => setScenDrawer(isSelected ? null : r)}>
-                    <td style={{ padding:"8px 10px", textAlign:"center", color:isSelected?C.navyLight:C.muted, fontWeight:700, width:scenColW["expand"]||28 }}>{isSelected?"▶":"·"}</td>
                     <td style={{ padding:"8px 6px", textAlign:"center", borderRight:`1px solid ${C.border}`, width:scenColW["del"]||46 }}>
                       {isDel ? <span style={{ background:"#fee2e2", color:"#b91c1c", borderRadius:3, padding:"1px 5px", fontSize:10, fontWeight:700 }}>✓</span> : <span style={{ color:C.muted }}>—</span>}
                     </td>
