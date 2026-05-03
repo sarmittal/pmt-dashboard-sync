@@ -1706,7 +1706,7 @@ function ExecutiveSummaryTab({ wp, raid, req, cap, openModal }) {
   // Filter from raid.open (already excludes Complete/Deferred) to avoid strict-equality mismatches
   const impactOpen = raid && tagKey ? raid.open.filter(r => {
     const tag = String(r[tagKey]||"").toLowerCase();
-    return tag.includes("impact") && tag.includes("tech build");
+    return tag.includes("action - impacts tech build");
   }) : [];
   const impactDelayed = impactOpen.filter(r => String(r[K?.status]||"").toLowerCase().includes("delay"));
   const blockedStories = req?.blocked || [];
